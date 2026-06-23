@@ -1,0 +1,2 @@
+"""Static package inspection helpers."""
+
