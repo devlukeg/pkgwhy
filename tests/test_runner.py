@@ -52,7 +52,7 @@ def test_run_cli_prints_warning_output_and_log_path(tmp_path: Path) -> None:
     result = runner.invoke(app, ["run", "local/cli_runner_tool"], env=env)
 
     assert result.exit_code == 0
-    assert RUNNER_ISOLATION_WARNING in result.output
+    assert RUNNER_ISOLATION_WARNING in result.stderr
     assert "cli runner ok" in result.output
     assert "Execution log:" in result.output
 

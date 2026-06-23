@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -54,9 +55,7 @@ def save_registry_index(path: Path, index: RegistryIndex) -> None:
     target = registry_index_path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     content = json.dumps(index.model_dump(mode="json"), indent=2, sort_keys=True) + "\n"
-    temp_path = target.with_name(f".{target.name}.tmp")
-    temp_path.write_text(content, encoding="utf-8")
-    temp_path.replace(target)
+    _atomic_write_text(target, content)
 
 
 def load_registry_config(path: Path | None = None) -> RegistryConfig:
@@ -74,9 +73,20 @@ def save_registry_config(config: RegistryConfig, path: Path | None = None) -> No
     target = path or config_path()
     target.parent.mkdir(parents=True, exist_ok=True)
     content = json.dumps(config.model_dump(mode="json"), indent=2, sort_keys=True) + "\n"
-    temp_path = target.with_name(f".{target.name}.tmp")
-    temp_path.write_text(content, encoding="utf-8")
-    temp_path.replace(target)
+    _atomic_write_text(target, content)
+
+
+def _atomic_write_text(target: Path, content: str) -> None:
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=target.parent, delete=False) as handle:
+            handle.write(content)
+            temp_path = Path(handle.name)
+        temp_path.replace(target)
+    except Exception:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+        raise
 
 
 def init_local_registry(path: Path, name: str = DEFAULT_REGISTRY_NAME) -> RegistryEntry:

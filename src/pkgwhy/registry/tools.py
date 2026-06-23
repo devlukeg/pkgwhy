@@ -91,7 +91,7 @@ def _parse_reference(reference: str) -> tuple[str | None, str]:
 
 
 def _load_manifest(registry_path: Path, entry: RegistryToolEntry) -> ToolManifest:
-    manifest_path = registry_path / entry.manifest_path
+    manifest_path = _validate_registry_path(registry_path, entry.manifest_path, entry)
     try:
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
         return ToolManifest.model_validate(data)
@@ -100,13 +100,22 @@ def _load_manifest(registry_path: Path, entry: RegistryToolEntry) -> ToolManifes
 
 
 def _verify_hash(registry_path: Path, entry: RegistryToolEntry) -> HashStatus:
-    bundle_path = registry_path / entry.bundle_path
-    if not bundle_path.exists():
-        return HashStatus.MISSING
+    bundle_path = _validate_registry_path(registry_path, entry.bundle_path, entry)
     digest = hashlib.sha256()
-    with bundle_path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
+    try:
+        with bundle_path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except FileNotFoundError:
+        return HashStatus.MISSING
     if digest.hexdigest() != entry.sha256:
         return HashStatus.MISMATCH
     return HashStatus.VERIFIED
+
+
+def _validate_registry_path(registry_path: Path, entry_path: str, entry: RegistryToolEntry) -> Path:
+    registry_root = registry_path.resolve()
+    candidate = (registry_root / entry_path).resolve()
+    if not candidate.is_relative_to(registry_root):
+        raise ValueError(f"Registry entry path escapes registry root for {entry.owner}/{entry.name}: {entry_path}")
+    return candidate

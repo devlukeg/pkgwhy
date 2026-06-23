@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -265,7 +266,7 @@ def publish(path: Annotated[Path, typer.Argument(help="Local .py file or folder 
 @app.command()
 def run(reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference from the local registry.")]) -> None:
     """Run a verified local private tool."""
-    print(RUNNER_ISOLATION_WARNING)
+    print(RUNNER_ISOLATION_WARNING, file=sys.stderr)
     try:
         result = run_local_tool(reference)
     except ValueError as exc:

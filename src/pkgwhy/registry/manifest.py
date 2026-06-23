@@ -73,6 +73,6 @@ def _optional_text(data: dict[str, Any], key: str, default: str) -> str:
 
 def _optional_text_list(data: dict[str, Any], key: str) -> list[str]:
     values = data.get(key, [])
-    if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
-        raise ValueError(f"Tool manifest field must be a list of strings when present: {key}")
+    if not isinstance(values, list) or not all(isinstance(value, str) and value.strip() for value in values):
+        raise ValueError(f"Tool manifest field must be a list of non-empty strings when present: {key}")
     return values

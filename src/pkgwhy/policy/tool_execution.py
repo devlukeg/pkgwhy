@@ -4,6 +4,9 @@ from dataclasses import dataclass, field
 
 from pkgwhy.core.models import AgentDecision, HashStatus, ToolJudgement
 
+SIGNATURE_STATUS_VERIFIED = "verified"
+SIGNATURE_STATUS_NOT_IMPLEMENTED = "not_implemented"
+
 
 @dataclass(frozen=True)
 class ToolExecutionPolicy:
@@ -46,7 +49,7 @@ def evaluate_tool_execution_policy(
     elif judgement.decision == AgentDecision.SANDBOX_ONLY:
         reasons.append("Tool requires sandbox-only execution, but the local runner is not a full OS sandbox.")
 
-    if judgement.signature_status != "verified":
+    if judgement.signature_status != SIGNATURE_STATUS_VERIFIED:
         message = "Tool signature verification is not implemented; treat this tool as unsigned."
         if active_policy.require_signature_verification:
             reasons.append(message)

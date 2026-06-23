@@ -61,6 +61,7 @@ def run_local_tool(reference: str, *, non_interactive: bool = False) -> ToolRunR
             capture_output=True,
             text=True,
             check=False,
+            cwd=tool_root,
             timeout=DEFAULT_RUN_TIMEOUT_SECONDS,
         )
         exit_code = completed.returncode
@@ -103,7 +104,10 @@ def _prepare_workspace(bundle_path: Path, tool_root: Path) -> None:
     with tarfile.open(bundle_path, "r:gz") as archive:
         members = archive.getmembers()
         _validate_archive_members(members)
-        archive.extractall(tool_root, members=members)
+        try:
+            archive.extractall(tool_root, members=members, filter="data")
+        except TypeError:
+            archive.extractall(tool_root, members=members)
 
 
 def _validate_archive_members(members: list[tarfile.TarInfo]) -> None:

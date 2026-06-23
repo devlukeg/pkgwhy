@@ -96,3 +96,24 @@ def test_audit_markdown_escapes_table_pipes() -> None:
 
     assert "demo\\|package" in rendered
     assert "1\\|2" in rendered
+
+
+def test_audit_markdown_escapes_newlines_and_backslashes() -> None:
+    judgement = PackageJudgement(
+        package="demo\npackage",
+        version=r"1\2",
+        decision=AgentDecision.ALLOW,
+        risk_level=RiskLevel.LOW,
+        confidence=Confidence.HIGH,
+        summary="demo",
+        source_availability=SourceAvailability.INSTALLED_SOURCE_PRESENT,
+        installed_size_bytes=1,
+        recommendation="ok",
+    )
+
+    rendered = render_audit_markdown([judgement])
+
+    assert "demo package" in rendered
+    assert r"1\\2" in rendered
+    assert "demo\npackage" not in rendered
+    assert len([line for line in rendered.splitlines() if line.startswith("| ")]) == 3

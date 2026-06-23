@@ -46,4 +46,4 @@ def render_audit_markdown(judgements: list[PackageJudgement]) -> str:
 
 
 def _escape_markdown_table_cell(value: str) -> str:
-    return value.replace("|", r"\|")
+    return value.replace("\\", r"\\").replace("\r", " ").replace("\n", " ").replace("|", r"\|")

@@ -5,7 +5,7 @@ import pytest
 from typer.testing import CliRunner
 
 from pkgwhy.cli import app
-from pkgwhy.core.models import AgentDecision, HashStatus
+from pkgwhy.core.models import AgentDecision, HashStatus, RiskLevel
 from pkgwhy.registry.local import init_local_registry, load_registry_index, save_registry_index
 from pkgwhy.registry.publish import publish_local_tool
 from pkgwhy.registry.tools import judge_tool
@@ -44,6 +44,24 @@ def test_judge_tool_blocks_hash_mismatch(tmp_path: Path, monkeypatch: pytest.Mon
 
     assert judgement.hash_status == HashStatus.MISMATCH
     assert judgement.decision == AgentDecision.BLOCK
+
+
+def test_judge_tool_reports_missing_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PKGWHY_CONFIG_HOME", str(tmp_path / "config"))
+    registry_path = tmp_path / "registry"
+    init_local_registry(registry_path)
+    script = tmp_path / "missing_bundle.py"
+    script.write_text("print('missing')\n", encoding="utf-8")
+    publish_local_tool(script)
+    index = load_registry_index(registry_path)
+    (registry_path / index.tools[0].bundle_path).unlink()
+
+    judgement = judge_tool("local/missing_bundle")
+
+    assert judgement.hash_status == HashStatus.MISSING
+    assert judgement.decision == AgentDecision.REVIEW_MANUALLY
+    assert judgement.risk_level == RiskLevel.UNKNOWN
+    assert "missing" in judgement.reason
 
 
 def test_tool_cli_inspect_and_judge_json(tmp_path: Path) -> None:
