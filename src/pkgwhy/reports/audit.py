@@ -36,10 +36,14 @@ def render_audit_markdown(judgements: list[PackageJudgement]) -> str:
         warning_count = len(judgement.warnings)
         lines.append(
             "| "
-            f"{judgement.package} | "
-            f"{judgement.version or 'unknown'} | "
-            f"{judgement.risk_level.value} | "
-            f"{judgement.decision.value} | "
+            f"{_escape_markdown_table_cell(judgement.package)} | "
+            f"{_escape_markdown_table_cell(judgement.version or 'unknown')} | "
+            f"{_escape_markdown_table_cell(judgement.risk_level.value)} | "
+            f"{_escape_markdown_table_cell(judgement.decision.value)} | "
             f"{warning_count} |"
         )
     return "\n".join(lines) + "\n"
+
+
+def _escape_markdown_table_cell(value: str) -> str:
+    return value.replace("|", r"\|")

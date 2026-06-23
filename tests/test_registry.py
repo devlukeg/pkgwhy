@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from pkgwhy.registry.local import (
     REGISTRY_INDEX_FILENAME,
     add_registry,
@@ -11,7 +13,7 @@ from pkgwhy.registry.local import (
 )
 
 
-def test_init_local_registry_creates_index_and_selects_registry(tmp_path: Path, monkeypatch) -> None:
+def test_init_local_registry_creates_index_and_selects_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PKGWHY_CONFIG_HOME", str(tmp_path / "config"))
     registry_path = tmp_path / "registry"
 
@@ -27,7 +29,7 @@ def test_init_local_registry_creates_index_and_selects_registry(tmp_path: Path, 
     assert config_path() == tmp_path / "config" / "registries.json"
 
 
-def test_add_and_use_existing_registry(tmp_path: Path, monkeypatch) -> None:
+def test_add_and_use_existing_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PKGWHY_CONFIG_HOME", str(tmp_path / "config"))
     first = init_local_registry(tmp_path / "first", name="first")
     second_path = tmp_path / "second"
@@ -43,3 +45,10 @@ def test_add_and_use_existing_registry(tmp_path: Path, monkeypatch) -> None:
     entries = {entry.name: entry for entry in list_registries()}
     assert entries["first"].is_current is False
     assert entries["second"].is_current is True
+
+
+def test_empty_xdg_config_home_uses_default_config_dir(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("PKGWHY_CONFIG_HOME", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", "")
+
+    assert config_path() == Path.home() / ".config" / "pkgwhy" / "registries.json"

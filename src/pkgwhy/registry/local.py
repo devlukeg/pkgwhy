@@ -17,11 +17,16 @@ def config_dir() -> Path:
     override = os.environ.get(CONFIG_ENV_VAR)
     if override:
         return Path(override).expanduser()
-    if sys.platform == "win32" and os.environ.get("APPDATA"):
-        return Path(os.environ["APPDATA"]) / "pkgwhy"
+    if sys.platform == "win32":
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            return Path(appdata) / "pkgwhy"
     if sys.platform == "darwin":
         return Path.home() / "Library" / "Application Support" / "pkgwhy"
-    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "pkgwhy"
+    xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
+    if xdg_config_home:
+        return Path(xdg_config_home) / "pkgwhy"
+    return Path.home() / ".config" / "pkgwhy"
 
 
 def config_path() -> Path:
@@ -46,7 +51,10 @@ def load_registry_config(path: Path | None = None) -> RegistryConfig:
 def save_registry_config(config: RegistryConfig, path: Path | None = None) -> None:
     target = path or config_path()
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(config.model_dump(mode="json"), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    content = json.dumps(config.model_dump(mode="json"), indent=2, sort_keys=True) + "\n"
+    temp_path = target.with_name(f".{target.name}.tmp")
+    temp_path.write_text(content, encoding="utf-8")
+    temp_path.replace(target)
 
 
 def init_local_registry(path: Path, name: str = DEFAULT_REGISTRY_NAME) -> RegistryEntry:

@@ -4,7 +4,14 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from pkgwhy.cli import app
-from pkgwhy.reports.audit import AUDIT_SCHEMA_VERSION
+from pkgwhy.core.models import (
+    AgentDecision,
+    Confidence,
+    PackageJudgement,
+    RiskLevel,
+    SourceAvailability,
+)
+from pkgwhy.reports.audit import AUDIT_SCHEMA_VERSION, render_audit_markdown
 
 runner = CliRunner()
 
@@ -70,3 +77,22 @@ def test_audit_writes_json_report_to_output_path(tmp_path: Path) -> None:
     assert output.exists()
     data = json.loads(output.read_text(encoding="utf-8"))
     assert data["schema_version"] == AUDIT_SCHEMA_VERSION
+
+
+def test_audit_markdown_escapes_table_pipes() -> None:
+    judgement = PackageJudgement(
+        package="demo|package",
+        version="1|2",
+        decision=AgentDecision.ALLOW,
+        risk_level=RiskLevel.LOW,
+        confidence=Confidence.HIGH,
+        summary="demo",
+        source_availability=SourceAvailability.INSTALLED_SOURCE_PRESENT,
+        installed_size_bytes=1,
+        recommendation="ok",
+    )
+
+    rendered = render_audit_markdown([judgement])
+
+    assert "demo\\|package" in rendered
+    assert "1\\|2" in rendered

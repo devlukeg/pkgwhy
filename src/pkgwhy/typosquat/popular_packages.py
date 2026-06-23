@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# Curated subset of commonly typosquatted PyPI targets, not an exhaustive index.
 POPULAR_PACKAGE_REFERENCES: dict[str, tuple[str, ...]] = {
     "requests": ("requests",),
     "numpy": ("numpy",),
@@ -31,4 +32,3 @@ KNOWN_LEGITIMATE_FAMILIES = {
     "pandas-stubs",
     "types-requests",
 }
-

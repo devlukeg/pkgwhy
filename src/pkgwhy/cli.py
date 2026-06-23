@@ -161,7 +161,10 @@ def risk(package: str, as_json: Annotated[bool, typer.Option("--json", help="Emi
         for warning in judgement.warnings:
             console.print(f"  - {warning}")
     if judgement.evidence:
-        console.print("Evidence:")
+        if len(judgement.evidence) > 10:
+            console.print(f"Evidence (showing first 10 of {len(judgement.evidence)}):")
+        else:
+            console.print("Evidence:")
         for item in judgement.evidence[:10]:
             console.print(f"  - {item}")
 
