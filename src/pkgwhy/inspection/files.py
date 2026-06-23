@@ -21,18 +21,18 @@ JS_APPEARS_MINIFIED_WARNING = "appears minified"
 JS_MAY_BE_MINIFIED_WARNING = "may be minified"
 
 JS_DYNAMIC_PATTERNS = {
-    r"\beval\s*\(": "JavaScript eval call",
-    r"\bFunction\s*\(": "JavaScript Function constructor",
+    re.compile(r"\beval\s*\("): "JavaScript eval call",
+    re.compile(r"\bFunction\s*\("): "JavaScript Function constructor",
 }
 JS_ENCODED_PATTERNS = {
-    r"\batob\s*\(": "JavaScript base64 decode call",
-    r"\bbtoa\s*\(": "JavaScript base64 encode call",
+    re.compile(r"\batob\s*\("): "JavaScript base64 decode call",
+    re.compile(r"\bbtoa\s*\("): "JavaScript base64 encode call",
 }
 JS_OBFUSCATION_PATTERNS = {
-    r"_0x[a-fA-F0-9]{3,}": "hex-like JavaScript identifier",
-    r"\\x[0-9a-fA-F]{2}": "hex-escaped JavaScript string content",
-    r"while\s*\(\s*!!\[\]\s*\)": "control-flow flattening pattern",
-    r"debugger\s*;": "JavaScript anti-debugging statement",
+    re.compile(r"_0x[a-fA-F0-9]{3,}"): "hex-like JavaScript identifier",
+    re.compile(r"\\x[0-9a-fA-F]{2}"): "hex-escaped JavaScript string content",
+    re.compile(r"while\s*\(\s*!!\[\]\s*\)"): "control-flow flattening pattern",
+    re.compile(r"debugger\s*;"): "JavaScript anti-debugging statement",
 }
 
 
@@ -170,17 +170,17 @@ def _analyze_javascript_file(path: Path) -> FileStaticAnalysis:
         evidence.append(f"JavaScript density signal in {path.name}: low whitespace and high punctuation.")
 
     for pattern, detail in JS_DYNAMIC_PATTERNS.items():
-        if re.search(pattern, source):
+        if pattern.search(source):
             capabilities.add("JavaScript dynamic code execution signals")
             evidence.append(f"JavaScript dynamic execution signal in {path.name}: {detail}.")
 
     for pattern, detail in JS_ENCODED_PATTERNS.items():
-        if re.search(pattern, source):
+        if pattern.search(source):
             capabilities.add("Encoded payload handling signals")
             evidence.append(f"JavaScript encoded payload signal in {path.name}: {detail}.")
 
     obfuscation_signals = [
-        detail for pattern, detail in JS_OBFUSCATION_PATTERNS.items() if re.search(pattern, source)
+        detail for pattern, detail in JS_OBFUSCATION_PATTERNS.items() if pattern.search(source)
     ]
     likely_threshold = max(3, len(JS_OBFUSCATION_PATTERNS) - 1)
     if len(obfuscation_signals) >= likely_threshold:
