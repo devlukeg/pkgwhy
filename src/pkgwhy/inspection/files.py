@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from importlib.metadata import Distribution
-from pathlib import Path
 import re
 from collections.abc import Callable
+from importlib.metadata import Distribution
+from pathlib import Path
 
 from pkgwhy.core.models import FileStaticAnalysis, ReadabilityStatus, SourceAvailability
 from pkgwhy.inspection.size import JAVASCRIPT_SUFFIXES, NATIVE_SUFFIXES
 
 SHELL_SUFFIXES = {".sh", ".bash", ".zsh", ".fish", ".ksh"}
-SETUP_FILE_NAMES = {"setup.py", "setup.cfg", "pyproject.toml"}
+INSTALL_TIME_SCRIPT_NAMES = {"setup.py"}
 MAX_TEXT_SCAN_BYTES = 500_000
 LONG_JS_LINE_LENGTH = 500
 MINIFIED_JS_LINE_LENGTH = 1_000
@@ -113,10 +113,10 @@ def analyze_file_signals(paths: list[Path], entry_points: list[str]) -> FileStat
             shell_scripts_detected += 1
             capabilities.add("Shell script files present")
             evidence.append(f"Shell script file present: {name}")
-        if name in SETUP_FILE_NAMES:
+        if name in INSTALL_TIME_SCRIPT_NAMES:
             setup_files_detected += 1
             capabilities.add("Install-time setup files present")
-            evidence.append(f"Install-time setup metadata or script present: {name}")
+            evidence.append(f"Install-time setup script present: {name}")
 
     return FileStaticAnalysis(
         detected_capabilities=sorted(capabilities),
@@ -176,7 +176,12 @@ def _analyze_javascript_file(path: Path) -> FileStaticAnalysis:
     obfuscation_signals = [
         detail for pattern, detail in JS_OBFUSCATION_PATTERNS.items() if re.search(pattern, source)
     ]
-    if len(obfuscation_signals) >= 2:
+    likely_threshold = max(3, len(JS_OBFUSCATION_PATTERNS) - 1)
+    if len(obfuscation_signals) >= likely_threshold:
+        warnings.append(f"JavaScript file has likely obfuscated javascript signals: {path.name}")
+        capabilities.add("JavaScript obfuscation signals")
+        evidence.append(f"JavaScript obfuscation signals in {path.name}: {', '.join(sorted(obfuscation_signals))}.")
+    elif len(obfuscation_signals) >= 2:
         warnings.append(f"JavaScript file has possibly obfuscated JavaScript signals: {path.name}")
         capabilities.add("JavaScript obfuscation signals")
         evidence.append(f"JavaScript obfuscation signals in {path.name}: {', '.join(sorted(obfuscation_signals))}.")

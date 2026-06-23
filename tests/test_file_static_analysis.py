@@ -2,7 +2,6 @@ from pathlib import Path
 
 from pkgwhy.core.models import ReadabilityStatus
 from pkgwhy.inspection.files import analyze_file_signals, infer_readability
-from pkgwhy.inspection.size import NATIVE_SUFFIXES
 
 
 def test_analyze_file_signals_detects_javascript_minification_and_dynamic_patterns(tmp_path: Path) -> None:
@@ -40,8 +39,6 @@ def test_analyze_file_signals_detects_binary_wasm_shell_and_setup_files(tmp_path
     assert analysis.wasm_files_detected == 1
     assert analysis.shell_scripts_detected == 1
     assert analysis.setup_files_detected == 1
-    assert ".wasm" in NATIVE_SUFFIXES
-    assert ".exe" in NATIVE_SUFFIXES
 
 
 def test_analyze_file_signals_detects_shell_shebang_without_shell_suffix(tmp_path: Path) -> None:
@@ -53,3 +50,13 @@ def test_analyze_file_signals_detects_shell_shebang_without_shell_suffix(tmp_pat
     assert "Shell script files present" in analysis.detected_capabilities
     assert analysis.shell_scripts_detected == 1
 
+
+def test_analyze_file_signals_escalates_heavy_javascript_obfuscation(tmp_path: Path) -> None:
+    script = tmp_path / "obfuscated.js"
+    script.write_text("var _0xabc='\\x41';while(!![]){debugger;break;}", encoding="utf-8")
+
+    analysis = analyze_file_signals([script], entry_points=[])
+
+    assert "JavaScript obfuscation signals" in analysis.detected_capabilities
+    assert any("likely obfuscated javascript" in warning.lower() for warning in analysis.warnings)
+    assert infer_readability([script], analysis) == ReadabilityStatus.LIKELY_OBFUSCATED
