@@ -6,11 +6,11 @@ Know why a package exists before you or your agent trusts it.
 
 ## Status
 
-`pkgwhy` is a **pre-alpha developer preview**. It is useful for local package inspection experiments, agent decision-support prototypes, and feedback on the CLI shape.
+`pkgwhy` is in local `0.1.0` release-candidate readiness review. It is useful for local package inspection experiments, conservative static package review, agent decision-support prototypes, and feedback on the CLI shape.
 
 It is not a production security scanner, not malware-detection certainty, and not a sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
 
-Current version candidate: `0.1.0a0`.
+Current packaged version candidate: `0.1.0a0`.
 
 ## What Works Now
 
@@ -22,6 +22,9 @@ pkgwhy explain typer
 pkgwhy why typer
 pkgwhy inspect typer
 pkgwhy judge typer --json
+pkgwhy risk typer
+pkgwhy audit --limit 5 --json
+pkgwhy typos reqeusts pandas-stubs
 ```
 
 Implemented capabilities include:
@@ -29,10 +32,13 @@ Implemented capabilities include:
 - Installed distribution metadata using `importlib.metadata`.
 - Package explanation from local knowledge and installed metadata.
 - Direct, transitive, imported, unknown, and not-installed dependency status.
+- Simple `requirements.txt`, `pyproject.toml`, `uv.lock`, and `poetry.lock` dependency reasoning.
 - Installed package size and largest-file reporting.
 - Source availability and coarse readability signals.
-- Native compiled file, JavaScript asset, package-manager, and CLI-entrypoint signals from file metadata.
+- JavaScript readability, minification, and suspicious static signals.
+- Native compiled file, WASM, shell script, package-manager, setup/install-time, and CLI-entrypoint signals from file metadata.
 - AST-only Python source scanning for filesystem, network, subprocess, environment, credential-pattern, dynamic-code, deserialisation, and encoded-payload signals.
+- Typosquatting similarity signals with false-positive guards for common ecosystem package families.
 - Conservative risk level, decision, warning, recommendation, evidence, and confidence output.
 - Stable JSON output for agent workflows.
 
@@ -40,8 +46,6 @@ Implemented capabilities include:
 
 These are roadmap items, not current features:
 
-- Typosquatting detection.
-- JavaScript minification and obfuscation heuristics beyond basic file signals.
 - Optional PyPI/source lookup and cache.
 - Vulnerability database integration.
 - Local private registry.
@@ -60,7 +64,7 @@ python -m pip install -e ".[dev]"
 pkgwhy --help
 ```
 
-Install directly from GitHub:
+Install directly from GitHub after the repository is public, or from an authorized private checkout:
 
 ```bash
 python -m pip install "pkgwhy @ git+https://github.com/devlukeg/pkgwhy.git"
@@ -182,15 +186,12 @@ python -m venv .venv
 
 ## Roadmap
 
-1. Public pre-alpha packaging and documentation.
-2. JavaScript readability and obfuscation heuristics.
-3. Native/binary and install-time script inspection.
-4. Typosquatting detection.
-5. Optional PyPI/source lookup and cache.
-6. Local private registry.
-7. Private runner with explicit isolation limitations.
-8. Tool judgement and private-first agent policy.
-9. Cloud/model-backed review as an optional future service.
+1. Complete public `0.1.0` release review and packaging.
+2. Optional PyPI/source lookup and cache.
+3. Local private registry.
+4. Private runner with explicit isolation limitations.
+5. Tool judgement and private-first agent policy.
+6. Cloud/model-backed review as an optional future service.
 
 ## License
 

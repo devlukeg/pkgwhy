@@ -2,7 +2,7 @@
 
 ## Supported Status
 
-`pkgwhy` is currently a pre-alpha developer preview. It is not a production security scanner and should not be treated as a definitive malware detector.
+`pkgwhy` is currently in local `0.1.0` release-candidate readiness review. It is not a production security scanner and should not be treated as a definitive malware detector.
 
 ## Reporting Security Issues
 
@@ -23,7 +23,7 @@ Capability analysis reports static signals such as API references, package files
 ## Current Limitations
 
 - No vulnerability database integration yet.
-- No typosquatting detector yet.
+- Typosquatting detection is heuristic and conservative. It can miss risky names and can surface false positives.
 - No OS-level sandboxing.
 - No cloud review or remote evidence lookup in the preview.
 - No guarantee that every risky behavior can be detected statically.
