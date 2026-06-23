@@ -17,6 +17,7 @@ from pkgwhy.imports.scanner import scan_project_imports
 from pkgwhy.manifests.pyproject import read_pyproject_dependencies
 from pkgwhy.manifests.requirements import read_requirements_dependencies
 from pkgwhy.metadata.installed import get_installed_package, list_installed_packages, normalize_package_name
+from pkgwhy.reports.audit import build_audit_report, render_audit_markdown
 from pkgwhy.typosquat.detector import detect_typosquats
 
 app = typer.Typer(no_args_is_help=True, help="Explain, inspect, and judge Python packages.")
@@ -129,6 +130,79 @@ def judge(package: str, as_json: Annotated[bool, typer.Option("--json", help="Em
 
 
 @app.command()
+def risk(package: str, as_json: Annotated[bool, typer.Option("--json", help="Emit JSON risk report.")] = False) -> None:
+    """Show conservative risk judgement for a package."""
+    judgement = judge_installed_package(package)
+    if as_json:
+        print(json.dumps(judgement.model_dump(mode="json"), indent=2, sort_keys=True))
+        return
+
+    console.print(f"[bold]{judgement.package}[/bold]")
+    console.print(f"Risk level: {judgement.risk_level.value}")
+    console.print(f"Decision: {judgement.decision.value}")
+    console.print(f"Confidence: {judgement.confidence.value}")
+    console.print(f"Source availability: {judgement.source_availability.value}")
+    console.print(f"Installed size: {judgement.installed_size_bytes} bytes")
+    console.print(f"Recommendation: {judgement.recommendation}")
+    if judgement.detected_capabilities:
+        console.print("Detected capability signals:")
+        for capability in judgement.detected_capabilities:
+            console.print(f"  - {capability}")
+    if judgement.warnings:
+        console.print("Warnings:")
+        for warning in judgement.warnings:
+            console.print(f"  - {warning}")
+    if judgement.evidence:
+        console.print("Evidence:")
+        for item in judgement.evidence[:10]:
+            console.print(f"  - {item}")
+
+
+@app.command()
+def audit(
+    limit: Annotated[int, typer.Option(help="Maximum installed packages to audit.")] = 25,
+    as_json: Annotated[bool, typer.Option("--json", help="Emit schema-versioned JSON audit report.")] = False,
+    markdown: Annotated[bool, typer.Option("--markdown", help="Emit Markdown audit report.")] = False,
+    output: Annotated[Path | None, typer.Option(help="Optional output path for JSON or Markdown reports.")] = None,
+) -> None:
+    """Audit installed packages with conservative static judgements."""
+    if limit <= 0:
+        raise typer.BadParameter("limit must be greater than zero")
+    if as_json and markdown:
+        raise typer.BadParameter("Choose either --json or --markdown, not both")
+
+    packages = list_installed_packages()[:limit]
+    names = [package.identity.name for package in packages]
+    judgements = [judge_installed_package(name) for name in names]
+    report = build_audit_report(judgements)
+
+    if as_json:
+        rendered = json.dumps(report, indent=2, sort_keys=True)
+        _emit_or_write(rendered, output)
+        return
+    if markdown:
+        rendered = render_audit_markdown(judgements)
+        _emit_or_write(rendered, output)
+        return
+
+    table = Table(title="Package audit")
+    table.add_column("Package")
+    table.add_column("Version")
+    table.add_column("Risk")
+    table.add_column("Decision")
+    table.add_column("Warnings")
+    for judgement in judgements:
+        table.add_row(
+            judgement.package,
+            judgement.version or "unknown",
+            judgement.risk_level.value,
+            judgement.decision.value,
+            str(len(judgement.warnings)),
+        )
+    console.print(table)
+
+
+@app.command()
 def typos(packages: Annotated[list[str] | None, typer.Argument(help="Package names to check. Omit to scan installed packages.")] = None) -> None:
     """Detect conservative typosquatting similarity signals."""
     names = packages if packages else [package.identity.name for package in list_installed_packages()]
@@ -182,3 +256,11 @@ def dependency_status_for(
 
 def _package_not_found(package: str) -> None:
     console.print(f"Package '{package}' is not installed in the active Python environment.")
+
+
+def _emit_or_write(rendered: str, output: Path | None) -> None:
+    if output is None:
+        print(rendered, end="" if rendered.endswith("\n") else "\n")
+        return
+    output.write_text(rendered, encoding="utf-8")
+    console.print(f"Wrote report to {output}")
