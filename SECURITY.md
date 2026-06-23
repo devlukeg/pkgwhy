@@ -22,11 +22,14 @@ Capability analysis reports static signals such as API references, package files
 
 `pkgwhy run` is a separate local private-tool execution feature. It intentionally executes tools only after resolving a valid local registry entry and verifying the stored bundle hash. This execution path is separate from package inspection and must not be treated as evidence that package inspection imports or executes inspected package code.
 
+The local runner blocks missing or hash-mismatched bundles, unsupported entrypoints, declared dependencies, and non-interactive runs that are not allowed by both judgement and manifest policy. It uses a Python virtual environment for dependency isolation only; it does not provide OS-level filesystem, network, process, or user permission sandboxing.
+
 ## Current Limitations
 
 - No vulnerability database integration yet.
 - No runner dependency installation yet.
 - No tool bundle signing or signature verification yet.
+- No cloud registry, remote pull, hosted review API, or account-based registry auth yet.
 - Typosquatting detection is heuristic and conservative. It can miss risky names and can surface false positives.
 - No OS-level sandboxing.
 - No cloud review or remote evidence lookup in the preview.

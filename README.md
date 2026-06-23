@@ -61,6 +61,16 @@ Every run prints this warning:
 This run uses a Python virtual environment for dependency isolation. It does not fully sandbox operating-system permissions.
 ```
 
+Current runner policy is intentionally conservative:
+
+- Unknown tools are not resolved or run; a valid local registry entry is required.
+- Bundle hash mismatch or a missing bundle blocks execution.
+- `sandbox_only` and `block` tool judgements block execution.
+- Non-interactive execution is blocked unless both the judgement and manifest agent policy allow it.
+- Tools with declared dependencies are not run yet because dependency installation is not implemented.
+- Unsupported entrypoints, including shell scripts, absolute paths, and path traversal, are rejected.
+- Tool signatures report `not_implemented`; unsigned local tools are a manual-review signal, not a verified trust claim.
+
 ## What Is Not Implemented Yet
 
 These are roadmap items, not current features:
@@ -182,13 +192,14 @@ The current risk engine is deliberately conservative and early. Treat it as deci
 ```bash
 pkgwhy registry init ~/.pkgwhy/registry
 pkgwhy publish ./my_tool.py
-pkgwhy run local/my_tool
+pkgwhy tool inspect local/my_tool
 pkgwhy tool judge local/my_tool --json
+pkgwhy run local/my_tool
 ```
 
-The runner executes only tools resolved from the configured local registry. It does not run arbitrary public package code, does not install tool dependencies in the MVP, and blocks execution if the stored bundle hash does not verify.
+The runner executes only tools resolved from the configured local registry. It does not run arbitrary public package code, does not install tool dependencies in the MVP, and blocks execution if the stored bundle hash does not verify. Local registry entries are file-backed records under the configured registry path; no cloud registry, account, upload, pull, or remote sync is implemented in this preview.
 
-The MVP runner uses Python virtual environments for dependency isolation. A virtual environment is not a full operating-system sandbox, and `pkgwhy` states that clearly before each run.
+The MVP runner uses Python virtual environments for dependency isolation. A virtual environment is not a full operating-system sandbox, and `pkgwhy` states that clearly before each run. Signing is also not implemented yet, so JSON judgement reports `signature_status: "not_implemented"` rather than pretending a signature was verified.
 
 ## Future Cloud Review
 

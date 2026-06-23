@@ -10,12 +10,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from pkgwhy.core.models import (
-    AgentDecision,
-    HashStatus,
     ToolArtifactType,
     ToolRunResult,
     ToolRunStatus,
 )
+from pkgwhy.policy.tool_execution import evaluate_tool_execution_policy
 from pkgwhy.registry.local import current_registry
 from pkgwhy.registry.tools import judge_tool, resolve_tool_entry
 
@@ -26,14 +25,13 @@ RUNNER_ISOLATION_WARNING = (
 DEFAULT_RUN_TIMEOUT_SECONDS = 300
 
 
-def run_local_tool(reference: str) -> ToolRunResult:
+def run_local_tool(reference: str, *, non_interactive: bool = False) -> ToolRunResult:
     registry = current_registry()
     entry = resolve_tool_entry(reference, registry)
     judgement = judge_tool(reference)
-    if judgement.hash_status != HashStatus.VERIFIED:
-        raise ValueError(f"Tool hash is not verified: {judgement.hash_status.value}")
-    if judgement.decision == AgentDecision.BLOCK:
-        raise ValueError("Tool judgement blocks execution.")
+    policy_result = evaluate_tool_execution_policy(judgement, non_interactive=non_interactive)
+    if not policy_result.allowed:
+        raise ValueError(f"Tool policy blocks execution: {' '.join(policy_result.reasons)}")
     manifest = judgement.manifest
     if manifest.artifact_type not in {ToolArtifactType.SCRIPT, ToolArtifactType.FOLDER}:
         raise ValueError(f"Unsupported tool artifact type for runner MVP: {manifest.artifact_type.value}")
