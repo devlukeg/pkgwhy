@@ -87,6 +87,8 @@ def init_local_registry(path: Path, name: str = DEFAULT_REGISTRY_NAME) -> Regist
         save_registry_index(registry_path, RegistryIndex())
 
     config = load_registry_config()
+    if name in config.registries and config.registries[name] != str(registry_path):
+        raise ValueError(f"A registry with this name already exists at a different path: {name}")
     config.registries[name] = str(registry_path)
     config.current_registry = name
     save_registry_config(config)

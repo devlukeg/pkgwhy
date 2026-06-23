@@ -208,11 +208,11 @@ python -m venv .venv
 
 ## Roadmap
 
-1. Complete public `0.1.0` release review and packaging.
+1. Complete public release review and packaging for the current local package-intelligence, registry, tool-judgement, and runner MVP.
 2. Optional PyPI/source lookup and cache.
-3. Local private registry.
-4. Private runner with explicit isolation limitations.
-5. Tool judgement and private-first agent policy.
+3. Tool dependency installation in the runner.
+4. Tool bundle signing and signature verification.
+5. Cloud/private remote registry backends.
 6. Cloud/model-backed review as an optional future service.
 
 ## License

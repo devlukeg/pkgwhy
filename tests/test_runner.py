@@ -1,4 +1,7 @@
 import json
+import hashlib
+import io
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -143,3 +146,26 @@ non_interactive_decision = "block"
 
     with pytest.raises(ValueError, match="Dependency installation is not implemented"):
         run_local_tool("local/dependency-tool")
+
+
+def test_run_local_tool_rejects_path_traversal_in_archive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PKGWHY_CONFIG_HOME", str(tmp_path / "config"))
+    registry_path = tmp_path / "registry"
+    init_local_registry(registry_path)
+    script = tmp_path / "traversal_runner.py"
+    script.write_text("print('should not extract')\n", encoding="utf-8")
+    publish_local_tool(script)
+    index = load_registry_index(registry_path)
+    bundle_path = registry_path / index.tools[0].bundle_path
+    payload = b"print('unsafe')\n"
+    with tarfile.open(bundle_path, "w:gz") as archive:
+        member = tarfile.TarInfo("../../../evil.py")
+        member.size = len(payload)
+        archive.addfile(member, io.BytesIO(payload))
+    index.tools[0].sha256 = hashlib.sha256(bundle_path.read_bytes()).hexdigest()
+    save_registry_index(registry_path, index)
+
+    with pytest.raises(ValueError, match="Unsafe path"):
+        run_local_tool("local/traversal_runner")

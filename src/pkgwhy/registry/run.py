@@ -23,6 +23,7 @@ RUNNER_ISOLATION_WARNING = (
     "This run uses a Python virtual environment for dependency isolation. "
     "It does not fully sandbox operating-system permissions."
 )
+DEFAULT_RUN_TIMEOUT_SECONDS = 300
 
 
 def run_local_tool(reference: str) -> ToolRunResult:
@@ -56,9 +57,25 @@ def run_local_tool(reference: str) -> ToolRunResult:
 
     started_at_dt = datetime.now(tz=UTC)
     command = [str(python_path), str(entrypoint_path)]
-    completed = subprocess.run(command, capture_output=True, text=True, check=False)
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=DEFAULT_RUN_TIMEOUT_SECONDS,
+        )
+        exit_code = completed.returncode
+        stdout = completed.stdout
+        stderr = completed.stderr
+    except subprocess.TimeoutExpired as exc:
+        exit_code = 124
+        stdout = _output_text(exc.stdout)
+        stderr = _output_text(exc.stderr)
+        timeout_message = f"Tool execution timed out after {DEFAULT_RUN_TIMEOUT_SECONDS} seconds."
+        stderr = f"{stderr.rstrip()}\n{timeout_message}\n" if stderr else f"{timeout_message}\n"
     finished_at_dt = datetime.now(tz=UTC)
-    status = ToolRunStatus.COMPLETED if completed.returncode == 0 else ToolRunStatus.FAILED
+    status = ToolRunStatus.COMPLETED if exit_code == 0 else ToolRunStatus.FAILED
     result = ToolRunResult(
         tool=f"{entry.owner}/{entry.name}",
         owner=entry.owner,
@@ -70,10 +87,10 @@ def run_local_tool(reference: str) -> ToolRunResult:
         entrypoint=manifest.entrypoint,
         started_at=started_at_dt.isoformat(),
         finished_at=finished_at_dt.isoformat(),
-        exit_code=completed.returncode,
+        exit_code=exit_code,
         status=status,
-        stdout=completed.stdout,
-        stderr=completed.stderr,
+        stdout=stdout,
+        stderr=stderr,
         log_path=log_dir / f"{started_at_dt.strftime('%Y%m%dT%H%M%S%fZ')}.json",
         warning=RUNNER_ISOLATION_WARNING,
     )
@@ -111,6 +128,14 @@ def _ensure_venv_python(venv_path: Path) -> Path:
 
 def _is_windows_venv() -> bool:
     return sys.platform == "win32"
+
+
+def _output_text(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode(errors="replace")
+    return value
 
 
 def _write_execution_log(result: ToolRunResult) -> None:

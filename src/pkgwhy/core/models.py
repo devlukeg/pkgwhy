@@ -327,10 +327,13 @@ class ToolManifest(BaseModel):
     @field_validator("dependencies", "declared_permissions")
     @classmethod
     def validate_non_empty_list_items(cls, values: list[str]) -> list[str]:
+        stripped_values: list[str] = []
         for value in values:
-            if not value.strip():
+            stripped = value.strip()
+            if not stripped:
                 raise ValueError("list values must not be empty")
-        return values
+            stripped_values.append(stripped)
+        return stripped_values
 
 
 class PublishResult(BaseModel):

@@ -59,6 +59,16 @@ def test_add_registry_rejects_duplicate_name(tmp_path: Path, monkeypatch: pytest
         add_registry("local", second_path)
 
 
+def test_init_local_registry_rejects_duplicate_name_at_different_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PKGWHY_CONFIG_HOME", str(tmp_path / "config"))
+    init_local_registry(tmp_path / "first", name="local")
+
+    with pytest.raises(ValueError, match="already exists"):
+        init_local_registry(tmp_path / "second", name="local")
+
+
 def test_load_registry_config_ignores_invalid_config(tmp_path: Path) -> None:
     config_file = tmp_path / "registries.json"
     config_file.write_text('{"registries": []}', encoding="utf-8")
