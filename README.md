@@ -24,6 +24,7 @@ pkgwhy inspect typer
 pkgwhy judge typer --json
 pkgwhy risk typer
 pkgwhy audit --limit 5 --json
+# "reqeusts" is intentionally misspelled to demonstrate typo detection.
 pkgwhy typos reqeusts pandas-stubs
 ```
 

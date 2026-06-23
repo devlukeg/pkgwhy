@@ -121,8 +121,6 @@ def _is_known_family_package(normalized: str, target: str) -> bool:
     return (
         normalized.startswith(f"{target_normalized}-")
         or normalized.endswith(f"-{target_normalized}")
-        or normalized == f"types-{target_normalized}"
-        or normalized == f"{target_normalized}-stubs"
     )
 
 

@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
@@ -62,7 +63,7 @@ def test_scan_rejects_invalid_limit(limit: str) -> None:
     assert "limit must be greater than zero" in result.output
 
 
-def test_why_command_reports_declared_and_lockfile_evidence(tmp_path) -> None:
+def test_why_command_reports_declared_and_lockfile_evidence(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text(
         """
 [project]
