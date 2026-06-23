@@ -15,6 +15,10 @@ LONG_JS_LINE_LENGTH = 500
 MINIFIED_JS_LINE_LENGTH = 1_000
 LOW_WHITESPACE_RATIO = 0.08
 HIGH_PUNCTUATION_RATIO = 0.32
+JS_LIKELY_OBFUSCATED_WARNING = "likely obfuscated javascript"
+JS_POSSIBLY_OBFUSCATED_WARNING = "possibly obfuscated javascript"
+JS_APPEARS_MINIFIED_WARNING = "appears minified"
+JS_MAY_BE_MINIFIED_WARNING = "may be minified"
 
 JS_DYNAMIC_PATTERNS = {
     r"\beval\s*\(": "JavaScript eval call",
@@ -60,11 +64,15 @@ def infer_source_availability(paths: list[Path]) -> SourceAvailability:
 
 
 def infer_readability(paths: list[Path], file_analysis: FileStaticAnalysis | None = None) -> ReadabilityStatus:
-    if file_analysis and any("likely obfuscated javascript" in warning.lower() for warning in file_analysis.warnings):
+    if file_analysis and any(JS_LIKELY_OBFUSCATED_WARNING in warning.lower() for warning in file_analysis.warnings):
         return ReadabilityStatus.LIKELY_OBFUSCATED
-    if file_analysis and any("possibly obfuscated javascript" in warning.lower() for warning in file_analysis.warnings):
+    if file_analysis and any(JS_POSSIBLY_OBFUSCATED_WARNING in warning.lower() for warning in file_analysis.warnings):
         return ReadabilityStatus.POSSIBLY_OBFUSCATED
-    if file_analysis and any("appears minified" in warning.lower() for warning in file_analysis.warnings):
+    if file_analysis and any(
+        marker in warning.lower()
+        for marker in {JS_APPEARS_MINIFIED_WARNING, JS_MAY_BE_MINIFIED_WARNING}
+        for warning in file_analysis.warnings
+    ):
         return ReadabilityStatus.MINIFIED
     if any(path.suffix == ".py" for path in paths):
         return ReadabilityStatus.READABLE
@@ -151,10 +159,10 @@ def _analyze_javascript_file(path: Path) -> FileStaticAnalysis:
     punctuation_ratio = _character_ratio(source, lambda char: not char.isalnum() and not char.isspace())
 
     if path.name.endswith(".min.js") or longest_line >= MINIFIED_JS_LINE_LENGTH:
-        warnings.append(f"JavaScript file appears minified: {path.name}")
+        warnings.append(f"JavaScript file {JS_APPEARS_MINIFIED_WARNING}: {path.name}")
         evidence.append(f"JavaScript minification signal in {path.name}: long line or .min.js filename.")
     elif longest_line >= LONG_JS_LINE_LENGTH and whitespace_ratio < LOW_WHITESPACE_RATIO:
-        warnings.append(f"JavaScript file may be minified: {path.name}")
+        warnings.append(f"JavaScript file {JS_MAY_BE_MINIFIED_WARNING}: {path.name}")
         evidence.append(f"JavaScript readability signal in {path.name}: long line with low whitespace ratio.")
 
     if whitespace_ratio < LOW_WHITESPACE_RATIO and punctuation_ratio > HIGH_PUNCTUATION_RATIO:
@@ -176,11 +184,11 @@ def _analyze_javascript_file(path: Path) -> FileStaticAnalysis:
     ]
     likely_threshold = max(3, len(JS_OBFUSCATION_PATTERNS) - 1)
     if len(obfuscation_signals) >= likely_threshold:
-        warnings.append(f"JavaScript file has likely obfuscated javascript signals: {path.name}")
+        warnings.append(f"JavaScript file has {JS_LIKELY_OBFUSCATED_WARNING} signals: {path.name}")
         capabilities.add("JavaScript obfuscation signals")
         evidence.append(f"JavaScript obfuscation signals in {path.name}: {', '.join(sorted(obfuscation_signals))}.")
     elif len(obfuscation_signals) >= 2:
-        warnings.append(f"JavaScript file has possibly obfuscated JavaScript signals: {path.name}")
+        warnings.append(f"JavaScript file has {JS_POSSIBLY_OBFUSCATED_WARNING} signals: {path.name}")
         capabilities.add("JavaScript obfuscation signals")
         evidence.append(f"JavaScript obfuscation signals in {path.name}: {', '.join(sorted(obfuscation_signals))}.")
 
