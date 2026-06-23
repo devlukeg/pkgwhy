@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -14,6 +15,11 @@ from pkgwhy.core.models import (
 from pkgwhy.reports.audit import AUDIT_SCHEMA_VERSION, render_audit_markdown
 
 runner = CliRunner()
+ANSI_STYLE_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def strip_ansi_styles(output: str) -> str:
+    return ANSI_STYLE_RE.sub("", output)
 
 
 def test_risk_command_outputs_human_risk_report() -> None:
@@ -58,7 +64,7 @@ def test_audit_rejects_invalid_output_mode_combination() -> None:
     result = runner.invoke(app, ["audit", "--json", "--markdown"])
 
     assert result.exit_code != 0
-    assert "Choose either --json or --markdown" in result.output
+    assert "Choose either --json or --markdown" in strip_ansi_styles(result.output)
 
 
 def test_audit_rejects_output_without_file_report_mode(tmp_path: Path) -> None:
@@ -66,7 +72,7 @@ def test_audit_rejects_output_without_file_report_mode(tmp_path: Path) -> None:
     result = runner.invoke(app, ["audit", "--output", str(output)])
 
     assert result.exit_code != 0
-    assert "--output requires --json or --markdown" in result.output
+    assert "--output requires --json or --markdown" in strip_ansi_styles(result.output)
 
 
 def test_audit_writes_json_report_to_output_path(tmp_path: Path) -> None:
