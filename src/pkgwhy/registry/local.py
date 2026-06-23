@@ -39,6 +39,26 @@ def registry_index_path(path: Path) -> Path:
     return path / REGISTRY_INDEX_FILENAME
 
 
+def load_registry_index(path: Path) -> RegistryIndex:
+    target = registry_index_path(path)
+    if not target.exists():
+        return RegistryIndex()
+    try:
+        data = json.loads(target.read_text(encoding="utf-8"))
+        return RegistryIndex.model_validate(data)
+    except (OSError, json.JSONDecodeError, ValidationError):
+        return RegistryIndex()
+
+
+def save_registry_index(path: Path, index: RegistryIndex) -> None:
+    target = registry_index_path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    content = json.dumps(index.model_dump(mode="json"), indent=2, sort_keys=True) + "\n"
+    temp_path = target.with_name(f".{target.name}.tmp")
+    temp_path.write_text(content, encoding="utf-8")
+    temp_path.replace(target)
+
+
 def load_registry_config(path: Path | None = None) -> RegistryConfig:
     target = path or config_path()
     if not target.exists():
@@ -112,6 +132,13 @@ def use_registry(name: str) -> RegistryEntry:
         is_current=True,
         index_exists=registry_index_path(registry_path).exists(),
     )
+
+
+def current_registry() -> RegistryEntry:
+    config = load_registry_config()
+    if config.current_registry is None:
+        raise ValueError("No current registry is configured. Run 'pkgwhy registry init <path>' first.")
+    return use_registry(config.current_registry)
 
 
 def list_registries() -> list[RegistryEntry]:

@@ -235,11 +235,25 @@ class RegistryEntry(BaseModel):
     index_exists: bool = False
 
 
+class RegistryToolEntry(BaseModel):
+    """One published local tool bundle in a registry index."""
+
+    name: str
+    owner: str
+    version: str
+    artifact_type: ToolArtifactType
+    entrypoint: str
+    bundle_path: str
+    sha256: str
+    manifest_path: str
+    published_at: str
+
+
 class RegistryIndex(BaseModel):
     """Local registry index placeholder for published private tools."""
 
     schema_version: str = "pkgwhy.registry_index.v1"
-    tools: list[dict[str, str]] = Field(default_factory=list)
+    tools: list[RegistryToolEntry] = Field(default_factory=list)
 
 
 class ToolSecurityPolicy(BaseModel):
@@ -304,3 +318,14 @@ class ToolManifest(BaseModel):
             if not value.strip():
                 raise ValueError("list values must not be empty")
         return values
+
+
+class PublishResult(BaseModel):
+    """Result of a local-only publish operation."""
+
+    manifest: ToolManifest
+    registry_name: str
+    registry_path: Path
+    bundle_path: Path
+    manifest_path: Path
+    sha256: str

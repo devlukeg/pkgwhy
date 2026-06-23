@@ -104,3 +104,18 @@ def test_registry_commands_manage_local_config(tmp_path: Path) -> None:
     assert "present" in list_result.output
     assert use_result.exit_code == 0
     assert "Current registry: local" in use_result.output
+
+
+def test_publish_command_publishes_script_to_current_registry(tmp_path: Path) -> None:
+    env = {"PKGWHY_CONFIG_HOME": str(tmp_path / "config")}
+    registry_path = tmp_path / "registry"
+    script = tmp_path / "hello_tool.py"
+    script.write_text("print('hello')\n", encoding="utf-8")
+
+    init_result = runner.invoke(app, ["registry", "init", str(registry_path)], env=env)
+    publish_result = runner.invoke(app, ["publish", str(script)], env=env)
+
+    assert init_result.exit_code == 0
+    assert publish_result.exit_code == 0
+    assert "Published local/hello_tool 0.1.0" in publish_result.output
+    assert "Signature status: not_implemented" in publish_result.output

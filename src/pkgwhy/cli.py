@@ -16,6 +16,7 @@ from pkgwhy.explanations.explain import explain_package
 from pkgwhy.imports.scanner import scan_project_imports
 from pkgwhy.metadata.installed import get_installed_package, list_installed_packages
 from pkgwhy.registry.local import add_registry, init_local_registry, list_registries, use_registry
+from pkgwhy.registry.publish import publish_local_tool
 from pkgwhy.reports.audit import build_audit_report, render_audit_markdown
 from pkgwhy.typosquat.detector import detect_typosquats
 
@@ -239,6 +240,22 @@ def typos(packages: Annotated[list[str] | None, typer.Argument(help="Package nam
             candidate.recommendation,
         )
     console.print(table)
+
+
+@app.command()
+def publish(path: Annotated[Path, typer.Argument(help="Local .py file or folder with pkgwhy.toml to publish.")]) -> None:
+    """Publish a local private tool into the current local registry."""
+    try:
+        result = publish_local_tool(path)
+    except ValueError as exc:
+        console.print(str(exc))
+        raise typer.Exit(1) from exc
+
+    manifest = result.manifest
+    console.print(f"Published {manifest.owner}/{manifest.name} {manifest.version} to registry '{result.registry_name}'")
+    console.print(f"Bundle: {result.bundle_path}")
+    console.print(f"SHA-256: {result.sha256}")
+    console.print("Signature status: not_implemented")
 
 
 @registry_app.command("init")
