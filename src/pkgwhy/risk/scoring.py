@@ -68,9 +68,15 @@ def _warning_capability_signals(capabilities: list[str]) -> list[str]:
     warning_signals = {
         "Subprocess or shell execution signals",
         "Dynamic code execution signals",
+        "JavaScript dynamic code execution signals",
+        "JavaScript obfuscation signals",
+        "Encoded payload handling signals",
         "Deserialisation risk signals",
         "Credential or token access patterns",
         "Package manager manipulation signals",
+        "Shell script files present",
+        "Install-time setup files present",
+        "WASM binary code present",
     }
     return sorted(set(capabilities) & warning_signals)
 

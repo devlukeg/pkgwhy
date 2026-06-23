@@ -5,7 +5,7 @@ from pathlib import Path
 from pkgwhy.core.models import PackageIdentity, PackageInspection, PackageJudgement, PackageMetadata
 from pkgwhy.core.models import ReadabilityStatus, SourceAvailability
 from pkgwhy.inspection.files import (
-    detect_file_capabilities,
+    analyze_file_signals,
     distribution_file_paths,
     infer_readability,
     infer_source_availability,
@@ -26,9 +26,10 @@ def inspect_installed_package(name: str) -> PackageInspection | None:
 
     paths = distribution_file_paths(dist)
     size = measure_distribution_size(dist)
+    file_analysis = analyze_file_signals(paths, metadata.entry_points)
     python_analysis = analyze_python_files(paths)
     capabilities = sorted(
-        set(detect_file_capabilities(paths, metadata.entry_points))
+        set(file_analysis.detected_capabilities)
         | set(python_analysis.detected_capabilities)
     )
     evidence = [
@@ -37,8 +38,10 @@ def inspect_installed_package(name: str) -> PackageInspection | None:
         f"Statically parsed {python_analysis.files_scanned} Python files with AST.",
         "Did not import or execute inspected package code.",
     ]
+    evidence.extend(file_analysis.evidence)
     evidence.extend(python_analysis.evidence)
     warnings: list[str] = []
+    warnings.extend(file_analysis.warnings)
     warnings.extend(python_analysis.warnings)
     if not paths:
         warnings.append("Distribution metadata did not expose installed files for static file inspection.")
@@ -46,12 +49,13 @@ def inspect_installed_package(name: str) -> PackageInspection | None:
     return PackageInspection(
         metadata=metadata,
         source_availability=infer_source_availability(paths),
-        readability=infer_readability(paths),
+        readability=infer_readability(paths, file_analysis),
         size=size,
         package_paths=[Path(path) for path in paths[:MAX_REPORTED_PATHS]],
         detected_capabilities=capabilities,
         warnings=warnings,
         evidence=evidence,
+        file_analysis=file_analysis,
     )
 
 

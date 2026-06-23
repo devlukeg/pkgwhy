@@ -114,6 +114,19 @@ class PythonStaticAnalysis(BaseModel):
     files_scanned: int = 0
 
 
+class FileStaticAnalysis(BaseModel):
+    """Static file-type and text-pattern signals gathered without execution."""
+
+    detected_capabilities: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
+    javascript_files_scanned: int = 0
+    shell_scripts_detected: int = 0
+    native_binaries_detected: int = 0
+    wasm_files_detected: int = 0
+    setup_files_detected: int = 0
+
+
 class PackageInspection(BaseModel):
     """Static inspection result combining metadata, files, warnings, and evidence."""
 
@@ -125,6 +138,7 @@ class PackageInspection(BaseModel):
     detected_capabilities: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
+    file_analysis: FileStaticAnalysis = Field(default_factory=FileStaticAnalysis)
 
 
 class PackageExplanation(BaseModel):
