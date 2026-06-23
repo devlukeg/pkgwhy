@@ -75,7 +75,7 @@ def _manifest_path(registry_path: Path, manifest: ToolManifest) -> Path:
 
 
 def _write_bundle(source: Path, bundle_path: Path) -> None:
-    with tarfile.open(bundle_path, "w:gz") as archive:
+    with tarfile.open(bundle_path, "w:gz", dereference=False) as archive:
         if source.is_file():
             archive.add(source, arcname=source.name)
             return
