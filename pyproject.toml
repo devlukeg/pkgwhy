@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pkgwhy"
-version = "0.1.0a0"
-description = "Offline-first Python package intelligence and conservative static inspection for agent decisions."
+version = "0.2.0a0"
+description = "Offline-first Python package intelligence and local private-tool execution with conservative static inspection."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -26,6 +26,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Software Development :: Libraries :: Python Modules",
   "Topic :: Security",
 ]
