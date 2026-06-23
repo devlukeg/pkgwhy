@@ -23,7 +23,7 @@ from pkgwhy.registry.tools import judge_tool
 from pkgwhy.reports.audit import build_audit_report, render_audit_markdown
 from pkgwhy.typosquat.detector import detect_typosquats
 
-app = typer.Typer(no_args_is_help=True, help="Explain, inspect, and judge Python packages.")
+app = typer.Typer(no_args_is_help=True, help="Explain, inspect, judge packages, and run local private tools.")
 registry_app = typer.Typer(no_args_is_help=True, help="Manage local private registries.")
 tool_app = typer.Typer(no_args_is_help=True, help="Inspect and judge local private tools.")
 app.add_typer(registry_app, name="registry")
@@ -265,7 +265,7 @@ def publish(path: Annotated[Path, typer.Argument(help="Local .py file or folder 
 
 @app.command()
 def run(reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference from the local registry.")]) -> None:
-    """Run a verified local private tool."""
+    """Run a hash-verified local private tool from the current local registry."""
     print(RUNNER_ISOLATION_WARNING, file=sys.stderr)
     try:
         result = run_local_tool(reference)

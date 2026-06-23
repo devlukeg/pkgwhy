@@ -20,9 +20,15 @@ Do not include secrets, private package contents, or credentials in public issue
 
 Capability analysis reports static signals such as API references, package files, and entry points. These signals are not proof of runtime behavior, intent, or maliciousness.
 
-`pkgwhy run` is a separate local private-tool execution feature. It intentionally executes tools only after resolving a valid local registry entry and verifying the stored bundle hash. This execution path is separate from package inspection and must not be treated as evidence that package inspection imports or executes inspected package code.
+`pkgwhy run` is a separate local private-tool execution feature. It intentionally executes local private tool code only after resolving a valid local registry entry, verifying the stored bundle hash, and applying policy checks. This execution path is separate from package inspection and must not be treated as evidence that package inspection imports or executes inspected package code.
 
 The local runner blocks missing or hash-mismatched bundles, unsupported entrypoints, declared dependencies, and non-interactive runs that are not allowed by both judgement and manifest policy. It uses a Python virtual environment for dependency isolation only; it does not provide OS-level filesystem, network, process, or user permission sandboxing.
+
+Runner warning:
+
+```text
+This run uses a Python virtual environment for dependency isolation. It does not fully sandbox operating-system permissions.
+```
 
 ## Current Limitations
 

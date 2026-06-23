@@ -2,7 +2,7 @@
 
 Know why a package exists before you or your agent trusts it.
 
-`pkgwhy` is an offline-first Python package intelligence CLI owned and maintained by Luke Gerakiteys. It explains installed packages, inspects local package files without importing them, reports conservative static security signals, and produces agent-readable JSON judgements.
+`pkgwhy` is an offline-first Python package intelligence and local private-tool CLI owned and maintained by Luke Gerakiteys. It explains installed packages, inspects local package files without importing them, reports conservative static security signals, produces agent-readable JSON judgements, and can publish and run local private Python tools from a local registry.
 
 ## Status
 
@@ -10,7 +10,7 @@ Know why a package exists before you or your agent trusts it.
 
 It is not a production security scanner, not malware-detection certainty, and not a sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
 
-Current packaged version candidate: `0.1.0a0`.
+Current packaged version candidate: `0.2.0a0`.
 
 ## What Works Now
 
@@ -47,6 +47,9 @@ The local private-tool MVP supports a local registry, local publishing, tool jud
 
 ```bash
 pkgwhy registry init ~/.pkgwhy/registry
+pkgwhy registry list
+pkgwhy registry add local-copy ~/.pkgwhy/registry
+pkgwhy registry use local
 pkgwhy publish ./my_tool.py
 pkgwhy tool inspect local/my_tool
 pkgwhy tool judge local/my_tool --json
@@ -107,6 +110,15 @@ Future PyPI pre-alpha install command, after Luke explicitly approves publishing
 python -m pip install pkgwhy
 ```
 
+Runtime dependencies are intentionally small:
+
+- `typer` for the command-line interface.
+- `rich` for terminal tables and formatted human output.
+- `pydantic` for stable structured judgement, manifest, registry, and report models.
+- `packaging` for dependency and requirement parsing.
+
+Development-only dependencies are `pytest`, `build`, and `twine`.
+
 ## Quickstart
 
 Inspect an installed package:
@@ -127,18 +139,97 @@ Emit machine-readable judgement JSON:
 pkgwhy judge typer --json
 ```
 
-Abbreviated JSON contract shape:
+Run a conservative risk report:
+
+```bash
+pkgwhy risk typer
+```
+
+Audit a small slice of the current environment:
+
+```bash
+pkgwhy audit --limit 2 --json
+```
+
+Check package names for typosquatting similarity signals:
+
+```bash
+pkgwhy typos reqeusts pandas-stubs
+```
+
+Create and select a local registry:
+
+```bash
+pkgwhy registry init ~/.pkgwhy/registry
+pkgwhy registry list
+pkgwhy registry use local
+```
+
+Add an existing local registry directory:
+
+```bash
+pkgwhy registry add work-tools ~/.pkgwhy/work-tools-registry
+```
+
+Publish and inspect a local Python script:
+
+```bash
+pkgwhy publish ./my_tool.py
+pkgwhy tool inspect local/my_tool
+pkgwhy tool judge local/my_tool --json
+```
+
+Publish a folder with an explicit `pkgwhy.toml` manifest:
+
+```toml
+[tool]
+name = "my-tool"
+owner = "local"
+version = "0.1.0"
+description = "Local Python tool."
+artifact_type = "folder"
+entrypoint = "main.py"
+python_requires = ">=3.11"
+dependencies = []
+declared_permissions = ["filesystem"]
+
+[security]
+requires_human_approval = true
+allow_unsigned = false
+allow_unpinned_dependencies = false
+signing_status = "not_implemented"
+
+[agent]
+default_decision = "review_manually"
+non_interactive_decision = "review_manually"
+```
+
+```bash
+pkgwhy publish ./my-tool-folder
+```
+
+Run a local private tool after hash verification and policy checks:
+
+```bash
+pkgwhy run local/my_tool
+```
+
+## Agent JSON Contracts
+
+Package judgement schema version: `pkgwhy.package_judgement.v1`.
+
+Field shape for `pkgwhy judge <package> --json`:
 
 ```json
 {
   "schema_version": "pkgwhy.package_judgement.v1",
   "package": "package-name",
   "version": "installed-version-or-null",
-  "decision": "allow | allow_with_caution | review_manually | sandbox_only | block",
-  "risk_level": "low | medium | high | critical | unknown",
-  "confidence": "low | medium | high",
+  "decision": "allow_with_caution",
+  "risk_level": "medium",
+  "confidence": "medium",
   "summary": "summary from installed metadata or local explanation sources",
-  "source_availability": "installed_source_present | installed_metadata_only | source_availability_unknown | not_installed",
+  "source_availability": "installed_source_present",
   "installed_size_bytes": 0,
   "detected_capabilities": [],
   "warnings": [],
@@ -148,7 +239,73 @@ Abbreviated JSON contract shape:
 }
 ```
 
-Run `pkgwhy judge <installed-package> --json` locally for real environment-specific values.
+Values are environment-specific. Run `pkgwhy judge <installed-package> --json` locally for actual installed-package evidence.
+
+Tool judgement schema version: `pkgwhy.tool_judgement.v1`.
+
+Field shape for `pkgwhy tool judge <tool> --json`:
+
+```json
+{
+  "schema_version": "pkgwhy.tool_judgement.v1",
+  "tool": "local/my_tool",
+  "owner": "local",
+  "name": "my_tool",
+  "version": "0.1.0",
+  "decision": "review_manually",
+  "risk_level": "medium",
+  "confidence": "medium",
+  "reason": "Tool bundle hash matches the local registry index.",
+  "requires_human_approval": true,
+  "manifest": {
+    "schema_version": "pkgwhy.tool_manifest.v1",
+    "name": "my_tool",
+    "owner": "local",
+    "version": "0.1.0",
+    "description": "Local Python script published with pkgwhy.",
+    "artifact_type": "script",
+    "entrypoint": "my_tool.py",
+    "python_requires": ">=3.11",
+    "dependencies": [],
+    "declared_permissions": [],
+    "security": {
+      "requires_human_approval": true,
+      "allow_unsigned": false,
+      "allow_unpinned_dependencies": false,
+      "signing_status": "not_implemented"
+    },
+    "agent": {
+      "default_decision": "review_manually",
+      "non_interactive_decision": "review_manually"
+    }
+  },
+  "declared_permissions": [],
+  "detected_capabilities": [],
+  "hash_status": "verified",
+  "signature_status": "not_implemented",
+  "warnings": [
+    "Signature verification is not implemented yet.",
+    "Static capability detection for tool bundles is not implemented yet."
+  ],
+  "recommendation": "Review declared permissions and manifest metadata before running this private tool."
+}
+```
+
+Supported package and tool decision values are:
+
+- `allow`
+- `allow_with_caution`
+- `review_manually`
+- `sandbox_only`
+- `block`
+
+Supported risk levels are:
+
+- `low`
+- `medium`
+- `high`
+- `critical`
+- `unknown`
 
 ## Security Model
 
@@ -199,7 +356,13 @@ pkgwhy run local/my_tool
 
 The runner executes only tools resolved from the configured local registry. It does not run arbitrary public package code, does not install tool dependencies in the MVP, and blocks execution if the stored bundle hash does not verify. Local registry entries are file-backed records under the configured registry path; no cloud registry, account, upload, pull, or remote sync is implemented in this preview.
 
-The MVP runner uses Python virtual environments for dependency isolation. A virtual environment is not a full operating-system sandbox, and `pkgwhy` states that clearly before each run. Signing is also not implemented yet, so JSON judgement reports `signature_status: "not_implemented"` rather than pretending a signature was verified.
+The MVP runner uses Python virtual environments for dependency isolation. A virtual environment is not a full operating-system sandbox, and `pkgwhy` states that clearly before each run:
+
+```text
+This run uses a Python virtual environment for dependency isolation. It does not fully sandbox operating-system permissions.
+```
+
+Signing is also not implemented yet, so JSON judgement reports `signature_status: "not_implemented"` rather than pretending a signature was verified.
 
 ## Future Cloud Review
 

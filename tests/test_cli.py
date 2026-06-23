@@ -16,7 +16,7 @@ def test_cli_help() -> None:
     result = runner.invoke(app, ["--help"])
 
     assert result.exit_code == 0
-    assert "Explain, inspect, and judge Python packages" in result.output
+    assert "Explain, inspect, judge packages, and run local private tools" in result.output
 
 
 def test_judge_json_for_missing_package_is_stable() -> None:
