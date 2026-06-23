@@ -209,3 +209,27 @@ class DependencyReason(BaseModel):
     installed: bool = False
     transitive_via: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
+
+
+class RegistryConfig(BaseModel):
+    """Local registry configuration stored on the user's machine."""
+
+    schema_version: str = "pkgwhy.registry_config.v1"
+    current_registry: str | None = None
+    registries: dict[str, str] = Field(default_factory=dict)
+
+
+class RegistryEntry(BaseModel):
+    """One configured registry location."""
+
+    name: str
+    path: Path
+    is_current: bool = False
+    index_exists: bool = False
+
+
+class RegistryIndex(BaseModel):
+    """Local registry index placeholder for published private tools."""
+
+    schema_version: str = "pkgwhy.registry_index.v1"
+    tools: list[dict[str, str]] = Field(default_factory=list)

@@ -15,10 +15,13 @@ from pkgwhy.dependencies.reason import explain_dependency_reason
 from pkgwhy.explanations.explain import explain_package
 from pkgwhy.imports.scanner import scan_project_imports
 from pkgwhy.metadata.installed import get_installed_package, list_installed_packages
+from pkgwhy.registry.local import add_registry, init_local_registry, list_registries, use_registry
 from pkgwhy.reports.audit import build_audit_report, render_audit_markdown
 from pkgwhy.typosquat.detector import detect_typosquats
 
 app = typer.Typer(no_args_is_help=True, help="Explain, inspect, and judge Python packages.")
+registry_app = typer.Typer(no_args_is_help=True, help="Manage local private registries.")
+app.add_typer(registry_app, name="registry")
 console = Console()
 
 
@@ -231,6 +234,68 @@ def typos(packages: Annotated[list[str] | None, typer.Argument(help="Package nam
             f"{candidate.similarity:.3f}",
             ", ".join(candidate.signals),
             candidate.recommendation,
+        )
+    console.print(table)
+
+
+@registry_app.command("init")
+def registry_init(
+    path: Annotated[Path, typer.Argument(help="Local registry directory to create or initialize.")],
+    name: Annotated[str, typer.Option(help="Registry name to store in local config.")] = "local",
+) -> None:
+    """Initialize a local private registry directory and select it."""
+    entry = init_local_registry(path, name=name)
+    console.print(f"Initialized registry '{entry.name}' at {entry.path}")
+    console.print(f"Current registry: {entry.name}")
+
+
+@registry_app.command("add")
+def registry_add(
+    name: Annotated[str, typer.Argument(help="Registry name to store in local config.")],
+    path: Annotated[Path, typer.Argument(help="Existing local registry directory.")],
+) -> None:
+    """Add an existing local registry directory to config."""
+    try:
+        entry = add_registry(name, path)
+    except ValueError as exc:
+        console.print(str(exc))
+        raise typer.Exit(1) from exc
+    console.print(f"Added registry '{entry.name}' at {entry.path}")
+    if not entry.index_exists:
+        console.print("Warning: registry index not found. Run 'pkgwhy registry init' for new local registries.")
+
+
+@registry_app.command("use")
+def registry_use(name: Annotated[str, typer.Argument(help="Configured registry name to select.")]) -> None:
+    """Select the active local registry."""
+    try:
+        entry = use_registry(name)
+    except ValueError as exc:
+        console.print(str(exc))
+        raise typer.Exit(1) from exc
+    console.print(f"Current registry: {entry.name}")
+    console.print(f"Path: {entry.path}")
+
+
+@registry_app.command("list")
+def registry_list() -> None:
+    """List configured local registries."""
+    entries = list_registries()
+    if not entries:
+        console.print("No registries configured.")
+        return
+
+    table = Table(title="Configured registries")
+    table.add_column("Current")
+    table.add_column("Name")
+    table.add_column("Path")
+    table.add_column("Index")
+    for entry in entries:
+        table.add_row(
+            "*" if entry.is_current else "",
+            entry.name,
+            str(entry.path),
+            "present" if entry.index_exists else "missing",
         )
     console.print(table)
 
