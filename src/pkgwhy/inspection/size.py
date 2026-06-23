@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pkgwhy.core.models import LargestFile, PackageSize
 
-NATIVE_SUFFIXES = {".so", ".pyd", ".dll", ".dylib", ".a", ".lib"}
+NATIVE_SUFFIXES = {".so", ".pyd", ".dll", ".dylib", ".a", ".lib", ".exe", ".wasm"}
 JAVASCRIPT_SUFFIXES = {".js", ".mjs", ".cjs"}
 
 

@@ -8,6 +8,7 @@ from pkgwhy.core.models import (
     RiskLevel,
     SourceAvailability,
 )
+from pkgwhy.typosquat.detector import detect_typosquat
 
 
 def judge_inspection(inspection: PackageInspection) -> PackageJudgement:
@@ -16,6 +17,16 @@ def judge_inspection(inspection: PackageInspection) -> PackageJudgement:
     evidence = list(inspection.evidence)
     risk = RiskLevel.LOW
     confidence = Confidence.MEDIUM
+    typosquat_candidate = detect_typosquat(metadata.identity.name)
+    if typosquat_candidate is not None:
+        warnings.append(
+            "Possible typosquatting risk: "
+            f"'{metadata.identity.name}' is similar to popular package '{typosquat_candidate.possible_target}'. "
+            "This is a signal, not proof of unsafe behavior."
+        )
+        evidence.extend(typosquat_candidate.evidence)
+        if risk == RiskLevel.LOW:
+            risk = RiskLevel.MEDIUM
 
     if inspection.source_availability in {
         SourceAvailability.SOURCE_AVAILABILITY_UNKNOWN,
@@ -68,9 +79,15 @@ def _warning_capability_signals(capabilities: list[str]) -> list[str]:
     warning_signals = {
         "Subprocess or shell execution signals",
         "Dynamic code execution signals",
+        "JavaScript dynamic code execution signals",
+        "JavaScript obfuscation signals",
+        "Encoded payload handling signals",
         "Deserialisation risk signals",
         "Credential or token access patterns",
         "Package manager manipulation signals",
+        "Shell script files present",
+        "Install-time setup files present",
+        "WASM binary code present",
     }
     return sorted(set(capabilities) & warning_signals)
 

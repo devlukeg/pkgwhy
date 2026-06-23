@@ -6,15 +6,15 @@ Know why a package exists before you or your agent trusts it.
 
 ## Status
 
-`pkgwhy` is a **pre-alpha developer preview**. It is useful for local package inspection experiments, agent decision-support prototypes, and feedback on the CLI shape.
+`pkgwhy` is in local release-candidate readiness review. It is useful for local package inspection experiments, conservative static package review, agent decision-support prototypes, and feedback on the CLI and local private-registry shape.
 
 It is not a production security scanner, not malware-detection certainty, and not a sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
 
-Current version candidate: `0.1.0a0`.
+Current packaged version candidate: `0.1.0a0`.
 
 ## What Works Now
 
-The current preview focuses on installed package intelligence:
+The current preview includes installed package intelligence:
 
 ```bash
 pkgwhy scan
@@ -22,6 +22,10 @@ pkgwhy explain typer
 pkgwhy why typer
 pkgwhy inspect typer
 pkgwhy judge typer --json
+pkgwhy risk typer
+pkgwhy audit --limit 5 --json
+# "reqeusts" is intentionally misspelled to demonstrate typo detection.
+pkgwhy typos reqeusts pandas-stubs
 ```
 
 Implemented capabilities include:
@@ -29,23 +33,54 @@ Implemented capabilities include:
 - Installed distribution metadata using `importlib.metadata`.
 - Package explanation from local knowledge and installed metadata.
 - Direct, transitive, imported, unknown, and not-installed dependency status.
+- Simple `requirements.txt`, `pyproject.toml`, `uv.lock`, and `poetry.lock` dependency reasoning.
 - Installed package size and largest-file reporting.
 - Source availability and coarse readability signals.
-- Native compiled file, JavaScript asset, package-manager, and CLI-entrypoint signals from file metadata.
+- JavaScript readability, minification, and suspicious static signals.
+- Native compiled file, WASM, shell script, package-manager, setup/install-time, and CLI-entrypoint signals from file metadata.
 - AST-only Python source scanning for filesystem, network, subprocess, environment, credential-pattern, dynamic-code, deserialisation, and encoded-payload signals.
+- Typosquatting similarity signals with false-positive guards for common ecosystem package families.
 - Conservative risk level, decision, warning, recommendation, evidence, and confidence output.
 - Stable JSON output for agent workflows.
+
+The local private-tool MVP supports a local registry, local publishing, tool judgement, and controlled local execution:
+
+```bash
+pkgwhy registry init ~/.pkgwhy/registry
+pkgwhy publish ./my_tool.py
+pkgwhy tool inspect local/my_tool
+pkgwhy tool judge local/my_tool --json
+pkgwhy run local/my_tool
+```
+
+`pkgwhy run` resolves tools only from the configured local registry, verifies the stored bundle hash before execution, runs simple Python-script entrypoints in a per-tool virtual environment, and writes execution metadata logs under the registry directory.
+
+Every run prints this warning:
+
+```text
+This run uses a Python virtual environment for dependency isolation. It does not fully sandbox operating-system permissions.
+```
+
+Current runner policy is intentionally conservative:
+
+- Unknown tools are not resolved or run; a valid local registry entry is required.
+- Bundle hash mismatch or a missing bundle blocks execution.
+- `sandbox_only` and `block` tool judgements block execution.
+- Non-interactive execution is blocked unless both the judgement and manifest agent policy allow it.
+- Tools with declared dependencies are not run yet because dependency installation is not implemented.
+- Unsupported entrypoints, including shell scripts, absolute paths, and path traversal, are rejected.
+- Tool signatures report `not_implemented`; unsigned local tools are a manual-review signal, not a verified trust claim.
 
 ## What Is Not Implemented Yet
 
 These are roadmap items, not current features:
 
-- Typosquatting detection.
-- JavaScript minification and obfuscation heuristics beyond basic file signals.
 - Optional PyPI/source lookup and cache.
 - Vulnerability database integration.
-- Local private registry.
-- `publish`, `pull`, `run`, and `tool judge`.
+- Cloud/private remote registry backends.
+- `pull`, mirroring, and remote synchronization.
+- Tool dependency installation in the runner.
+- Tool bundle signing and signature verification.
 - Cloud/model-backed review.
 - Billing, API keys, team plans, or enterprise deployment.
 - OS-level sandboxing or container isolation.
@@ -60,7 +95,7 @@ python -m pip install -e ".[dev]"
 pkgwhy --help
 ```
 
-Install directly from GitHub:
+Install directly from GitHub after the repository is public, or from an authorized private checkout:
 
 ```bash
 python -m pip install "pkgwhy @ git+https://github.com/devlukeg/pkgwhy.git"
@@ -152,17 +187,19 @@ The current risk engine is deliberately conservative and early. Treat it as deci
 
 ## Private Registry Roadmap
 
-`pkgwhy` is intended to grow into a private, security-aware executable layer for Python tools and AI-agent skills:
+`pkgwhy` is intended to grow into a private, security-aware executable layer for Python tools and AI-agent skills. The current MVP is local-only:
 
 ```bash
 pkgwhy registry init ~/.pkgwhy/registry
 pkgwhy publish ./my_tool.py
-pkgwhy pull luke/my-tool
-pkgwhy run luke/my-tool
-pkgwhy tool judge luke/my-tool --json
+pkgwhy tool inspect local/my_tool
+pkgwhy tool judge local/my_tool --json
+pkgwhy run local/my_tool
 ```
 
-The first runner design will use Python virtual environments for dependency isolation. A virtual environment is not a full operating-system sandbox, and `pkgwhy` will state that clearly when runner features are implemented.
+The runner executes only tools resolved from the configured local registry. It does not run arbitrary public package code, does not install tool dependencies in the MVP, and blocks execution if the stored bundle hash does not verify. Local registry entries are file-backed records under the configured registry path; no cloud registry, account, upload, pull, or remote sync is implemented in this preview.
+
+The MVP runner uses Python virtual environments for dependency isolation. A virtual environment is not a full operating-system sandbox, and `pkgwhy` states that clearly before each run. Signing is also not implemented yet, so JSON judgement reports `signature_status: "not_implemented"` rather than pretending a signature was verified.
 
 ## Future Cloud Review
 
@@ -182,15 +219,12 @@ python -m venv .venv
 
 ## Roadmap
 
-1. Public pre-alpha packaging and documentation.
-2. JavaScript readability and obfuscation heuristics.
-3. Native/binary and install-time script inspection.
-4. Typosquatting detection.
-5. Optional PyPI/source lookup and cache.
-6. Local private registry.
-7. Private runner with explicit isolation limitations.
-8. Tool judgement and private-first agent policy.
-9. Cloud/model-backed review as an optional future service.
+1. Complete public release review and packaging for the current local package-intelligence, registry, tool-judgement, and runner MVP.
+2. Optional PyPI/source lookup and cache.
+3. Tool dependency installation in the runner.
+4. Tool bundle signing and signature verification.
+5. Cloud/private remote registry backends.
+6. Cloud/model-backed review as an optional future service.
 
 ## License
 

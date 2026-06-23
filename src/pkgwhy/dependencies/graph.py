@@ -34,6 +34,30 @@ def transitive_dependencies_for(direct_dependencies: set[str], graph: dict[str, 
     return transitive
 
 
+def transitive_parents_for(
+    package: str,
+    direct_dependencies: set[str],
+    graph: dict[str, set[str]] | None = None,
+) -> set[str]:
+    dependency_graph = graph if graph is not None else installed_dependency_graph()
+    normalized_package = normalize_package_name(package)
+    normalized_direct = {normalize_package_name(name) for name in direct_dependencies}
+    parents: set[str] = set()
+    queue: deque[str] = deque(normalized_direct)
+    seen: set[str] = set()
+
+    while queue:
+        current = queue.popleft()
+        if current in seen:
+            continue
+        seen.add(current)
+        dependencies = dependency_graph.get(current, set())
+        if normalized_package in dependencies:
+            parents.add(current)
+        queue.extend(dependencies - seen)
+    return parents
+
+
 def _dependency_names(requirements: list[str]) -> set[str]:
     names: set[str] = set()
     for value in requirements:
@@ -42,4 +66,3 @@ def _dependency_names(requirements: list[str]) -> set[str]:
         except InvalidRequirement:
             continue
     return names
-

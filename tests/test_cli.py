@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
@@ -60,3 +61,61 @@ def test_scan_rejects_invalid_limit(limit: str) -> None:
 
     assert result.exit_code != 0
     assert "limit must be greater than zero" in result.output
+
+
+def test_why_command_reports_declared_and_lockfile_evidence(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        """
+[project]
+dependencies = ["Typer>=0.12"]
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "poetry.lock").write_text(
+        """
+[[package]]
+name = "typer"
+version = "0.1.0"
+""",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["why", "typer", "--project-root", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "Dependency status: direct" in result.output
+    assert "Declared in: pyproject.toml" in result.output
+    assert "Lockfile signal: poetry.lock" in result.output
+
+
+def test_registry_commands_manage_local_config(tmp_path: Path) -> None:
+    env = {"PKGWHY_CONFIG_HOME": str(tmp_path / "config")}
+    registry_path = tmp_path / "registry"
+
+    init_result = runner.invoke(app, ["registry", "init", str(registry_path)], env=env)
+    list_result = runner.invoke(app, ["registry", "list"], env=env)
+    use_result = runner.invoke(app, ["registry", "use", "local"], env=env)
+
+    assert init_result.exit_code == 0
+    assert "Initialized registry 'local'" in init_result.output
+    assert (registry_path / "pkgwhy-registry.json").exists()
+    assert list_result.exit_code == 0
+    assert "local" in list_result.output
+    assert "present" in list_result.output
+    assert use_result.exit_code == 0
+    assert "Current registry: local" in use_result.output
+
+
+def test_publish_command_publishes_script_to_current_registry(tmp_path: Path) -> None:
+    env = {"PKGWHY_CONFIG_HOME": str(tmp_path / "config")}
+    registry_path = tmp_path / "registry"
+    script = tmp_path / "hello_tool.py"
+    script.write_text("print('hello')\n", encoding="utf-8")
+
+    init_result = runner.invoke(app, ["registry", "init", str(registry_path)], env=env)
+    publish_result = runner.invoke(app, ["publish", str(script)], env=env)
+
+    assert init_result.exit_code == 0
+    assert publish_result.exit_code == 0
+    assert "Published local/hello_tool 0.1.0" in publish_result.output
+    assert "Signature status: not_implemented" in publish_result.output
