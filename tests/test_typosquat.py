@@ -34,6 +34,14 @@ def test_detect_typosquat_false_positive_guards_for_known_families() -> None:
     assert all(detect_typosquat(package) is None for package in guarded)
 
 
+def test_detect_typosquat_homoglyph() -> None:
+    candidate = detect_typosquat("reque5ts")
+
+    assert candidate is not None
+    assert candidate.possible_target == "requests"
+    assert "homoglyph_or_lookalike" in candidate.signals
+
+
 def test_detect_typosquats_sorts_strongest_signals_first() -> None:
     candidates = detect_typosquats(["requests", "reqeusts", "pnadas"])
 

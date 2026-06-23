@@ -54,6 +54,14 @@ def test_audit_rejects_invalid_output_mode_combination() -> None:
     assert "Choose either --json or --markdown" in result.output
 
 
+def test_audit_rejects_output_without_file_report_mode(tmp_path: Path) -> None:
+    output = tmp_path / "audit.txt"
+    result = runner.invoke(app, ["audit", "--output", str(output)])
+
+    assert result.exit_code != 0
+    assert "--output requires --json or --markdown" in result.output
+
+
 def test_audit_writes_json_report_to_output_path(tmp_path: Path) -> None:
     output = tmp_path / "audit.json"
     result = runner.invoke(app, ["audit", "--limit", "1", "--json", "--output", str(output)])
@@ -62,4 +70,3 @@ def test_audit_writes_json_report_to_output_path(tmp_path: Path) -> None:
     assert output.exists()
     data = json.loads(output.read_text(encoding="utf-8"))
     assert data["schema_version"] == AUDIT_SCHEMA_VERSION
-

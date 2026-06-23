@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+from typing import TypedDict
+
 from pkgwhy.core.models import PackageJudgement
 
 AUDIT_SCHEMA_VERSION = "pkgwhy.audit.v1"
 
 
-def build_audit_report(judgements: list[PackageJudgement]) -> dict[str, object]:
+class AuditReport(TypedDict):
+    schema_version: str
+    package_count: int
+    packages: list[dict[str, object]]
+
+
+def build_audit_report(judgements: list[PackageJudgement]) -> AuditReport:
     return {
         "schema_version": AUDIT_SCHEMA_VERSION,
         "package_count": len(judgements),

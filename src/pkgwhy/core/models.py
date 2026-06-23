@@ -184,7 +184,7 @@ class TyposquatCandidate(BaseModel):
     possible_target: str
     matched_reference: str
     similarity: float
+    recommendation: str
     signals: list[str] = Field(default_factory=list)
     is_possible_typosquat: bool = False
-    recommendation: str
     evidence: list[str] = Field(default_factory=list)

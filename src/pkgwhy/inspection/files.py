@@ -70,8 +70,8 @@ def infer_readability(paths: list[Path], file_analysis: FileStaticAnalysis | Non
         return ReadabilityStatus.POSSIBLY_OBFUSCATED
     if file_analysis and any(
         marker in warning.lower()
-        for marker in {JS_APPEARS_MINIFIED_WARNING, JS_MAY_BE_MINIFIED_WARNING}
         for warning in file_analysis.warnings
+        for marker in {JS_APPEARS_MINIFIED_WARNING, JS_MAY_BE_MINIFIED_WARNING}
     ):
         return ReadabilityStatus.MINIFIED
     if any(path.suffix == ".py" for path in paths):

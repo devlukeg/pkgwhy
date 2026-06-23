@@ -170,6 +170,8 @@ def audit(
         raise typer.BadParameter("limit must be greater than zero")
     if as_json and markdown:
         raise typer.BadParameter("Choose either --json or --markdown, not both")
+    if output is not None and not (as_json or markdown):
+        raise typer.BadParameter("--output requires --json or --markdown")
 
     packages = list_installed_packages()[:limit]
     names = [package.identity.name for package in packages]
