@@ -390,5 +390,9 @@ def _emit_or_write(rendered: str, output: Path | None) -> None:
     if output is None:
         print(rendered, end="" if rendered.endswith("\n") else "\n")
         return
-    output.write_text(rendered, encoding="utf-8")
+    try:
+        output.write_text(rendered, encoding="utf-8")
+    except OSError as exc:
+        console.print(f"Could not write report to {output}: {exc}")
+        raise typer.Exit(1) from exc
     console.print(f"Wrote report to {output}")

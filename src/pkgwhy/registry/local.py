@@ -23,7 +23,7 @@ def config_dir() -> Path:
         appdata = os.environ.get("APPDATA")
         if appdata:
             return Path(appdata) / "pkgwhy"
-    if sys.platform == "darwin":
+    elif sys.platform == "darwin":
         return Path.home() / "Library" / "Application Support" / "pkgwhy"
     xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
     if xdg_config_home:
@@ -84,10 +84,7 @@ def init_local_registry(path: Path, name: str = DEFAULT_REGISTRY_NAME) -> Regist
     registry_path.mkdir(parents=True, exist_ok=True)
     index_path = registry_index_path(registry_path)
     if not index_path.exists():
-        index_path.write_text(
-            json.dumps(RegistryIndex().model_dump(mode="json"), indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
+        save_registry_index(registry_path, RegistryIndex())
 
     config = load_registry_config()
     config.registries[name] = str(registry_path)
@@ -138,7 +135,15 @@ def current_registry() -> RegistryEntry:
     config = load_registry_config()
     if config.current_registry is None:
         raise ValueError("No current registry is configured. Run 'pkgwhy registry init <path>' first.")
-    return use_registry(config.current_registry)
+    if config.current_registry not in config.registries:
+        raise ValueError(f"Current registry is not configured: {config.current_registry}")
+    registry_path = Path(config.registries[config.current_registry])
+    return RegistryEntry(
+        name=config.current_registry,
+        path=registry_path,
+        is_current=True,
+        index_exists=registry_index_path(registry_path).exists(),
+    )
 
 
 def list_registries() -> list[RegistryEntry]:

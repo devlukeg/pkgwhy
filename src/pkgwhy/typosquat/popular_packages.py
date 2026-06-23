@@ -26,7 +26,7 @@ POPULAR_PACKAGE_REFERENCES: dict[str, tuple[str, ...]] = {
     "pillow": ("pillow", "pil"),
 }
 
-KNOWN_LEGITIMATE_FAMILIES = {
+KNOWN_LEGITIMATE_FAMILIES: set[str] = {
     "django-debug-toolbar",
     "pytest-cov",
     "pandas-stubs",

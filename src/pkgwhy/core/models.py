@@ -313,9 +313,10 @@ class ToolManifest(BaseModel):
     @field_validator("version", "description", "entrypoint", "python_requires")
     @classmethod
     def validate_non_empty_text(cls, value: str) -> str:
-        if not value.strip():
+        stripped = value.strip()
+        if not stripped:
             raise ValueError("must not be empty")
-        return value
+        return stripped
 
     @field_validator("dependencies", "declared_permissions")
     @classmethod

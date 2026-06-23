@@ -64,6 +64,8 @@ def infer_source_availability(paths: list[Path]) -> SourceAvailability:
 
 
 def infer_readability(paths: list[Path], file_analysis: FileStaticAnalysis | None = None) -> ReadabilityStatus:
+    if any(path.suffix == ".py" for path in paths):
+        return ReadabilityStatus.READABLE
     if file_analysis and any(JS_LIKELY_OBFUSCATED_WARNING in warning.lower() for warning in file_analysis.warnings):
         return ReadabilityStatus.LIKELY_OBFUSCATED
     if file_analysis and any(JS_POSSIBLY_OBFUSCATED_WARNING in warning.lower() for warning in file_analysis.warnings):
@@ -74,8 +76,6 @@ def infer_readability(paths: list[Path], file_analysis: FileStaticAnalysis | Non
         for marker in {JS_APPEARS_MINIFIED_WARNING, JS_MAY_BE_MINIFIED_WARNING}
     ):
         return ReadabilityStatus.MINIFIED
-    if any(path.suffix == ".py" for path in paths):
-        return ReadabilityStatus.READABLE
     return ReadabilityStatus.NOT_ENOUGH_SOURCE_AVAILABLE
 
 
