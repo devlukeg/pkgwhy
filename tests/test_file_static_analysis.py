@@ -60,3 +60,13 @@ def test_analyze_file_signals_escalates_heavy_javascript_obfuscation(tmp_path: P
     assert "JavaScript obfuscation signals" in analysis.detected_capabilities
     assert any("likely obfuscated javascript" in warning.lower() for warning in analysis.warnings)
     assert infer_readability([script], analysis) == ReadabilityStatus.LIKELY_OBFUSCATED
+
+
+def test_analyze_file_signals_avoids_javascript_call_substring_false_positives(tmp_path: Path) -> None:
+    script = tmp_path / "helpers.js"
+    script.write_text("function retrieval(){} function getFunction(){} const catob = 1;", encoding="utf-8")
+
+    analysis = analyze_file_signals([script], entry_points=[])
+
+    assert "JavaScript dynamic code execution signals" not in analysis.detected_capabilities
+    assert "Encoded payload handling signals" not in analysis.detected_capabilities

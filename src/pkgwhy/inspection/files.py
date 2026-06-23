@@ -17,13 +17,12 @@ LOW_WHITESPACE_RATIO = 0.08
 HIGH_PUNCTUATION_RATIO = 0.32
 
 JS_DYNAMIC_PATTERNS = {
-    "eval(": "JavaScript eval call",
-    "new Function(": "JavaScript Function constructor",
-    "Function(": "JavaScript Function constructor",
+    r"\beval\s*\(": "JavaScript eval call",
+    r"\bFunction\s*\(": "JavaScript Function constructor",
 }
 JS_ENCODED_PATTERNS = {
-    "atob(": "JavaScript base64 decode call",
-    "btoa(": "JavaScript base64 encode call",
+    r"\batob\s*\(": "JavaScript base64 decode call",
+    r"\bbtoa\s*\(": "JavaScript base64 encode call",
 }
 JS_OBFUSCATION_PATTERNS = {
     r"_0x[a-fA-F0-9]{3,}": "hex-like JavaScript identifier",
@@ -145,7 +144,6 @@ def _analyze_javascript_file(path: Path) -> FileStaticAnalysis:
     capabilities: set[str] = set()
     warnings: list[str] = []
     evidence: list[str] = [f"Statically scanned JavaScript file: {path.name}"]
-    compact_source = source.replace(" ", "")
 
     lines = source.splitlines() or [source]
     longest_line = max((len(line) for line in lines), default=0)
@@ -163,13 +161,13 @@ def _analyze_javascript_file(path: Path) -> FileStaticAnalysis:
         warnings.append(f"JavaScript file has low whitespace and high punctuation ratios: {path.name}")
         evidence.append(f"JavaScript density signal in {path.name}: low whitespace and high punctuation.")
 
-    for marker, detail in JS_DYNAMIC_PATTERNS.items():
-        if marker.replace(" ", "") in compact_source:
+    for pattern, detail in JS_DYNAMIC_PATTERNS.items():
+        if re.search(pattern, source):
             capabilities.add("JavaScript dynamic code execution signals")
             evidence.append(f"JavaScript dynamic execution signal in {path.name}: {detail}.")
 
-    for marker, detail in JS_ENCODED_PATTERNS.items():
-        if marker.replace(" ", "") in compact_source:
+    for pattern, detail in JS_ENCODED_PATTERNS.items():
+        if re.search(pattern, source):
             capabilities.add("Encoded payload handling signals")
             evidence.append(f"JavaScript encoded payload signal in {path.name}: {detail}.")
 
