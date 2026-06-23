@@ -6,7 +6,7 @@ Know why a package exists before you or your agent trusts it.
 
 ## Status
 
-`pkgwhy` is in local `0.1.0` release-candidate readiness review. It is useful for local package inspection experiments, conservative static package review, agent decision-support prototypes, and feedback on the CLI shape.
+`pkgwhy` is in local release-candidate readiness review. It is useful for local package inspection experiments, conservative static package review, agent decision-support prototypes, and feedback on the CLI and local private-registry shape.
 
 It is not a production security scanner, not malware-detection certainty, and not a sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
 
@@ -14,7 +14,7 @@ Current packaged version candidate: `0.1.0a0`.
 
 ## What Works Now
 
-The current preview focuses on installed package intelligence:
+The current preview includes installed package intelligence:
 
 ```bash
 pkgwhy scan
@@ -43,14 +43,34 @@ Implemented capabilities include:
 - Conservative risk level, decision, warning, recommendation, evidence, and confidence output.
 - Stable JSON output for agent workflows.
 
+The local private-tool MVP supports a local registry, local publishing, tool judgement, and controlled local execution:
+
+```bash
+pkgwhy registry init ~/.pkgwhy/registry
+pkgwhy publish ./my_tool.py
+pkgwhy tool inspect local/my_tool
+pkgwhy tool judge local/my_tool --json
+pkgwhy run local/my_tool
+```
+
+`pkgwhy run` resolves tools only from the configured local registry, verifies the stored bundle hash before execution, runs simple Python-script entrypoints in a per-tool virtual environment, and writes execution metadata logs under the registry directory.
+
+Every run prints this warning:
+
+```text
+This run uses a Python virtual environment for dependency isolation. It does not fully sandbox operating-system permissions.
+```
+
 ## What Is Not Implemented Yet
 
 These are roadmap items, not current features:
 
 - Optional PyPI/source lookup and cache.
 - Vulnerability database integration.
-- Local private registry.
-- `publish`, `pull`, `run`, and `tool judge`.
+- Cloud/private remote registry backends.
+- `pull`, mirroring, and remote synchronization.
+- Tool dependency installation in the runner.
+- Tool bundle signing and signature verification.
 - Cloud/model-backed review.
 - Billing, API keys, team plans, or enterprise deployment.
 - OS-level sandboxing or container isolation.
@@ -157,17 +177,18 @@ The current risk engine is deliberately conservative and early. Treat it as deci
 
 ## Private Registry Roadmap
 
-`pkgwhy` is intended to grow into a private, security-aware executable layer for Python tools and AI-agent skills:
+`pkgwhy` is intended to grow into a private, security-aware executable layer for Python tools and AI-agent skills. The current MVP is local-only:
 
 ```bash
 pkgwhy registry init ~/.pkgwhy/registry
 pkgwhy publish ./my_tool.py
-pkgwhy pull luke/my-tool
-pkgwhy run luke/my-tool
-pkgwhy tool judge luke/my-tool --json
+pkgwhy run local/my_tool
+pkgwhy tool judge local/my_tool --json
 ```
 
-The first runner design will use Python virtual environments for dependency isolation. A virtual environment is not a full operating-system sandbox, and `pkgwhy` will state that clearly when runner features are implemented.
+The runner executes only tools resolved from the configured local registry. It does not run arbitrary public package code, does not install tool dependencies in the MVP, and blocks execution if the stored bundle hash does not verify.
+
+The MVP runner uses Python virtual environments for dependency isolation. A virtual environment is not a full operating-system sandbox, and `pkgwhy` states that clearly before each run.
 
 ## Future Cloud Review
 

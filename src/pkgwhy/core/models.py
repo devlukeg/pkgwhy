@@ -37,6 +37,12 @@ class HashStatus(StrEnum):
     MISSING = "missing"
 
 
+class ToolRunStatus(StrEnum):
+    COMPLETED = "completed"
+    FAILED = "failed"
+    BLOCKED = "blocked"
+
+
 class Confidence(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
@@ -358,3 +364,25 @@ class ToolJudgement(BaseModel):
     signature_status: str = "not_implemented"
     warnings: list[str] = Field(default_factory=list)
     recommendation: str
+
+
+class ToolRunResult(BaseModel):
+    """Execution metadata for a local private tool run."""
+
+    schema_version: str = "pkgwhy.tool_run.v1"
+    tool: str
+    owner: str
+    name: str
+    version: str
+    registry_name: str
+    registry_path: Path
+    command: list[str]
+    entrypoint: str
+    started_at: str
+    finished_at: str
+    exit_code: int
+    status: ToolRunStatus
+    stdout: str
+    stderr: str
+    log_path: Path
+    warning: str

@@ -2,7 +2,7 @@
 
 ## Supported Status
 
-`pkgwhy` is currently in local `0.1.0` release-candidate readiness review. It is not a production security scanner and should not be treated as a definitive malware detector.
+`pkgwhy` is currently in local release-candidate readiness review. It is not a production security scanner and should not be treated as a definitive malware detector.
 
 ## Reporting Security Issues
 
@@ -20,9 +20,13 @@ Do not include secrets, private package contents, or credentials in public issue
 
 Capability analysis reports static signals such as API references, package files, and entry points. These signals are not proof of runtime behavior, intent, or maliciousness.
 
+`pkgwhy run` is a separate local private-tool execution feature. It intentionally executes tools only after resolving a valid local registry entry and verifying the stored bundle hash. This execution path is separate from package inspection and must not be treated as evidence that package inspection imports or executes inspected package code.
+
 ## Current Limitations
 
 - No vulnerability database integration yet.
+- No runner dependency installation yet.
+- No tool bundle signing or signature verification yet.
 - Typosquatting detection is heuristic and conservative. It can miss risky names and can surface false positives.
 - No OS-level sandboxing.
 - No cloud review or remote evidence lookup in the preview.

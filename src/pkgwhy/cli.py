@@ -17,6 +17,7 @@ from pkgwhy.imports.scanner import scan_project_imports
 from pkgwhy.metadata.installed import get_installed_package, list_installed_packages
 from pkgwhy.registry.local import add_registry, init_local_registry, list_registries, use_registry
 from pkgwhy.registry.publish import publish_local_tool
+from pkgwhy.registry.run import RUNNER_ISOLATION_WARNING, run_local_tool
 from pkgwhy.registry.tools import judge_tool
 from pkgwhy.reports.audit import build_audit_report, render_audit_markdown
 from pkgwhy.typosquat.detector import detect_typosquats
@@ -259,6 +260,24 @@ def publish(path: Annotated[Path, typer.Argument(help="Local .py file or folder 
     console.print(f"Bundle: {result.bundle_path}")
     console.print(f"SHA-256: {result.sha256}")
     console.print("Signature status: not_implemented")
+
+
+@app.command()
+def run(reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference from the local registry.")]) -> None:
+    """Run a verified local private tool."""
+    print(RUNNER_ISOLATION_WARNING)
+    try:
+        result = run_local_tool(reference)
+    except ValueError as exc:
+        console.print(str(exc))
+        raise typer.Exit(1) from exc
+
+    if result.stdout:
+        print(result.stdout, end="" if result.stdout.endswith("\n") else "\n")
+    if result.stderr:
+        print(result.stderr, end="" if result.stderr.endswith("\n") else "\n")
+    console.print(f"Execution log: {result.log_path}")
+    raise typer.Exit(result.exit_code)
 
 
 @tool_app.command("inspect")
