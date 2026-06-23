@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 from pathlib import Path
 
@@ -22,6 +23,12 @@ class AgentDecision(StrEnum):
     REVIEW_MANUALLY = "review_manually"
     SANDBOX_ONLY = "sandbox_only"
     BLOCK = "block"
+
+
+class ToolArtifactType(StrEnum):
+    SCRIPT = "script"
+    FOLDER = "folder"
+    PACKAGE = "package"
 
 
 class Confidence(StrEnum):
@@ -233,3 +240,65 @@ class RegistryIndex(BaseModel):
 
     schema_version: str = "pkgwhy.registry_index.v1"
     tools: list[dict[str, str]] = Field(default_factory=list)
+
+
+class ToolSecurityPolicy(BaseModel):
+    """Declared security policy for a private tool manifest."""
+
+    requires_human_approval: bool = True
+    allow_unsigned: bool = False
+    allow_unpinned_dependencies: bool = False
+    signing_status: str = "not_implemented"
+
+    @field_validator("signing_status")
+    @classmethod
+    def validate_signing_status(cls, value: str) -> str:
+        if value != "not_implemented":
+            raise ValueError("signing_status must be 'not_implemented' until signing is implemented")
+        return value
+
+
+class ToolAgentPolicy(BaseModel):
+    """Declared agent policy for a private tool manifest."""
+
+    default_decision: AgentDecision = AgentDecision.REVIEW_MANUALLY
+    non_interactive_decision: AgentDecision = AgentDecision.REVIEW_MANUALLY
+
+
+class ToolManifest(BaseModel):
+    """Validated pkgwhy private tool manifest."""
+
+    schema_version: str = "pkgwhy.tool_manifest.v1"
+    name: str
+    owner: str
+    version: str
+    description: str
+    artifact_type: ToolArtifactType
+    entrypoint: str
+    python_requires: str = ">=3.11"
+    dependencies: list[str] = Field(default_factory=list)
+    declared_permissions: list[str] = Field(default_factory=list)
+    security: ToolSecurityPolicy = Field(default_factory=ToolSecurityPolicy)
+    agent: ToolAgentPolicy = Field(default_factory=ToolAgentPolicy)
+
+    @field_validator("name", "owner")
+    @classmethod
+    def validate_identifier(cls, value: str) -> str:
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", value):
+            raise ValueError("must start with a letter or number and contain only letters, numbers, dots, underscores, or hyphens")
+        return value
+
+    @field_validator("version", "description", "entrypoint", "python_requires")
+    @classmethod
+    def validate_non_empty_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be empty")
+        return value
+
+    @field_validator("dependencies", "declared_permissions")
+    @classmethod
+    def validate_non_empty_list_items(cls, values: list[str]) -> list[str]:
+        for value in values:
+            if not value.strip():
+                raise ValueError("list values must not be empty")
+        return values
