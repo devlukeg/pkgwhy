@@ -11,12 +11,10 @@ from rich.table import Table
 from pkgwhy.agent.judge import inspect_installed_package, judge_installed_package
 from pkgwhy.core.constants import CAPABILITY_EXPOSURE_NOTE
 from pkgwhy.core.models import PackageMetadata
-from pkgwhy.dependencies.graph import transitive_dependencies_for
+from pkgwhy.dependencies.reason import explain_dependency_reason
 from pkgwhy.explanations.explain import explain_package
 from pkgwhy.imports.scanner import scan_project_imports
-from pkgwhy.manifests.pyproject import read_pyproject_dependencies
-from pkgwhy.manifests.requirements import read_requirements_dependencies
-from pkgwhy.metadata.installed import get_installed_package, list_installed_packages, normalize_package_name
+from pkgwhy.metadata.installed import get_installed_package, list_installed_packages
 from pkgwhy.reports.audit import build_audit_report, render_audit_markdown
 from pkgwhy.typosquat.detector import detect_typosquats
 
@@ -69,15 +67,22 @@ def explain(package: str, project_root: Annotated[Path, typer.Option(help="Proje
 def why(package: str, project_root: Annotated[Path, typer.Option(help="Project root to inspect.")] = Path(".")) -> None:
     """Explain why a package may be installed in the current project."""
     imports = scan_project_imports(project_root)
-    status = dependency_status_for(package, project_root, imports)
-    normalized = normalize_package_name(package)
+    reason = explain_dependency_reason(package, project_root, imports)
     console.print(f"[bold]{package}[/bold]")
-    console.print(f"Dependency status: {status}")
-    if normalized.replace("-", "_") in imports:
+    console.print(f"Dependency status: {reason.status.value}")
+    if reason.declared_in:
+        console.print(f"Declared in: {', '.join(reason.declared_in)}")
+    if reason.transitive_via:
+        console.print(f"Transitive parent signal: {', '.join(reason.transitive_via)}")
+    if reason.lockfiles:
+        console.print(f"Lockfile signal: {', '.join(reason.lockfiles)}")
+    if reason.imported_by_project:
         console.print("Local import signal: imported by project source.")
     else:
         console.print("Local import signal: no matching top-level import found.")
-    console.print("Evidence: pyproject.toml, requirements.txt, and AST import scan where available.")
+    console.print("Evidence:")
+    for item in reason.evidence:
+        console.print(f"  - {item}")
 
 
 @app.command()
@@ -236,24 +241,8 @@ def dependency_status_for(
     project_imports: set[str] | None = None,
     metadata: PackageMetadata | None = None,
 ) -> str:
-    normalized = normalize_package_name(package)
-    declared = set()
-    declared.update(read_pyproject_dependencies(project_root / "pyproject.toml"))
-    declared.update(read_requirements_dependencies(project_root / "requirements.txt"))
-    if normalized in declared:
-        return "direct"
-
-    if normalized in transitive_dependencies_for(declared):
-        return "transitive"
-
-    metadata = metadata if metadata is not None else get_installed_package(package)
-    if metadata is None:
-        return "not_installed"
-
-    imports = project_imports if project_imports is not None else scan_project_imports(project_root)
-    if normalized.replace("-", "_") in imports:
-        return "imported_by_project"
-    return "unknown"
+    reason = explain_dependency_reason(package, project_root, project_imports, metadata)
+    return reason.status.value
 
 
 def _package_not_found(package: str) -> None:

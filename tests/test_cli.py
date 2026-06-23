@@ -60,3 +60,28 @@ def test_scan_rejects_invalid_limit(limit: str) -> None:
 
     assert result.exit_code != 0
     assert "limit must be greater than zero" in result.output
+
+
+def test_why_command_reports_declared_and_lockfile_evidence(tmp_path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        """
+[project]
+dependencies = ["Typer>=0.12"]
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "poetry.lock").write_text(
+        """
+[[package]]
+name = "typer"
+version = "0.1.0"
+""",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["why", "typer", "--project-root", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "Dependency status: direct" in result.output
+    assert "Declared in: pyproject.toml" in result.output
+    assert "Lockfile signal: poetry.lock" in result.output

@@ -188,3 +188,17 @@ class TyposquatCandidate(BaseModel):
     signals: list[str] = Field(default_factory=list)
     is_possible_typosquat: bool = False
     evidence: list[str] = Field(default_factory=list)
+
+
+class DependencyReason(BaseModel):
+    """Project-local evidence explaining why a package may be present."""
+
+    package: str
+    normalized_package: str
+    status: DependencyStatus
+    declared_in: list[str] = Field(default_factory=list)
+    lockfiles: list[str] = Field(default_factory=list)
+    imported_by_project: bool = False
+    installed: bool = False
+    transitive_via: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
