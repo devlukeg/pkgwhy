@@ -17,12 +17,15 @@ from pkgwhy.imports.scanner import scan_project_imports
 from pkgwhy.metadata.installed import get_installed_package, list_installed_packages
 from pkgwhy.registry.local import add_registry, init_local_registry, list_registries, use_registry
 from pkgwhy.registry.publish import publish_local_tool
+from pkgwhy.registry.tools import judge_tool
 from pkgwhy.reports.audit import build_audit_report, render_audit_markdown
 from pkgwhy.typosquat.detector import detect_typosquats
 
 app = typer.Typer(no_args_is_help=True, help="Explain, inspect, and judge Python packages.")
 registry_app = typer.Typer(no_args_is_help=True, help="Manage local private registries.")
+tool_app = typer.Typer(no_args_is_help=True, help="Inspect and judge local private tools.")
 app.add_typer(registry_app, name="registry")
+app.add_typer(tool_app, name="tool")
 console = Console()
 
 
@@ -256,6 +259,55 @@ def publish(path: Annotated[Path, typer.Argument(help="Local .py file or folder 
     console.print(f"Bundle: {result.bundle_path}")
     console.print(f"SHA-256: {result.sha256}")
     console.print("Signature status: not_implemented")
+
+
+@tool_app.command("inspect")
+def tool_inspect(reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference.")]) -> None:
+    """Inspect a locally published private tool."""
+    try:
+        judgement = judge_tool(reference)
+    except ValueError as exc:
+        console.print(str(exc))
+        raise typer.Exit(1) from exc
+
+    console.print(f"[bold]{judgement.tool}[/bold] {judgement.version}")
+    console.print(f"Description: {judgement.manifest.description}")
+    console.print(f"Artifact type: {judgement.manifest.artifact_type.value}")
+    console.print(f"Entrypoint: {judgement.manifest.entrypoint}")
+    console.print(f"Hash status: {judgement.hash_status.value}")
+    console.print(f"Signature status: {judgement.signature_status}")
+    console.print(f"Risk level: {judgement.risk_level.value}")
+    console.print(f"Decision: {judgement.decision.value}")
+    if judgement.declared_permissions:
+        console.print("Declared permissions:")
+        for permission in judgement.declared_permissions:
+            console.print(f"  - {permission}")
+    if judgement.warnings:
+        console.print("Warnings:")
+        for warning in judgement.warnings:
+            console.print(f"  - {warning}")
+
+
+@tool_app.command("judge")
+def tool_judge(
+    reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Emit stable JSON for agents.")] = False,
+) -> None:
+    """Produce a conservative private tool judgement."""
+    try:
+        judgement = judge_tool(reference)
+    except ValueError as exc:
+        console.print(str(exc))
+        raise typer.Exit(1) from exc
+
+    if as_json:
+        print(json.dumps(judgement.model_dump(mode="json"), indent=2, sort_keys=True))
+        return
+    console.print(f"[bold]{judgement.tool}[/bold]")
+    console.print(f"Decision: {judgement.decision.value}")
+    console.print(f"Risk level: {judgement.risk_level.value}")
+    console.print(f"Hash status: {judgement.hash_status.value}")
+    console.print(f"Recommendation: {judgement.recommendation}")
 
 
 @registry_app.command("init")

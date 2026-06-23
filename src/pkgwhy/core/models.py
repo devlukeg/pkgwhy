@@ -31,6 +31,12 @@ class ToolArtifactType(StrEnum):
     PACKAGE = "package"
 
 
+class HashStatus(StrEnum):
+    VERIFIED = "verified"
+    MISMATCH = "mismatch"
+    MISSING = "missing"
+
+
 class Confidence(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
@@ -329,3 +335,25 @@ class PublishResult(BaseModel):
     bundle_path: Path
     manifest_path: Path
     sha256: str
+
+
+class ToolJudgement(BaseModel):
+    """Agent-readable conservative judgement for a private registry tool."""
+
+    schema_version: str = "pkgwhy.tool_judgement.v1"
+    tool: str
+    owner: str
+    name: str
+    version: str
+    decision: AgentDecision
+    risk_level: RiskLevel
+    confidence: Confidence
+    reason: str
+    requires_human_approval: bool
+    manifest: ToolManifest
+    declared_permissions: list[str] = Field(default_factory=list)
+    detected_capabilities: list[str] = Field(default_factory=list)
+    hash_status: HashStatus
+    signature_status: str = "not_implemented"
+    warnings: list[str] = Field(default_factory=list)
+    recommendation: str
