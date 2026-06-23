@@ -265,7 +265,7 @@ def registry_add(
         raise typer.Exit(1) from exc
     console.print(f"Added registry '{entry.name}' at {entry.path}")
     if not entry.index_exists:
-        console.print("Warning: registry index not found. Run 'pkgwhy registry init' for new local registries.")
+        console.print("Warning: registry index not found. Verify the directory contains 'pkgwhy-registry.json'.")
 
 
 @registry_app.command("use")

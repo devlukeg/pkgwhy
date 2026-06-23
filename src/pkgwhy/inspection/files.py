@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from importlib.metadata import Distribution
+from math import ceil
 from pathlib import Path
 
 from pkgwhy.core.models import FileStaticAnalysis, ReadabilityStatus, SourceAvailability
@@ -182,7 +183,7 @@ def _analyze_javascript_file(path: Path) -> FileStaticAnalysis:
     obfuscation_signals = [
         detail for pattern, detail in JS_OBFUSCATION_PATTERNS.items() if pattern.search(source)
     ]
-    likely_threshold = max(3, len(JS_OBFUSCATION_PATTERNS) - 1)
+    likely_threshold = max(2, ceil(len(JS_OBFUSCATION_PATTERNS) * 0.75))
     if len(obfuscation_signals) >= likely_threshold:
         warnings.append(f"JavaScript file has {JS_LIKELY_OBFUSCATED_WARNING} signals: {path.name}")
         capabilities.add("JavaScript obfuscation signals")

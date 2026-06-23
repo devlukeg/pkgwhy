@@ -94,3 +94,22 @@ entrypoint = "demo.py"
 
     with pytest.raises(ValueError):
         read_tool_manifest(manifest_path)
+
+
+def test_read_tool_manifest_rejects_trailing_identifier_punctuation(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "pkgwhy.toml"
+    manifest_path.write_text(
+        """
+[tool]
+name = "demo-"
+owner = "luke"
+version = "0.1.0"
+description = "Demo private tool"
+artifact_type = "script"
+entrypoint = "demo.py"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="start and end"):
+        read_tool_manifest(manifest_path)

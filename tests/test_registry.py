@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,7 @@ from pkgwhy.registry.local import (
     init_local_registry,
     list_registries,
     load_registry_config,
+    save_registry_config,
     use_registry,
 )
 
@@ -47,6 +49,39 @@ def test_add_and_use_existing_registry(tmp_path: Path, monkeypatch: pytest.Monke
     assert entries["second"].is_current is True
 
 
+def test_add_registry_rejects_duplicate_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PKGWHY_CONFIG_HOME", str(tmp_path / "config"))
+    init_local_registry(tmp_path / "first", name="local")
+    second_path = tmp_path / "second"
+    second_path.mkdir()
+
+    with pytest.raises(ValueError, match="already exists"):
+        add_registry("local", second_path)
+
+
+def test_load_registry_config_ignores_invalid_config(tmp_path: Path) -> None:
+    config_file = tmp_path / "registries.json"
+    config_file.write_text('{"registries": []}', encoding="utf-8")
+
+    config = load_registry_config(config_file)
+
+    assert config.registries == {}
+
+
+def test_save_registry_config_uses_final_path(tmp_path: Path) -> None:
+    config_file = tmp_path / "registries.json"
+    config = load_registry_config(config_file)
+
+    save_registry_config(config, config_file)
+
+    assert config_file.exists()
+    assert not (tmp_path / ".registries.json.tmp").exists()
+
+
+@pytest.mark.skipif(
+    sys.platform in {"win32", "darwin"},
+    reason="XDG_CONFIG_HOME is only used on Unix-like platforms",
+)
 def test_empty_xdg_config_home_uses_default_config_dir(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("PKGWHY_CONFIG_HOME", raising=False)
     monkeypatch.setenv("XDG_CONFIG_HOME", "")

@@ -5,6 +5,8 @@ import os
 import sys
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from pkgwhy.core.models import RegistryConfig, RegistryEntry, RegistryIndex
 
 CONFIG_ENV_VAR = "PKGWHY_CONFIG_HOME"
@@ -43,9 +45,9 @@ def load_registry_config(path: Path | None = None) -> RegistryConfig:
         return RegistryConfig()
     try:
         data = json.loads(target.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        return RegistryConfig.model_validate(data)
+    except (OSError, json.JSONDecodeError, ValidationError):
         return RegistryConfig()
-    return RegistryConfig.model_validate(data)
 
 
 def save_registry_config(config: RegistryConfig, path: Path | None = None) -> None:
@@ -81,6 +83,8 @@ def add_registry(name: str, path: Path) -> RegistryEntry:
 
     index_exists = registry_index_path(registry_path).exists()
     config = load_registry_config()
+    if name in config.registries:
+        raise ValueError(f"A registry with this name already exists: {name}")
     config.registries[name] = str(registry_path)
     if config.current_registry is None:
         config.current_registry = name

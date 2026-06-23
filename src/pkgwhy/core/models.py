@@ -284,8 +284,10 @@ class ToolManifest(BaseModel):
     @field_validator("name", "owner")
     @classmethod
     def validate_identifier(cls, value: str) -> str:
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", value):
-            raise ValueError("must start with a letter or number and contain only letters, numbers, dots, underscores, or hyphens")
+        if not re.fullmatch(r"[A-Za-z0-9]+([._-][A-Za-z0-9]+)*", value):
+            raise ValueError(
+                "must start and end with a letter or number, with only single dots, underscores, or hyphens between segments"
+            )
         return value
 
     @field_validator("version", "description", "entrypoint", "python_requires")
