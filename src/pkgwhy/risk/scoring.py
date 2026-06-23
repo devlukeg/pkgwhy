@@ -25,7 +25,8 @@ def judge_inspection(inspection: PackageInspection) -> PackageJudgement:
             "This is a signal, not proof of unsafe behavior."
         )
         evidence.extend(typosquat_candidate.evidence)
-        risk = RiskLevel.MEDIUM
+        if risk == RiskLevel.LOW:
+            risk = RiskLevel.MEDIUM
 
     if inspection.source_availability in {
         SourceAvailability.SOURCE_AVAILABILITY_UNKNOWN,

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 import tomllib
 from pathlib import Path
 
 from pkgwhy.metadata.installed import normalize_package_name
+
+logger = logging.getLogger(__name__)
 
 
 def read_uv_lock_dependencies(path: Path) -> set[str]:
@@ -32,7 +35,8 @@ def _read_toml_lock_packages(path: Path) -> set[str]:
         return set()
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError):
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        logger.debug("Unable to parse lockfile %s: %s", path, exc)
         return set()
 
     names: set[str] = set()

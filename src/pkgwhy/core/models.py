@@ -3,7 +3,7 @@ from __future__ import annotations
 from enum import StrEnum
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from pkgwhy.core.constants import CAPABILITY_EXPOSURE_NOTE, PACKAGE_JUDGEMENT_SCHEMA_VERSION
 
@@ -188,6 +188,13 @@ class TyposquatCandidate(BaseModel):
     signals: list[str] = Field(default_factory=list)
     is_possible_typosquat: bool = False
     evidence: list[str] = Field(default_factory=list)
+
+    @field_validator("similarity")
+    @classmethod
+    def validate_similarity(cls, value: float) -> float:
+        if not 0 <= value <= 1:
+            raise ValueError("similarity must be between 0 and 1")
+        return value
 
 
 class DependencyReason(BaseModel):

@@ -51,6 +51,7 @@ def explain_dependency_reason(
         evidence.append("Package is not installed in the active Python environment.")
 
     imports = project_imports if project_imports is not None else scan_project_imports(project_root)
+    # Best-effort only: some packages use non-obvious import names such as PIL, bs4, or yaml.
     imported_by_project = normalized.replace("-", "_") in imports
     if imported_by_project:
         evidence.append("Package import name appears in local project source.")

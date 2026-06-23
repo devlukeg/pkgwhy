@@ -87,14 +87,17 @@ def _compare_to_reference(
     if _is_adjacent_transposition(candidate_compact, reference_compact):
         signals.append("adjacent_transposition")
         evidence.append(f"Name appears to transpose adjacent characters from '{reference}'.")
+        # Adjacent swaps are common typos even when edit-distance similarity underweights them.
         similarity = max(similarity, 0.92)
     if _is_single_missing_or_extra_character(candidate_compact, reference_compact):
         signals.append("missing_or_extra_character")
         evidence.append(f"Name differs from '{reference}' by one missing or extra character.")
+        # Single missing/extra characters are strong typo signals for short package names.
         similarity = max(similarity, 0.88)
     if candidate_homoglyph == reference_homoglyph and candidate_compact != reference_compact:
         signals.append("homoglyph_or_lookalike")
         evidence.append(f"Name normalizes to the same lookalike form as '{reference}'.")
+        # Lookalike normalization catches visual similarity that plain edit distance can miss.
         similarity = max(similarity, 0.95)
 
     if len(signals) == 0:
