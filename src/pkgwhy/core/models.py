@@ -174,3 +174,17 @@ class PackageJudgement(BaseModel):
     recommendation: str
     evidence: list[str] = Field(default_factory=list)
     capability_exposure_note: str = CAPABILITY_EXPOSURE_NOTE
+
+
+class TyposquatCandidate(BaseModel):
+    """Conservative typosquatting similarity signal for a package name."""
+
+    package: str
+    normalized_package: str
+    possible_target: str
+    matched_reference: str
+    similarity: float
+    signals: list[str] = Field(default_factory=list)
+    is_possible_typosquat: bool = False
+    recommendation: str
+    evidence: list[str] = Field(default_factory=list)

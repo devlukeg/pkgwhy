@@ -17,6 +17,7 @@ from pkgwhy.imports.scanner import scan_project_imports
 from pkgwhy.manifests.pyproject import read_pyproject_dependencies
 from pkgwhy.manifests.requirements import read_requirements_dependencies
 from pkgwhy.metadata.installed import get_installed_package, list_installed_packages, normalize_package_name
+from pkgwhy.typosquat.detector import detect_typosquats
 
 app = typer.Typer(no_args_is_help=True, help="Explain, inspect, and judge Python packages.")
 console = Console()
@@ -125,6 +126,32 @@ def judge(package: str, as_json: Annotated[bool, typer.Option("--json", help="Em
         console.print("Warnings:")
         for warning in judgement.warnings:
             console.print(f"  - {warning}")
+
+
+@app.command()
+def typos(packages: Annotated[list[str] | None, typer.Argument(help="Package names to check. Omit to scan installed packages.")] = None) -> None:
+    """Detect conservative typosquatting similarity signals."""
+    names = packages if packages else [package.identity.name for package in list_installed_packages()]
+    candidates = detect_typosquats(names)
+    if not candidates:
+        console.print("No possible typosquatting signals found.")
+        return
+
+    table = Table(title="Possible typosquatting signals")
+    table.add_column("Package")
+    table.add_column("Possible target")
+    table.add_column("Similarity")
+    table.add_column("Signals")
+    table.add_column("Recommendation")
+    for candidate in candidates:
+        table.add_row(
+            candidate.package,
+            candidate.possible_target,
+            f"{candidate.similarity:.3f}",
+            ", ".join(candidate.signals),
+            candidate.recommendation,
+        )
+    console.print(table)
 
 
 def dependency_status_for(

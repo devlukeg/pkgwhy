@@ -8,6 +8,7 @@ from pkgwhy.core.models import (
     RiskLevel,
     SourceAvailability,
 )
+from pkgwhy.typosquat.detector import detect_typosquat
 
 
 def judge_inspection(inspection: PackageInspection) -> PackageJudgement:
@@ -16,6 +17,15 @@ def judge_inspection(inspection: PackageInspection) -> PackageJudgement:
     evidence = list(inspection.evidence)
     risk = RiskLevel.LOW
     confidence = Confidence.MEDIUM
+    typosquat_candidate = detect_typosquat(metadata.identity.name)
+    if typosquat_candidate is not None:
+        warnings.append(
+            "Possible typosquatting risk: "
+            f"'{metadata.identity.name}' is similar to popular package '{typosquat_candidate.possible_target}'. "
+            "This is a signal, not proof of unsafe behavior."
+        )
+        evidence.extend(typosquat_candidate.evidence)
+        risk = RiskLevel.MEDIUM
 
     if inspection.source_availability in {
         SourceAvailability.SOURCE_AVAILABILITY_UNKNOWN,

@@ -1,0 +1,2 @@
+"""Typosquatting similarity detection."""
+
