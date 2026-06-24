@@ -10,7 +10,7 @@ For non-sensitive security bugs or documentation issues, use GitHub Issues:
 
 <https://github.com/devlukeg/pkgwhy/issues>
 
-For sensitive security reports, report privately to Luke Gerakiteys through the channel where you received access to the project until a dedicated private security contact is configured.
+For sensitive security reports, use the private channel where you received access to the project until a dedicated security contact is configured.
 
 Do not include secrets, private package contents, or credentials in public issues.
 

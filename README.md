@@ -2,7 +2,7 @@
 
 Know why a package exists before you or your agent trusts it.
 
-`pkgwhy` is an offline-first Python package intelligence and local private-tool CLI owned and maintained by Luke Gerakiteys. It explains installed packages, inspects local package files without importing them, reports conservative static security signals, produces agent-readable JSON judgements, and can publish and run local private Python tools from a local registry.
+`pkgwhy` is an offline-first Python package intelligence and local private-tool CLI. It explains installed packages, inspects local package files without importing them, reports conservative static security signals, produces agent-readable JSON judgements, and can publish and run local private Python tools from a local registry.
 
 ## Status
 
@@ -104,7 +104,7 @@ Install directly from GitHub after the repository is public, or from an authoriz
 python -m pip install "pkgwhy @ git+https://github.com/devlukeg/pkgwhy.git"
 ```
 
-Future PyPI pre-alpha install command, after Luke explicitly approves publishing:
+Future PyPI pre-alpha install command, once a release is published:
 
 ```bash
 python -m pip install pkgwhy

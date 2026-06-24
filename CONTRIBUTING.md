@@ -1,6 +1,6 @@
 # Contributing
 
-`pkgwhy` is owned and maintained by Luke Gerakiteys. The project is in pre-alpha, so contributions should stay small, focused, and conservative.
+`pkgwhy` is still pre-alpha. Small, focused issues and pull requests are easiest to review right now.
 
 ## Development Setup
 
@@ -20,7 +20,7 @@ python -m venv .venv
 - Do not claim full sandboxing unless it is implemented.
 - Do not fabricate metadata, source availability, vulnerability findings, risk results, signatures, hashes, or review findings.
 - Keep JSON output stable for agent workflows.
-- Keep PyPI/TestPyPI publishing, release tags, repository visibility changes, and pushes approval-gated.
+- Keep release, publishing, repository visibility, and distribution changes out of ordinary feature pull requests.
 
 ## Before Submitting Changes
 
@@ -33,7 +33,7 @@ git diff --check
 .venv/bin/python -m twine check dist/*
 ```
 
-Do not add publishing automation, external services, payment processing, secrets, or cloud backends without explicit maintainer approval.
+Publishing automation, external services, payment processing, secrets, and cloud backends are out of scope for this preview.
 
 Repository: <https://github.com/devlukeg/pkgwhy>
 
