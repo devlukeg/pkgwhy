@@ -29,6 +29,24 @@ def test_risk_command_outputs_human_risk_report() -> None:
     assert "Risk level:" in result.output
     assert "Decision:" in result.output
     assert "Recommendation:" in result.output
+    assert "Rule evidence" in result.output
+    assert "PKGWHY-" in result.output
+
+
+def test_inspect_command_outputs_rule_evidence() -> None:
+    result = runner.invoke(app, ["inspect", "typer"])
+
+    assert result.exit_code == 0
+    assert "Rule evidence" in result.output
+    assert "PKGWHY-" in result.output
+
+
+def test_judge_command_outputs_rule_evidence() -> None:
+    result = runner.invoke(app, ["judge", "typer"])
+
+    assert result.exit_code == 0
+    assert "Rule evidence" in result.output
+    assert "PKGWHY-" in result.output
 
 
 def test_risk_command_outputs_json_report() -> None:

@@ -11,7 +11,7 @@ from rich.table import Table
 
 from pkgwhy.agent.judge import inspect_installed_package, judge_installed_package
 from pkgwhy.core.constants import CAPABILITY_EXPOSURE_NOTE
-from pkgwhy.core.models import PackageMetadata, VulnerabilityMatch
+from pkgwhy.core.models import PackageMetadata, RiskRuleEvidence, VulnerabilityMatch
 from pkgwhy.dependencies.reason import explain_dependency_reason
 from pkgwhy.explanations.explain import explain_package
 from pkgwhy.imports.scanner import scan_project_imports
@@ -121,6 +121,7 @@ def inspect(package: str) -> None:
         console.print("Warnings:")
         for warning in inspection.warnings:
             console.print(f"  - {warning}")
+    _print_rule_evidence(inspection.rule_evidence)
     if inspection.size.largest_files:
         console.print("Largest files:")
         for item in inspection.size.largest_files:
@@ -143,6 +144,7 @@ def judge(package: str, as_json: Annotated[bool, typer.Option("--json", help="Em
         console.print("Warnings:")
         for warning in judgement.warnings:
             console.print(f"  - {warning}")
+    _print_rule_evidence(judgement.risk_rules)
 
 
 @app.command()
@@ -168,6 +170,7 @@ def risk(package: str, as_json: Annotated[bool, typer.Option("--json", help="Emi
         console.print("Warnings:")
         for warning in judgement.warnings:
             console.print(f"  - {warning}")
+    _print_rule_evidence(judgement.risk_rules)
     if judgement.evidence:
         if len(judgement.evidence) > 10:
             console.print(f"Evidence (showing first 10 of {len(judgement.evidence)}):")
@@ -451,6 +454,41 @@ def _emit_or_write(rendered: str, output: Path | None) -> None:
         console.print(f"Could not write report to {output}: {exc}")
         raise typer.Exit(1) from exc
     console.print(f"Wrote report to {output}")
+
+
+def _print_rule_evidence(rules: list[RiskRuleEvidence], limit: int = 8) -> None:
+    if not rules:
+        return
+    selected_rules = sorted(rules, key=_rule_sort_key)[:limit]
+    heading = f"Rule evidence (showing first {limit} of {len(rules)}):" if len(rules) > limit else "Rule evidence:"
+    console.print(heading)
+    for rule in selected_rules:
+        location = _format_rule_location(rule)
+        location_text = f" at {location}" if location else ""
+        console.print(
+            f"  - {rule.rule_id} ({rule.severity.value}/{rule.confidence.value}) {rule.name}{location_text}: {rule.message}"
+        )
+
+
+def _rule_sort_key(rule: RiskRuleEvidence) -> tuple[int, str, str]:
+    severity_order = {
+        "critical": 0,
+        "high": 1,
+        "medium": 2,
+        "low": 3,
+        "info": 4,
+    }
+    return severity_order.get(rule.severity.value, 5), rule.rule_id, rule.file_path or ""
+
+
+def _format_rule_location(rule: RiskRuleEvidence) -> str:
+    if rule.file_path and rule.line_number:
+        return f"{rule.file_path}:{rule.line_number}"
+    if rule.file_path:
+        return rule.file_path
+    if rule.symbol:
+        return rule.symbol
+    return ""
 
 
 def _dedupe_vulnerability_matches(matches: list[VulnerabilityMatch]) -> list[VulnerabilityMatch]:
