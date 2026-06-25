@@ -57,6 +57,16 @@ class RuleSeverity(StrEnum):
     CRITICAL = "critical"
 
 
+class RuleCategory(StrEnum):
+    VULNERABILITY = "vulnerability"
+    IDENTITY = "identity"
+    SOURCE = "source"
+    METADATA = "metadata"
+    STATIC_ANALYSIS = "static_analysis"
+    BINARY = "binary"
+    POLICY = "policy"
+
+
 class DependencyStatus(StrEnum):
     DIRECT = "direct"
     TRANSITIVE = "transitive"
@@ -181,10 +191,15 @@ class RiskRuleEvidence(BaseModel):
 
     rule_id: str
     name: str
+    category: RuleCategory
     severity: RuleSeverity
     confidence: Confidence
     message: str
     evidence: list[str] = Field(default_factory=list)
+    file_path: str | None = None
+    line_number: int | None = Field(default=None, ge=1)
+    symbol: str | None = None
+    false_positive_note: str | None = None
 
 
 class LargestFile(BaseModel):

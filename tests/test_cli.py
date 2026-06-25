@@ -55,6 +55,8 @@ def test_judge_json_contains_agent_contract_fields_for_installed_package() -> No
     assert isinstance(data["warnings"], list)
     assert isinstance(data["evidence"], list)
     assert isinstance(data["risk_rules"], list)
+    assert all("category" in rule for rule in data["risk_rules"])
+    assert all("false_positive_note" in rule for rule in data["risk_rules"])
     assert isinstance(data["known_vulnerabilities"], list)
     assert data["provenance"] is not None
     assert data["provenance"]["attestation_status"] == "not_implemented"

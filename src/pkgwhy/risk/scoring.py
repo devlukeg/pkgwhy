@@ -12,6 +12,7 @@ from pkgwhy.core.models import (
     VulnerabilityMatch,
 )
 from pkgwhy.provenance.installed import assess_installed_provenance
+from pkgwhy.risk.rules import make_rule_evidence
 from pkgwhy.typosquat.detector import detect_typosquat
 
 
@@ -38,13 +39,12 @@ def judge_inspection(
         warnings.append(message)
         evidence.extend(vulnerability.evidence)
         risk_rules.append(
-            RiskRuleEvidence(
-                rule_id="PKGWHY-VULN-001",
-                name="known_vulnerability_match",
-                severity=_severity_for_vulnerability(vulnerability),
-                confidence=vulnerability.confidence,
+            make_rule_evidence(
+                "PKGWHY-VULN-001",
                 message=message,
                 evidence=vulnerability.evidence,
+                severity=_severity_for_vulnerability(vulnerability),
+                confidence=vulnerability.confidence,
             )
         )
         risk = _raise_risk(risk, _risk_for_vulnerability(vulnerability))
@@ -58,16 +58,7 @@ def judge_inspection(
         )
         warnings.append(message)
         evidence.extend(typosquat_candidate.evidence)
-        risk_rules.append(
-            RiskRuleEvidence(
-                rule_id="PKGWHY-RISK-001",
-                name="possible_typosquat_similarity",
-                severity=RuleSeverity.MEDIUM,
-                confidence=Confidence.MEDIUM,
-                message=message,
-                evidence=typosquat_candidate.evidence,
-            )
-        )
+        risk_rules.append(make_rule_evidence("PKGWHY-RISK-001", message=message, evidence=typosquat_candidate.evidence))
         risk = _raise_risk(risk, RiskLevel.MEDIUM)
 
     if inspection.source_availability in {
@@ -77,11 +68,8 @@ def judge_inspection(
         message = "Source availability is unknown from installed files."
         warnings.append(message)
         risk_rules.append(
-            RiskRuleEvidence(
-                rule_id="PKGWHY-RISK-002",
-                name="source_availability_unknown",
-                severity=RuleSeverity.MEDIUM,
-                confidence=Confidence.MEDIUM,
+            make_rule_evidence(
+                "PKGWHY-RISK-002",
                 message=message,
                 evidence=["Installed file metadata did not provide readable source paths."],
             )
@@ -92,14 +80,7 @@ def judge_inspection(
         message = "Installed metadata does not include a clear license value."
         warnings.append(message)
         risk_rules.append(
-            RiskRuleEvidence(
-                rule_id="PKGWHY-RISK-003",
-                name="missing_license_metadata",
-                severity=RuleSeverity.MEDIUM,
-                confidence=Confidence.MEDIUM,
-                message=message,
-                evidence=["License metadata field was empty."],
-            )
+            make_rule_evidence("PKGWHY-RISK-003", message=message, evidence=["License metadata field was empty."])
         )
         risk = _raise_risk(risk, RiskLevel.MEDIUM)
 
@@ -107,11 +88,8 @@ def judge_inspection(
         message = "Native compiled files are present. This can be legitimate, but static review is more limited."
         warnings.append(message)
         risk_rules.append(
-            RiskRuleEvidence(
-                rule_id="PKGWHY-RISK-004",
-                name="native_compiled_code_present",
-                severity=RuleSeverity.MEDIUM,
-                confidence=Confidence.MEDIUM,
+            make_rule_evidence(
+                "PKGWHY-RISK-004",
                 message=message,
                 evidence=["Installed file scan detected native binary file extensions."],
             )
@@ -122,11 +100,8 @@ def judge_inspection(
         message = f"Static capability signal detected: {capability}. This is not proof of unsafe behavior."
         warnings.append(message)
         risk_rules.append(
-            RiskRuleEvidence(
-                rule_id="PKGWHY-RISK-005",
-                name="static_capability_signal",
-                severity=RuleSeverity.MEDIUM,
-                confidence=Confidence.MEDIUM,
+            make_rule_evidence(
+                "PKGWHY-RISK-005",
                 message=message,
                 evidence=[f"Detected capability signal: {capability}."],
             )
@@ -137,11 +112,8 @@ def judge_inspection(
         message = "No installed package files were found through distribution metadata."
         warnings.append(message)
         risk_rules.append(
-            RiskRuleEvidence(
-                rule_id="PKGWHY-RISK-006",
-                name="no_installed_files_found",
-                severity=RuleSeverity.HIGH,
-                confidence=Confidence.LOW,
+            make_rule_evidence(
+                "PKGWHY-RISK-006",
                 message=message,
                 evidence=["Distribution metadata did not expose files for static inspection."],
             )

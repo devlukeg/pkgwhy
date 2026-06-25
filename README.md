@@ -381,7 +381,17 @@ Agent decisions:
 
 The current risk engine is deliberately conservative and early. Treat it as decision support for humans and agents, not a final verdict.
 
-Risk rule output includes `risk_model_version` and per-rule `rule_id`, severity, confidence, message, and evidence fields. These rule IDs are a pre-alpha stability candidate, not a long-term compatibility guarantee yet.
+Risk rule output includes `risk_model_version` and per-rule `rule_id`, category, severity, confidence, message, evidence, optional file path, optional line number, optional symbol, and false-positive notes. These rule IDs are a pre-alpha stability candidate, not a long-term compatibility guarantee yet.
+
+Current pre-alpha rule IDs:
+
+- `PKGWHY-VULN-001`: known vulnerability advisory match.
+- `PKGWHY-RISK-001`: possible typosquatting similarity.
+- `PKGWHY-RISK-002`: unknown source availability from installed files.
+- `PKGWHY-RISK-003`: missing license metadata.
+- `PKGWHY-RISK-004`: native compiled code present.
+- `PKGWHY-RISK-005`: static capability signal.
+- `PKGWHY-RISK-006`: no installed files found through distribution metadata.
 
 Known-vulnerability output is source-attributed. A missing vulnerability match does not prove that a package has no vulnerabilities, because advisory databases and local fixtures can be incomplete or unavailable.
 
