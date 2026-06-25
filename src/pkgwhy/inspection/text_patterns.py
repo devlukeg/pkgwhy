@@ -23,9 +23,9 @@ TEXT_PATTERN_SUFFIXES = {
 
 URL_PATTERN = re.compile(r"https?://[^\s'\"<>)\]}]+", re.IGNORECASE)
 CREDENTIAL_ASSIGNMENT_PATTERN = re.compile(
-    r"\b(?P<name>[A-Za-z_][A-Za-z0-9_]*(?:api[_-]?key|token|secret|password|credential)[A-Za-z0-9_]*)\b"
-    r"\s*[:=]\s*"
-    r"(?P<quote>['\"]?)"
+    r"\b(?P<name>(?:[A-Za-z_][A-Za-z0-9]*[_-])*(?:api[_-]?key|token|secret|password|credential)(?:[_-][A-Za-z0-9]+)*)\b"
+    r"\s*(?:=|:\s*(?=['\"]))\s*"
+    r"(?P<quote>['\"])"
     r"(?P<value>[A-Za-z0-9_\-./+=]{8,})"
     r"(?P=quote)",
     re.IGNORECASE,
@@ -70,14 +70,14 @@ def analyze_text_patterns(path: Path) -> FileStaticAnalysis:
         for match in CREDENTIAL_ASSIGNMENT_PATTERN.finditer(line):
             credential_name = match.group("name")
             capabilities.add("Credential or token access patterns")
-            reference = f"{path.name}:{line_number}:{credential_name}=[masked]"
+            reference = f"{path.name}:{line_number}:{credential_name}=(masked)"
             _append_unique(credential_references, reference)
-            evidence.append(f"Credential-like assignment in {path.name}:{line_number}: {credential_name}=[masked].")
+            evidence.append(f"Credential-like assignment in {path.name}:{line_number}: {credential_name}=(masked).")
             rule_evidence.append(
                 make_rule_evidence(
                     "PKGWHY-CRED-001",
                     message=f"Credential-like assignment references {credential_name}; value masked.",
-                    evidence=[f"{path.name}:{line_number} contains {credential_name}=[masked]."],
+                    evidence=[f"{path.name}:{line_number} contains {credential_name}=(masked)."],
                     file_path=path.name,
                     line_number=line_number,
                     symbol=credential_name,

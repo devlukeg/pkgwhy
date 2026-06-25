@@ -107,9 +107,8 @@ def _latest_release_date(releases: Any) -> str | None:
 
 
 def _parse_datetime(value: str) -> datetime | None:
-    normalized = value.removesuffix("Z") + "+00:00" if value.endswith("Z") else value
     try:
-        return datetime.fromisoformat(normalized)
+        return datetime.fromisoformat(value)
     except ValueError:
         return None
 

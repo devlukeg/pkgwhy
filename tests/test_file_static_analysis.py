@@ -104,9 +104,10 @@ def test_analyze_file_signals_reports_setup_time_static_patterns(tmp_path: Path)
             [
                 "import subprocess",
                 "import urllib.request",
-                "subprocess.run(['python', '-m', 'pip', 'install', 'demo'])",
-                "urllib.request.urlopen('https://example.invalid')",
-                "exec('x = 1')",
+                "if False:",
+                "    subprocess.run(['python', '-m', 'pip', 'install', 'demo'])",
+                "    urllib.request.urlopen('https://example.invalid')",
+                "    exec('x = 1')",
             ]
         ),
         encoding="utf-8",
@@ -121,7 +122,7 @@ def test_analyze_file_signals_reports_setup_time_static_patterns(tmp_path: Path)
     assert rules["PKGWHY-BUILD-002"].file_path == "setup.py"
     assert rules["PKGWHY-BUILD-002"].line_number == 1
     assert rules["PKGWHY-BUILD-003"].line_number == 2
-    assert rules["PKGWHY-BUILD-004"].line_number == 5
+    assert rules["PKGWHY-BUILD-004"].line_number == 6
 
 
 def test_analyze_file_signals_reports_build_metadata_without_execution(tmp_path: Path) -> None:
@@ -164,7 +165,12 @@ def test_analyze_file_signals_extracts_sanitized_url_domain_evidence(tmp_path: P
 def test_analyze_file_signals_masks_credential_like_assignments(tmp_path: Path) -> None:
     source = tmp_path / "settings.py"
     source.write_text(
-        'SERVICE_API_TOKEN = "sk_live_test_value_that_must_not_print"\n',
+        "\n".join(
+            [
+                'SERVICE_API_TOKEN = "sk_live_test_value_that_must_not_print"',
+                'API_KEY = "example_value_that_must_not_print"',
+            ]
+        ),
         encoding="utf-8",
     )
 
@@ -177,7 +183,24 @@ def test_analyze_file_signals_masks_credential_like_assignments(tmp_path: Path) 
     )
 
     assert "Credential or token access patterns" in analysis.detected_capabilities
-    assert analysis.credential_references == ["settings.py:1:SERVICE_API_TOKEN=[masked]"]
+    assert analysis.credential_references == [
+        "settings.py:1:SERVICE_API_TOKEN=(masked)",
+        "settings.py:2:API_KEY=(masked)",
+    ]
     assert any(rule.rule_id == "PKGWHY-CRED-001" for rule in analysis.rule_evidence)
     assert "sk_live_test_value_that_must_not_print" not in combined_output
-    assert "[masked]" in combined_output
+    assert "example_value_that_must_not_print" not in combined_output
+    assert "(masked)" in combined_output
+
+
+def test_analyze_file_signals_ignores_type_annotation_credential_substrings(tmp_path: Path) -> None:
+    source = tmp_path / "typed.py"
+    source.write_text(
+        "token_normalize_func: Callable[[str], str] | None = None\n",
+        encoding="utf-8",
+    )
+
+    analysis = analyze_file_signals([source], entry_points=[])
+
+    assert analysis.credential_references == []
+    assert not any(rule.rule_id == "PKGWHY-CRED-001" for rule in analysis.rule_evidence)

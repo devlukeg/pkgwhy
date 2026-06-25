@@ -226,6 +226,4 @@ def _severity_for_vulnerability(vulnerability: VulnerabilityMatch) -> RuleSeveri
     severity = " ".join(vulnerability.severity).lower()
     if "critical" in severity:
         return RuleSeverity.CRITICAL
-    if "high" in severity:
-        return RuleSeverity.HIGH
     return RuleSeverity.HIGH

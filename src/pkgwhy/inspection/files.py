@@ -262,7 +262,8 @@ def _analyze_build_metadata(path: Path) -> FileStaticAnalysis:
         )
 
     try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
+        source = path.read_text(encoding="utf-8")
+        data = tomllib.loads(source)
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
         return FileStaticAnalysis(warnings=[f"Could not statically parse pyproject.toml: {exc.__class__.__name__}"])
 
@@ -274,7 +275,7 @@ def _analyze_build_metadata(path: Path) -> FileStaticAnalysis:
     if not isinstance(backend, str) or not backend.strip():
         return FileStaticAnalysis(evidence=["pyproject.toml build-system table present without build-backend."])
 
-    line_number = _first_matching_line(path.read_text(encoding="utf-8"), re.compile(r"build-backend\s*="))
+    line_number = _first_matching_line(source, re.compile(r"build-backend\s*="))
     evidence = [f"pyproject.toml declares build backend: {backend}"]
     return FileStaticAnalysis(
         evidence=evidence,
