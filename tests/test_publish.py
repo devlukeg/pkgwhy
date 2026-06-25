@@ -74,3 +74,45 @@ def test_publish_requires_current_registry(tmp_path: Path, monkeypatch: pytest.M
 
     with pytest.raises(ValueError, match="No current registry"):
         publish_local_tool(script)
+
+
+def test_publish_rejects_duplicate_tool_version(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PKGWHY_CONFIG_HOME", str(tmp_path / "config"))
+    init_local_registry(tmp_path / "registry")
+    script = tmp_path / "duplicate_tool.py"
+    script.write_text("print('first')\n", encoding="utf-8")
+
+    publish_local_tool(script)
+
+    with pytest.raises(ValueError, match="already published"):
+        publish_local_tool(script)
+
+
+def test_publish_rejects_symlinked_bundle_member(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PKGWHY_CONFIG_HOME", str(tmp_path / "config"))
+    init_local_registry(tmp_path / "registry")
+    tool_dir = tmp_path / "symlink-tool"
+    tool_dir.mkdir()
+    (tool_dir / "pkgwhy.toml").write_text(
+        """
+[tool]
+name = "symlink-tool"
+owner = "local"
+version = "0.1.0"
+description = "Tool with symlink"
+artifact_type = "folder"
+entrypoint = "main.py"
+
+[security]
+signing_status = "not_implemented"
+""",
+        encoding="utf-8",
+    )
+    (tool_dir / "main.py").write_text("print('symlink')\n", encoding="utf-8")
+    try:
+        (tool_dir / "linked.py").symlink_to(tool_dir / "main.py")
+    except OSError:
+        pytest.skip("symlink creation is unavailable on this platform")
+
+    with pytest.raises(ValueError, match="Symlinks are not supported"):
+        publish_local_tool(tool_dir)

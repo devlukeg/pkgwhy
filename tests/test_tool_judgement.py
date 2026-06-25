@@ -64,6 +64,31 @@ def test_judge_tool_reports_missing_bundle(tmp_path: Path, monkeypatch: pytest.M
     assert "missing" in judgement.reason
 
 
+def test_judge_tool_rejects_corrupt_registry_index(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PKGWHY_CONFIG_HOME", str(tmp_path / "config"))
+    registry_path = tmp_path / "registry"
+    init_local_registry(registry_path)
+    (registry_path / "pkgwhy-registry.json").write_text("{not-json", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Could not read registry index"):
+        judge_tool("local/anything")
+
+
+def test_judge_tool_rejects_registry_entry_path_escape(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PKGWHY_CONFIG_HOME", str(tmp_path / "config"))
+    registry_path = tmp_path / "registry"
+    init_local_registry(registry_path)
+    script = tmp_path / "path_escape.py"
+    script.write_text("print('escape')\n", encoding="utf-8")
+    publish_local_tool(script)
+    index = load_registry_index(registry_path)
+    index.tools[0].manifest_path = "../manifest.json"
+    save_registry_index(registry_path, index)
+
+    with pytest.raises(ValueError, match="escapes registry root"):
+        judge_tool("local/path_escape")
+
+
 def test_tool_cli_inspect_and_judge_json(tmp_path: Path) -> None:
     env = {"PKGWHY_CONFIG_HOME": str(tmp_path / "config")}
     registry_path = tmp_path / "registry"

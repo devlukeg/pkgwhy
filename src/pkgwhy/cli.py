@@ -11,23 +11,32 @@ from rich.table import Table
 
 from pkgwhy.agent.judge import inspect_installed_package, judge_installed_package
 from pkgwhy.core.constants import CAPABILITY_EXPOSURE_NOTE
-from pkgwhy.core.models import PackageMetadata
+from pkgwhy.core.models import AgentPackagePrecheckResult, PackageMetadata, RiskRuleEvidence, VulnerabilityMatch
 from pkgwhy.dependencies.reason import explain_dependency_reason
+from pkgwhy.dynamic.analysis import build_unavailable_dynamic_result
 from pkgwhy.explanations.explain import explain_package
 from pkgwhy.imports.scanner import scan_project_imports
 from pkgwhy.metadata.installed import get_installed_package, list_installed_packages
+from pkgwhy.policy.audit_log import write_agent_package_decision_log
+from pkgwhy.policy.agent_policy import default_agent_policy, evaluate_package_policy
 from pkgwhy.registry.local import add_registry, init_local_registry, list_registries, use_registry
 from pkgwhy.registry.publish import publish_local_tool
 from pkgwhy.registry.run import RUNNER_ISOLATION_WARNING, run_local_tool
 from pkgwhy.registry.tools import judge_tool
 from pkgwhy.reports.audit import build_audit_report, render_audit_markdown
 from pkgwhy.typosquat.detector import detect_typosquats
+from pkgwhy.vulnerabilities.matching import match_vulnerabilities
+from pkgwhy.vulnerabilities.osv import OSVClientError, load_osv_records, query_osv
 
 app = typer.Typer(no_args_is_help=True, help="Explain, inspect, judge packages, and run local private tools.")
 registry_app = typer.Typer(no_args_is_help=True, help="Manage local private registries.")
 tool_app = typer.Typer(no_args_is_help=True, help="Inspect and judge local private tools.")
+dynamic_app = typer.Typer(no_args_is_help=True, help="Experimental dynamic sandbox analysis.")
+agent_app = typer.Typer(no_args_is_help=True, help="Agent-facing policy and package precheck commands.")
 app.add_typer(registry_app, name="registry")
 app.add_typer(tool_app, name="tool")
+app.add_typer(dynamic_app, name="dynamic")
+app.add_typer(agent_app, name="agent")
 console = Console()
 
 
@@ -119,6 +128,7 @@ def inspect(package: str) -> None:
         console.print("Warnings:")
         for warning in inspection.warnings:
             console.print(f"  - {warning}")
+    _print_rule_evidence(inspection.rule_evidence)
     if inspection.size.largest_files:
         console.print("Largest files:")
         for item in inspection.size.largest_files:
@@ -141,6 +151,7 @@ def judge(package: str, as_json: Annotated[bool, typer.Option("--json", help="Em
         console.print("Warnings:")
         for warning in judgement.warnings:
             console.print(f"  - {warning}")
+    _print_rule_evidence(judgement.risk_rules)
 
 
 @app.command()
@@ -166,6 +177,7 @@ def risk(package: str, as_json: Annotated[bool, typer.Option("--json", help="Emi
         console.print("Warnings:")
         for warning in judgement.warnings:
             console.print(f"  - {warning}")
+    _print_rule_evidence(judgement.risk_rules)
     if judgement.evidence:
         if len(judgement.evidence) > 10:
             console.print(f"Evidence (showing first 10 of {len(judgement.evidence)}):")
@@ -181,6 +193,14 @@ def audit(
     as_json: Annotated[bool, typer.Option("--json", help="Emit schema-versioned JSON audit report.")] = False,
     markdown: Annotated[bool, typer.Option("--markdown", help="Emit Markdown audit report.")] = False,
     output: Annotated[Path | None, typer.Option(help="Optional output path for JSON or Markdown reports.")] = None,
+    vulnerability_file: Annotated[
+        Path | None,
+        typer.Option(help="Optional local OSV-like JSON file with vulnerability data. No network is used."),
+    ] = None,
+    osv: Annotated[
+        bool,
+        typer.Option("--osv", help="Query OSV.dev for known vulnerabilities. Network is never used unless this is set."),
+    ] = False,
 ) -> None:
     """Audit installed packages with conservative static judgements."""
     if limit <= 0:
@@ -191,9 +211,30 @@ def audit(
         raise typer.BadParameter("--output requires --json or --markdown")
 
     packages = list_installed_packages()[:limit]
-    names = [package.identity.name for package in packages]
-    judgements = [judge_installed_package(name) for name in names]
-    report = build_audit_report(judgements)
+    vulnerability_records = []
+    audit_warnings: list[str] = []
+    if vulnerability_file is not None:
+        try:
+            vulnerability_records = load_osv_records(vulnerability_file)
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc)) from exc
+
+    judgements = []
+    for package in packages:
+        package_name = package.identity.name
+        package_version = package.identity.version
+        matches = match_vulnerabilities(package_name, package_version, vulnerability_records)
+        if osv:
+            try:
+                osv_records = query_osv(package_name, package_version)
+            except OSVClientError as exc:
+                audit_warnings.append(str(exc))
+                osv_records = []
+            matches.extend(match_vulnerabilities(package_name, package_version, osv_records))
+        matches = _dedupe_vulnerability_matches(matches)
+        judgements.append(judge_installed_package(package_name, known_vulnerabilities=matches))
+
+    report = build_audit_report(judgements, warnings=audit_warnings)
 
     if as_json:
         rendered = json.dumps(report, indent=2, sort_keys=True)
@@ -209,6 +250,7 @@ def audit(
     table.add_column("Version")
     table.add_column("Risk")
     table.add_column("Decision")
+    table.add_column("Vulns")
     table.add_column("Warnings")
     for judgement in judgements:
         table.add_row(
@@ -216,9 +258,12 @@ def audit(
             judgement.version or "unknown",
             judgement.risk_level.value,
             judgement.decision.value,
+            str(len(judgement.known_vulnerabilities)),
             str(len(judgement.warnings)),
         )
     console.print(table)
+    for warning in audit_warnings:
+        console.print(f"Warning: {warning}")
 
 
 @app.command()
@@ -264,11 +309,17 @@ def publish(path: Annotated[Path, typer.Argument(help="Local .py file or folder 
 
 
 @app.command()
-def run(reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference from the local registry.")]) -> None:
+def run(
+    reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference from the local registry.")],
+    non_interactive: Annotated[
+        bool,
+        typer.Option("--non-interactive", help="Apply conservative non-interactive tool execution policy."),
+    ] = False,
+) -> None:
     """Run a hash-verified local private tool from the current local registry."""
     print(RUNNER_ISOLATION_WARNING, file=sys.stderr)
     try:
-        result = run_local_tool(reference)
+        result = run_local_tool(reference, non_interactive=non_interactive)
     except ValueError as exc:
         console.print(str(exc))
         raise typer.Exit(1) from exc
@@ -279,6 +330,91 @@ def run(reference: Annotated[str, typer.Argument(help="Tool name or owner/name r
         print(result.stderr, end="" if result.stderr.endswith("\n") else "\n")
     console.print(f"Execution log: {result.log_path}")
     raise typer.Exit(result.exit_code)
+
+
+@agent_app.command("policy")
+def agent_policy(as_json: Annotated[bool, typer.Option("--json", help="Emit schema-versioned agent policy JSON.")] = False) -> None:
+    """Show conservative default policy for agent package and tool decisions."""
+    policy = default_agent_policy()
+    if as_json:
+        print(json.dumps(policy.model_dump(mode="json"), indent=2, sort_keys=True))
+        return
+    console.print("[bold]Agent policy[/bold]")
+    console.print(f"Schema: {policy.schema_version}")
+    console.print(f"Public PyPI allowed by default: {policy.allow_public_pypi}")
+    console.print(f"Unpinned dependencies allowed by default: {policy.allow_unpinned_dependencies}")
+    console.print(f"Unsigned tools allowed by default: {policy.allow_unsigned_tools}")
+    console.print(f"Non-interactive default decision: {policy.non_interactive_default_decision.value}")
+    console.print(f"Unknown package decision: {policy.unknown_package_decision.value}")
+    console.print(f"Non-interactive unknown package decision: {policy.non_interactive_unknown_package_decision.value}")
+    console.print(f"High-risk package decision: {policy.high_risk_package_decision.value}")
+    console.print(f"Non-interactive high-risk package decision: {policy.non_interactive_high_risk_package_decision.value}")
+    console.print("Policy is decision support; it does not install, import, or execute packages.")
+
+
+@agent_app.command("precheck")
+def agent_precheck(
+    package: Annotated[str, typer.Argument(help="Installed package name to judge against agent policy.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Emit schema-versioned agent precheck JSON.")] = False,
+    non_interactive: Annotated[
+        bool,
+        typer.Option(
+            "--non-interactive/--interactive",
+            help="Apply conservative non-interactive agent defaults.",
+        ),
+    ] = True,
+) -> None:
+    """Apply conservative agent policy to an installed package judgement."""
+    result = _build_agent_package_precheck(package, non_interactive=non_interactive)
+    log_path = write_agent_package_decision_log(result)
+    _emit_agent_package_precheck(result, as_json=as_json, log_path=log_path)
+
+
+@agent_app.command("judge")
+def agent_judge(
+    package: Annotated[str, typer.Argument(help="Installed package name to judge against agent policy.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Emit schema-versioned agent judgement JSON.")] = False,
+    non_interactive: Annotated[
+        bool,
+        typer.Option(
+            "--non-interactive/--interactive",
+            help="Apply conservative non-interactive agent defaults.",
+        ),
+    ] = True,
+) -> None:
+    """Alias for package precheck until tool-specific agent judgement is expanded."""
+    result = _build_agent_package_precheck(package, non_interactive=non_interactive)
+    log_path = write_agent_package_decision_log(result)
+    _emit_agent_package_precheck(result, as_json=as_json, log_path=log_path)
+
+
+@dynamic_app.command("inspect")
+def dynamic_inspect(
+    target: Annotated[str, typer.Argument(help="Target package or artifact reference to analyze dynamically.")],
+    container: Annotated[
+        bool,
+        typer.Option("--container", help="Require a disposable container backend. Host execution is never used."),
+    ] = False,
+    network: Annotated[
+        str,
+        typer.Option("--network", help="Network mode for a future sandbox backend. Only 'off' is accepted currently."),
+    ] = "off",
+    as_json: Annotated[bool, typer.Option("--json", help="Emit schema-versioned dynamic analysis JSON.")] = False,
+) -> None:
+    """Experimental dynamic analysis skeleton that fails safely until a sandbox backend exists."""
+    result = build_unavailable_dynamic_result(target, container=container, network=network)
+    if as_json:
+        print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
+        raise typer.Exit(1)
+
+    for warning in result.warnings:
+        console.print(warning)
+    if result.limitations:
+        console.print("Limitations:")
+        for limitation in result.limitations:
+            console.print(f"  - {limitation}")
+    console.print(f"Target was not executed: {result.target}")
+    raise typer.Exit(1)
 
 
 @tool_app.command("inspect")
@@ -416,3 +552,97 @@ def _emit_or_write(rendered: str, output: Path | None) -> None:
         console.print(f"Could not write report to {output}: {exc}")
         raise typer.Exit(1) from exc
     console.print(f"Wrote report to {output}")
+
+
+def _print_rule_evidence(rules: list[RiskRuleEvidence], limit: int = 8) -> None:
+    if not rules:
+        return
+    selected_rules = sorted(rules, key=_rule_sort_key)[:limit]
+    heading = f"Rule evidence (showing first {limit} of {len(rules)}):" if len(rules) > limit else "Rule evidence:"
+    console.print(heading)
+    for rule in selected_rules:
+        location = _format_rule_location(rule)
+        location_text = f" at {location}" if location else ""
+        console.print(
+            f"  - {rule.rule_id} ({rule.severity.value}/{rule.confidence.value}) {rule.name}{location_text}: {rule.message}"
+        )
+
+
+def _rule_sort_key(rule: RiskRuleEvidence) -> tuple[int, str, str]:
+    severity_order = {
+        "critical": 0,
+        "high": 1,
+        "medium": 2,
+        "low": 3,
+        "info": 4,
+    }
+    return severity_order.get(rule.severity.value, 5), rule.rule_id, rule.file_path or ""
+
+
+def _format_rule_location(rule: RiskRuleEvidence) -> str:
+    if rule.file_path and rule.line_number:
+        return f"{rule.file_path}:{rule.line_number}"
+    if rule.file_path:
+        return rule.file_path
+    if rule.symbol:
+        return rule.symbol
+    return ""
+
+
+def _build_agent_package_precheck(package: str, *, non_interactive: bool) -> AgentPackagePrecheckResult:
+    judgement = judge_installed_package(package)
+    return evaluate_package_policy(judgement, non_interactive=non_interactive)
+
+
+def _emit_agent_package_precheck(
+    result: AgentPackagePrecheckResult,
+    *,
+    as_json: bool,
+    log_path: Path | None = None,
+) -> None:
+    if as_json:
+        print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
+        return
+    console.print(f"[bold]{result.package}[/bold]")
+    console.print(f"Decision: {result.decision.value}")
+    console.print(f"Risk level: {result.risk_level.value}")
+    console.print(f"Confidence: {result.confidence.value}")
+    console.print(f"Policy source: {result.policy_decision_source}")
+    console.print(f"Recommendation: {result.recommendation}")
+    if log_path is not None:
+        console.print(f"Decision log: {log_path}")
+    if result.reasons:
+        console.print("Policy reasons:")
+        for reason in result.reasons:
+            console.print(f"  - {reason}")
+    if result.warnings:
+        console.print("Warnings:")
+        for warning in result.warnings:
+            console.print(f"  - {warning}")
+
+
+def _dedupe_vulnerability_matches(matches: list[VulnerabilityMatch]) -> list[VulnerabilityMatch]:
+    deduped: dict[str, VulnerabilityMatch] = {}
+    for match in matches:
+        existing = deduped.get(match.vulnerability_id)
+        if existing is None or _vulnerability_match_rank(match) > _vulnerability_match_rank(existing):
+            deduped[match.vulnerability_id] = match
+    return sorted(deduped.values(), key=lambda item: item.vulnerability_id)
+
+
+def _vulnerability_match_rank(match: VulnerabilityMatch) -> tuple[int, bool, int, bool, int]:
+    severity_order = {
+        "CRITICAL": 5,
+        "HIGH": 4,
+        "MODERATE": 3,
+        "MEDIUM": 3,
+        "LOW": 2,
+    }
+    strongest_severity = max((severity_order.get(value.upper(), 1) for value in match.severity), default=0)
+    return (
+        strongest_severity,
+        bool(match.fixed_versions),
+        len(match.evidence),
+        bool(match.source_url),
+        len(match.references),
+    )

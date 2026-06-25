@@ -40,14 +40,18 @@ def registry_index_path(path: Path) -> Path:
     return path / REGISTRY_INDEX_FILENAME
 
 
-def load_registry_index(path: Path) -> RegistryIndex:
+def load_registry_index(path: Path, *, strict: bool = False) -> RegistryIndex:
     target = registry_index_path(path)
     if not target.exists():
+        if strict:
+            raise ValueError(f"Registry index not found: {target}")
         return RegistryIndex()
     try:
         data = json.loads(target.read_text(encoding="utf-8"))
         return RegistryIndex.model_validate(data)
-    except (OSError, json.JSONDecodeError, ValidationError):
+    except (OSError, json.JSONDecodeError, ValidationError) as exc:
+        if strict:
+            raise ValueError(f"Could not read registry index: {target}") from exc
         return RegistryIndex()
 
 

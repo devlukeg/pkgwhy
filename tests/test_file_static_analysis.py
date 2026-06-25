@@ -16,29 +16,37 @@ def test_analyze_file_signals_detects_javascript_minification_and_dynamic_patter
     assert "Encoded payload handling signals" in analysis.detected_capabilities
     assert any("appears minified" in warning for warning in analysis.warnings)
     assert infer_readability([script], analysis) == ReadabilityStatus.MINIFIED
+    assert any(rule.rule_id == "PKGWHY-JS-001" for rule in analysis.rule_evidence)
+    assert any(rule.rule_id == "PKGWHY-JS-002" and rule.line_number == 1 for rule in analysis.rule_evidence)
+    assert any(rule.rule_id == "PKGWHY-JS-003" and rule.line_number == 1 for rule in analysis.rule_evidence)
 
 
 def test_analyze_file_signals_detects_binary_wasm_shell_and_setup_files(tmp_path: Path) -> None:
     native = tmp_path / "extension.so"
+    executable = tmp_path / "helper.exe"
     wasm = tmp_path / "module.wasm"
     shell = tmp_path / "install.sh"
     setup = tmp_path / "setup.py"
-    for path in [native, wasm, shell, setup]:
+    for path in [native, executable, wasm, shell, setup]:
         path.write_bytes(b"")
     shell.write_text("#!/bin/sh\necho ok\n", encoding="utf-8")
     setup.write_text("from setuptools import setup\n", encoding="utf-8")
 
-    analysis = analyze_file_signals([native, wasm, shell, setup], entry_points=["pkgwhy = pkgwhy.cli:app"])
+    analysis = analyze_file_signals([native, executable, wasm, shell, setup], entry_points=["pkgwhy = pkgwhy.cli:app"])
 
     assert "Native compiled code present" in analysis.detected_capabilities
     assert "WASM binary code present" in analysis.detected_capabilities
     assert "Shell script files present" in analysis.detected_capabilities
     assert "Install-time setup files present" in analysis.detected_capabilities
     assert "CLI or plugin entrypoints declared in package metadata" in analysis.detected_capabilities
-    assert analysis.native_binaries_detected == 1
+    assert analysis.native_binaries_detected == 2
     assert analysis.wasm_files_detected == 1
     assert analysis.shell_scripts_detected == 1
     assert analysis.setup_files_detected == 1
+    assert any(rule.rule_id == "PKGWHY-BIN-001" and rule.file_path == "extension.so" for rule in analysis.rule_evidence)
+    assert any(rule.rule_id == "PKGWHY-BIN-002" and rule.file_path == "module.wasm" for rule in analysis.rule_evidence)
+    assert any(rule.rule_id == "PKGWHY-BIN-003" and rule.file_path == "helper.exe" for rule in analysis.rule_evidence)
+    assert any(rule.rule_id == "PKGWHY-BUILD-001" for rule in analysis.rule_evidence)
 
 
 def test_analyze_file_signals_detects_shell_shebang_without_shell_suffix(tmp_path: Path) -> None:
@@ -60,6 +68,23 @@ def test_analyze_file_signals_escalates_heavy_javascript_obfuscation(tmp_path: P
     assert "JavaScript obfuscation signals" in analysis.detected_capabilities
     assert any("likely obfuscated javascript" in warning.lower() for warning in analysis.warnings)
     assert infer_readability([script], analysis) == ReadabilityStatus.LIKELY_OBFUSCATED
+    assert any(rule.rule_id == "PKGWHY-JS-004" and rule.severity == "high" for rule in analysis.rule_evidence)
+
+
+def test_analyze_file_signals_reports_javascript_source_maps_and_large_encoded_strings(tmp_path: Path) -> None:
+    script = tmp_path / "bundle.js"
+    encoded = "A" * 90
+    script.write_text(
+        f"const payload = '{encoded}';\n//# sourceMappingURL=bundle.js.map\n",
+        encoding="utf-8",
+    )
+
+    analysis = analyze_file_signals([script], entry_points=[])
+
+    assert "Encoded payload handling signals" in analysis.detected_capabilities
+    assert any(rule.rule_id == "PKGWHY-JS-003" and rule.line_number == 1 for rule in analysis.rule_evidence)
+    assert any(rule.rule_id == "PKGWHY-JS-005" and rule.line_number == 2 for rule in analysis.rule_evidence)
+    assert encoded not in " ".join(analysis.evidence)
 
 
 def test_analyze_file_signals_avoids_javascript_call_substring_false_positives(tmp_path: Path) -> None:
@@ -70,3 +95,134 @@ def test_analyze_file_signals_avoids_javascript_call_substring_false_positives(t
 
     assert "JavaScript dynamic code execution signals" not in analysis.detected_capabilities
     assert "Encoded payload handling signals" not in analysis.detected_capabilities
+
+
+def test_analyze_file_signals_reports_setup_time_static_patterns(tmp_path: Path) -> None:
+    setup = tmp_path / "setup.py"
+    setup.write_text(
+        "\n".join(
+            [
+                "import subprocess",
+                "import urllib.request",
+                "if False:",
+                "    subprocess.run(['python', '-m', 'pip', 'install', 'demo'])",
+                "    urllib.request.urlopen('https://example.invalid')",
+                "    exec('x = 1')",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    analysis = analyze_file_signals([setup], entry_points=[])
+    rules = {rule.rule_id: rule for rule in analysis.rule_evidence}
+
+    assert "Subprocess or shell execution signals" in analysis.detected_capabilities
+    assert "Network access signals" in analysis.detected_capabilities
+    assert "Dynamic code execution signals" in analysis.detected_capabilities
+    assert rules["PKGWHY-BUILD-002"].file_path == "setup.py"
+    assert rules["PKGWHY-BUILD-002"].line_number == 1
+    assert rules["PKGWHY-BUILD-003"].line_number == 2
+    assert rules["PKGWHY-BUILD-004"].line_number == 6
+
+
+def test_analyze_file_signals_reports_build_metadata_without_execution(tmp_path: Path) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    setup_cfg = tmp_path / "setup.cfg"
+    pyproject.write_text(
+        """
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+""",
+        encoding="utf-8",
+    )
+    setup_cfg.write_text("[metadata]\nname = demo\n", encoding="utf-8")
+
+    analysis = analyze_file_signals([pyproject, setup_cfg], entry_points=[])
+
+    assert any(rule.rule_id == "PKGWHY-BUILD-005" and rule.symbol == "hatchling.build" for rule in analysis.rule_evidence)
+    assert any(rule.rule_id == "PKGWHY-BUILD-006" for rule in analysis.rule_evidence)
+    assert "pyproject.toml declares build backend: hatchling.build" in analysis.evidence
+
+
+def test_analyze_file_signals_extracts_sanitized_url_domain_evidence(tmp_path: Path) -> None:
+    source = tmp_path / "client.py"
+    source.write_text(
+        'API_URL = "https://user:password@api.example.invalid/v1/resource?token=secret-value"\n',
+        encoding="utf-8",
+    )
+
+    analysis = analyze_file_signals([source], entry_points=[])
+
+    assert "URL or domain references" in analysis.detected_capabilities
+    assert analysis.url_references == ["https://api.example.invalid/..."]
+    assert analysis.domain_references == ["api.example.invalid"]
+    assert any(rule.rule_id == "PKGWHY-NET-001" for rule in analysis.rule_evidence)
+    assert "secret-value" not in " ".join(analysis.evidence)
+    assert "user:password" not in " ".join(analysis.url_references)
+
+
+def test_analyze_file_signals_masks_credential_like_assignments(tmp_path: Path) -> None:
+    source = tmp_path / "settings.py"
+    source.write_text(
+        "\n".join(
+            [
+                'SERVICE_API_TOKEN = "sk_live_test_value_that_must_not_print"',
+                'API_KEY = "example_value_that_must_not_print"',
+                '"API_KEY": "json_value_that_must_not_print"',
+                'SERVICE_SECRET: str = "typed_value_that_must_not_print"',
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    analysis = analyze_file_signals([source], entry_points=[])
+    combined_output = " ".join(
+        analysis.evidence
+        + analysis.credential_references
+        + [item.message for item in analysis.rule_evidence]
+        + [text for item in analysis.rule_evidence for text in item.evidence]
+    )
+
+    assert "Credential or token access patterns" in analysis.detected_capabilities
+    assert analysis.credential_references == [
+        "settings.py:1:SERVICE_API_TOKEN=(masked)",
+        "settings.py:2:API_KEY=(masked)",
+        "settings.py:3:API_KEY=(masked)",
+        "settings.py:4:SERVICE_SECRET=(masked)",
+    ]
+    assert any(rule.rule_id == "PKGWHY-CRED-001" for rule in analysis.rule_evidence)
+    assert "sk_live_test_value_that_must_not_print" not in combined_output
+    assert "example_value_that_must_not_print" not in combined_output
+    assert "json_value_that_must_not_print" not in combined_output
+    assert "typed_value_that_must_not_print" not in combined_output
+    assert "(masked)" in combined_output
+
+
+def test_analyze_file_signals_ignores_type_annotation_credential_substrings(tmp_path: Path) -> None:
+    source = tmp_path / "typed.py"
+    source.write_text(
+        "token_normalize_func: Callable[[str], str] | None = None\n",
+        encoding="utf-8",
+    )
+
+    analysis = analyze_file_signals([source], entry_points=[])
+
+    assert analysis.credential_references == []
+    assert not any(rule.rule_id == "PKGWHY-CRED-001" for rule in analysis.rule_evidence)
+
+
+def test_analyze_file_signals_prioritizes_rule_evidence_before_cap(tmp_path: Path) -> None:
+    files: list[Path] = []
+    for index in range(105):
+        source = tmp_path / f"link-{index}.txt"
+        source.write_text(f"https://example-{index}.invalid/path\n", encoding="utf-8")
+        files.append(source)
+    executable = tmp_path / "helper.exe"
+    executable.write_bytes(b"")
+    files.append(executable)
+
+    analysis = analyze_file_signals(files, entry_points=[])
+
+    assert len(analysis.rule_evidence) == 100
+    assert any(rule.rule_id == "PKGWHY-BIN-003" and rule.file_path == "helper.exe" for rule in analysis.rule_evidence)

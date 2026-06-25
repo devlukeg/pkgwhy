@@ -3,10 +3,20 @@ from __future__ import annotations
 import re
 from enum import StrEnum
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from pkgwhy.core.constants import CAPABILITY_EXPOSURE_NOTE, PACKAGE_JUDGEMENT_SCHEMA_VERSION
+from pkgwhy.core.constants import (
+    AGENT_PACKAGE_PRECHECK_SCHEMA_VERSION,
+    AGENT_POLICY_SCHEMA_VERSION,
+    CAPABILITY_EXPOSURE_NOTE,
+    DYNAMIC_ANALYSIS_SCHEMA_VERSION,
+    PACKAGE_JUDGEMENT_SCHEMA_VERSION,
+    RISK_MODEL_VERSION,
+)
+
+RiskModelVersion = Literal["pkgwhy.risk_model.v1"]
 
 
 class RiskLevel(StrEnum):
@@ -23,6 +33,27 @@ class AgentDecision(StrEnum):
     REVIEW_MANUALLY = "review_manually"
     SANDBOX_ONLY = "sandbox_only"
     BLOCK = "block"
+
+
+class AgentPolicyConfig(BaseModel):
+    """Policy-as-code defaults for non-interactive agent package decisions."""
+
+    schema_version: str = AGENT_POLICY_SCHEMA_VERSION
+    allow_public_pypi: bool = False
+    allow_unpinned_dependencies: bool = False
+    allow_unsigned_tools: bool = False
+    require_pkgwhy_judgement: bool = True
+    require_hash_verification: bool = True
+    require_signature_verification: bool = False
+    non_interactive_default_decision: AgentDecision = AgentDecision.BLOCK
+    unknown_package_decision: AgentDecision = AgentDecision.REVIEW_MANUALLY
+    high_risk_package_decision: AgentDecision = AgentDecision.REVIEW_MANUALLY
+    critical_risk_package_decision: AgentDecision = AgentDecision.BLOCK
+    non_interactive_unknown_package_decision: AgentDecision = AgentDecision.BLOCK
+    non_interactive_high_risk_package_decision: AgentDecision = AgentDecision.BLOCK
+    non_interactive_critical_risk_package_decision: AgentDecision = AgentDecision.BLOCK
+    tool_execution_requires_local_registry: bool = True
+    dynamic_analysis_default_decision: AgentDecision = AgentDecision.BLOCK
 
 
 class ToolArtifactType(StrEnum):
@@ -43,10 +74,43 @@ class ToolRunStatus(StrEnum):
     BLOCKED = "blocked"
 
 
+class DynamicAnalysisStatus(StrEnum):
+    BLOCKED = "blocked"
+    BACKEND_UNAVAILABLE = "backend_unavailable"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class DynamicNetworkMode(StrEnum):
+    OFF = "off"
+
+
+class DynamicFilesystemMode(StrEnum):
+    SCRATCH = "scratch"
+
+
 class Confidence(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
+
+
+class RuleSeverity(StrEnum):
+    INFO = "info"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class RuleCategory(StrEnum):
+    VULNERABILITY = "vulnerability"
+    IDENTITY = "identity"
+    SOURCE = "source"
+    METADATA = "metadata"
+    STATIC_ANALYSIS = "static_analysis"
+    BINARY = "binary"
+    POLICY = "policy"
 
 
 class DependencyStatus(StrEnum):
@@ -105,6 +169,85 @@ class PackageMetadata(BaseModel):
     metadata_available: bool = True
 
 
+class VulnerabilityRange(BaseModel):
+    """Conservative affected-version range parsed from advisory data."""
+
+    introduced: str | None = None
+    fixed: str | None = None
+    last_affected: str | None = None
+    range_type: str | None = None
+
+
+class VulnerabilityRecord(BaseModel):
+    """Source-attributed vulnerability advisory record."""
+
+    id: str
+    aliases: list[str] = Field(default_factory=list)
+    package_name: str
+    ecosystem: str | None = None
+    summary: str | None = None
+    details: str | None = None
+    severity: list[str] = Field(default_factory=list)
+    affected_ranges: list[VulnerabilityRange] = Field(default_factory=list)
+    affected_versions: list[str] = Field(default_factory=list)
+    fixed_versions: list[str] = Field(default_factory=list)
+    references: list[str] = Field(default_factory=list)
+    source: str
+    source_url: str | None = None
+
+
+class VulnerabilityMatch(BaseModel):
+    """A conservative package-version match against a vulnerability record."""
+
+    vulnerability_id: str
+    package: str
+    version: str
+    aliases: list[str] = Field(default_factory=list)
+    summary: str | None = None
+    severity: list[str] = Field(default_factory=list)
+    fixed_versions: list[str] = Field(default_factory=list)
+    references: list[str] = Field(default_factory=list)
+    source: str
+    source_url: str | None = None
+    confidence: Confidence = Confidence.MEDIUM
+    evidence: list[str] = Field(default_factory=list)
+
+
+class PackageProvenance(BaseModel):
+    """Metadata-derived source-trust signals without claiming unavailable attestations."""
+
+    package: str
+    version: str | None = None
+    repository_url: str | None = None
+    documentation_url: str | None = None
+    homepage_url: str | None = None
+    project_urls: dict[str, str] = Field(default_factory=dict)
+    metadata_source: str = "unknown"
+    source_distribution_status: str = "unknown"
+    trusted_publishing_status: str = "unknown"
+    attestation_status: str = "not_implemented"
+    release_activity_status: str = "unknown"
+    confidence: Confidence = Confidence.LOW
+    warnings: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
+
+
+class RiskRuleEvidence(BaseModel):
+    """One versioned risk-rule contribution to a package judgement."""
+
+    rule_id: str
+    name: str
+    category: RuleCategory
+    severity: RuleSeverity
+    confidence: Confidence
+    message: str
+    evidence: list[str] = Field(default_factory=list)
+    file_path: str | None = None
+    line_number: int | None = Field(default=None, ge=1)
+    symbol: str | None = None
+    false_positive_note: str | None = None
+
+
 class LargestFile(BaseModel):
     """A large installed file reported as inspection evidence."""
 
@@ -130,6 +273,7 @@ class PythonStaticAnalysis(BaseModel):
     detected_capabilities: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
+    rule_evidence: list[RiskRuleEvidence] = Field(default_factory=list)
     files_scanned: int = 0
 
 
@@ -139,6 +283,10 @@ class FileStaticAnalysis(BaseModel):
     detected_capabilities: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
+    rule_evidence: list[RiskRuleEvidence] = Field(default_factory=list)
+    url_references: list[str] = Field(default_factory=list)
+    domain_references: list[str] = Field(default_factory=list)
+    credential_references: list[str] = Field(default_factory=list)
     javascript_files_scanned: int = Field(default=0, ge=0)
     shell_scripts_detected: int = Field(default=0, ge=0)
     native_binaries_detected: int = Field(default=0, ge=0)
@@ -157,6 +305,7 @@ class PackageInspection(BaseModel):
     detected_capabilities: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
+    rule_evidence: list[RiskRuleEvidence] = Field(default_factory=list)
     file_analysis: FileStaticAnalysis = Field(default_factory=FileStaticAnalysis)
 
 
@@ -180,6 +329,7 @@ class PackageJudgement(BaseModel):
     """Agent-readable conservative judgement for an inspected package."""
 
     schema_version: str = PACKAGE_JUDGEMENT_SCHEMA_VERSION
+    risk_model_version: RiskModelVersion = RISK_MODEL_VERSION
     package: str
     version: str | None = None
     decision: AgentDecision
@@ -192,7 +342,70 @@ class PackageJudgement(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     recommendation: str
     evidence: list[str] = Field(default_factory=list)
+    risk_rules: list[RiskRuleEvidence] = Field(default_factory=list)
+    known_vulnerabilities: list[VulnerabilityMatch] = Field(default_factory=list)
+    provenance: PackageProvenance | None = None
     capability_exposure_note: str = CAPABILITY_EXPOSURE_NOTE
+
+
+class AgentPackagePrecheckResult(BaseModel):
+    """Schema-versioned agent policy decision for one package judgement."""
+
+    schema_version: str = AGENT_PACKAGE_PRECHECK_SCHEMA_VERSION
+    policy_schema_version: str = AGENT_POLICY_SCHEMA_VERSION
+    package: str
+    version: str | None = None
+    target_type: Literal["package"] = "package"
+    non_interactive: bool = True
+    decision: AgentDecision
+    risk_level: RiskLevel
+    confidence: Confidence
+    policy_decision_source: str
+    reasons: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    recommendation: str
+    package_judgement: PackageJudgement
+
+
+class DynamicProcessEvent(BaseModel):
+    """Observed process event from a dynamic backend."""
+
+    command: list[str] = Field(default_factory=list)
+    exit_code: int | None = None
+    duration_ms: int | None = Field(default=None, ge=0)
+
+
+class DynamicFilesystemEvent(BaseModel):
+    """Observed filesystem event from a dynamic backend."""
+
+    path: str
+    action: str
+
+
+class DynamicNetworkEvent(BaseModel):
+    """Observed network event from a dynamic backend."""
+
+    destination: str
+    action: str
+    protocol: str | None = None
+
+
+class DynamicAnalysisResult(BaseModel):
+    """Schema-versioned dynamic analysis result without fabricated events."""
+
+    schema_version: str = DYNAMIC_ANALYSIS_SCHEMA_VERSION
+    target: str
+    mode: str = "inspect"
+    sandbox_backend: str
+    network_mode: DynamicNetworkMode = DynamicNetworkMode.OFF
+    filesystem_mode: DynamicFilesystemMode = DynamicFilesystemMode.SCRATCH
+    status: DynamicAnalysisStatus
+    warnings: list[str] = Field(default_factory=list)
+    process_events: list[DynamicProcessEvent] = Field(default_factory=list)
+    filesystem_events: list[DynamicFilesystemEvent] = Field(default_factory=list)
+    network_events: list[DynamicNetworkEvent] = Field(default_factory=list)
+    decision: AgentDecision
+    limitations: list[str] = Field(default_factory=list)
 
 
 class TyposquatCandidate(BaseModel):
@@ -389,3 +602,6 @@ class ToolRunResult(BaseModel):
     stderr: str
     log_path: Path
     warning: str
+    policy_decision: AgentDecision
+    policy_reasons: list[str] = Field(default_factory=list)
+    policy_warnings: list[str] = Field(default_factory=list)

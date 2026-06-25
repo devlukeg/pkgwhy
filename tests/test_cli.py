@@ -17,6 +17,122 @@ def test_cli_help() -> None:
 
     assert result.exit_code == 0
     assert "Explain, inspect, judge packages, and run local private tools" in result.output
+    assert "dynamic" in result.output
+    assert "agent" in result.output
+
+
+def test_agent_help_surfaces_policy_commands() -> None:
+    result = runner.invoke(app, ["agent", "--help"])
+
+    assert result.exit_code == 0
+    assert "Agent-facing policy and package precheck commands" in result.output
+    assert "policy" in result.output
+    assert "precheck" in result.output
+
+
+def test_agent_policy_json_is_schema_versioned_and_conservative() -> None:
+    result = runner.invoke(app, ["agent", "policy", "--json"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["schema_version"] == "pkgwhy.agent_policy.v1"
+    assert data["allow_public_pypi"] is False
+    assert data["allow_unpinned_dependencies"] is False
+    assert data["allow_unsigned_tools"] is False
+    assert data["non_interactive_default_decision"] == "block"
+
+
+def test_agent_precheck_missing_package_blocks_non_interactive_json(tmp_path: Path) -> None:
+    env = {"PKGWHY_CONFIG_HOME": str(tmp_path / "config")}
+    package_name = "definitely-not-installed-pkgwhy-agent-precheck-4c7f6"
+    assert get_installed_package(package_name) is None
+
+    result = runner.invoke(app, ["agent", "precheck", package_name, "--json"], env=env)
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["schema_version"] == "pkgwhy.agent_package_precheck.v1"
+    assert data["policy_schema_version"] == "pkgwhy.agent_policy.v1"
+    assert data["target_type"] == "package"
+    assert data["package"] == package_name
+    assert data["risk_level"] == "unknown"
+    assert data["decision"] == "block"
+    assert data["non_interactive"] is True
+    assert data["policy_decision_source"] == "agent_policy"
+    assert data["package_judgement"]["schema_version"] == "pkgwhy.package_judgement.v1"
+    log_files = list((tmp_path / "config" / "agent-decisions").rglob("*.json"))
+    assert len(log_files) == 1
+
+
+def test_agent_judge_interactive_missing_package_requires_review_json(tmp_path: Path) -> None:
+    env = {"PKGWHY_CONFIG_HOME": str(tmp_path / "config")}
+    package_name = "definitely-not-installed-pkgwhy-agent-judge-a0186"
+    assert get_installed_package(package_name) is None
+
+    result = runner.invoke(app, ["agent", "judge", package_name, "--interactive", "--json"], env=env)
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["schema_version"] == "pkgwhy.agent_package_precheck.v1"
+    assert data["decision"] == "review_manually"
+    assert data["non_interactive"] is False
+    log_files = list((tmp_path / "config" / "agent-decisions").rglob("*.json"))
+    assert len(log_files) == 1
+
+
+def test_dynamic_help_surfaces_experimental_command() -> None:
+    result = runner.invoke(app, ["dynamic", "--help"])
+
+    assert result.exit_code == 0
+    assert "Experimental dynamic sandbox analysis" in result.output
+
+
+def test_dynamic_inspect_help_surfaces_safe_options() -> None:
+    result = runner.invoke(app, ["dynamic", "inspect", "--help"])
+
+    assert result.exit_code == 0
+    assert "--container" in result.output
+    assert "--network" in result.output
+
+
+def test_dynamic_inspect_fails_safely_without_backend(monkeypatch) -> None:
+    monkeypatch.setattr("pkgwhy.dynamic.analysis.shutil.which", lambda _: None)
+
+    result = runner.invoke(app, ["dynamic", "inspect", "demo-target", "--container"])
+
+    assert result.exit_code == 1
+    assert "not a production sandbox" in result.output
+    assert "Refusing to run dynamic analysis" in result.output
+    assert "Docker container backend is unavailable" in result.output
+    assert "Target was not executed: demo-target" in result.output
+
+
+def test_dynamic_inspect_rejects_network_enabled_mode() -> None:
+    result = runner.invoke(app, ["dynamic", "inspect", "demo-target", "--container", "--network", "on"])
+
+    assert result.exit_code == 1
+    assert "Only network mode 'off' is accepted" in result.output
+
+
+def test_dynamic_inspect_json_uses_schema_and_empty_events(monkeypatch) -> None:
+    monkeypatch.setattr("pkgwhy.dynamic.analysis.shutil.which", lambda _: None)
+
+    result = runner.invoke(app, ["dynamic", "inspect", "demo-target", "--container", "--json"])
+
+    assert result.exit_code == 1
+    data = json.loads(result.output)
+    assert data["schema_version"] == "pkgwhy.dynamic_analysis.v1"
+    assert data["target"] == "demo-target"
+    assert data["mode"] == "inspect"
+    assert data["sandbox_backend"] == "container"
+    assert data["network_mode"] == "off"
+    assert data["filesystem_mode"] == "scratch"
+    assert data["status"] == "backend_unavailable"
+    assert data["decision"] == "block"
+    assert data["process_events"] == []
+    assert data["filesystem_events"] == []
+    assert data["network_events"] == []
+    assert any("No dynamic sandbox backend" in limitation for limitation in data["limitations"])
 
 
 def test_judge_json_for_missing_package_is_stable() -> None:
@@ -28,6 +144,7 @@ def test_judge_json_for_missing_package_is_stable() -> None:
     data = json.loads(result.output)
     PackageJudgement.model_validate(data)
     assert data["schema_version"] == "pkgwhy.package_judgement.v1"
+    assert data["risk_model_version"] == "pkgwhy.risk_model.v1"
     assert data["package"] == package_name
     assert data["risk_level"] == "unknown"
     assert data["decision"] == "review_manually"
@@ -45,6 +162,7 @@ def test_judge_json_contains_agent_contract_fields_for_installed_package() -> No
     data = json.loads(result.output)
     PackageJudgement.model_validate(data)
     assert data["schema_version"] == "pkgwhy.package_judgement.v1"
+    assert data["risk_model_version"] == "pkgwhy.risk_model.v1"
     assert data["package"] == "typer"
     assert data["decision"] in {decision.value for decision in AgentDecision}
     assert data["risk_level"] in {risk.value for risk in RiskLevel}
@@ -52,6 +170,13 @@ def test_judge_json_contains_agent_contract_fields_for_installed_package() -> No
     assert isinstance(data["detected_capabilities"], list)
     assert isinstance(data["warnings"], list)
     assert isinstance(data["evidence"], list)
+    assert isinstance(data["risk_rules"], list)
+    assert data["risk_rules"]
+    assert all("category" in rule for rule in data["risk_rules"])
+    assert all("false_positive_note" in rule for rule in data["risk_rules"])
+    assert isinstance(data["known_vulnerabilities"], list)
+    assert data["provenance"] is not None
+    assert data["provenance"]["attestation_status"] == "not_implemented"
     assert "not proof" in data["capability_exposure_note"].lower()
 
 

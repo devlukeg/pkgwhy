@@ -69,7 +69,7 @@ def judge_tool(reference: str) -> ToolJudgement:
 
 def resolve_tool_entry(reference: str, registry: RegistryEntry | None = None) -> RegistryToolEntry:
     active_registry = registry or current_registry()
-    index = load_registry_index(active_registry.path)
+    index = load_registry_index(active_registry.path, strict=True)
     owner, name = _parse_reference(reference)
     matches = [
         entry
