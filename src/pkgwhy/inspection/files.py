@@ -8,6 +8,7 @@ from pathlib import Path
 
 from pkgwhy.core.models import FileStaticAnalysis, ReadabilityStatus, SourceAvailability
 from pkgwhy.inspection.size import JAVASCRIPT_SUFFIXES, NATIVE_SUFFIXES
+from pkgwhy.inspection.text_patterns import analyze_text_patterns, is_text_pattern_candidate
 from pkgwhy.risk.rules import make_rule_evidence
 
 SHELL_SUFFIXES = {".sh", ".bash", ".zsh", ".fish", ".ksh"}
@@ -94,6 +95,9 @@ def analyze_file_signals(paths: list[Path], entry_points: list[str]) -> FileStat
     warnings: list[str] = []
     evidence: list[str] = []
     rule_evidence = []
+    url_references: list[str] = []
+    domain_references: list[str] = []
+    credential_references: list[str] = []
     javascript_files_scanned = 0
     shell_scripts_detected = 0
     native_binaries_detected = 0
@@ -107,6 +111,15 @@ def analyze_file_signals(paths: list[Path], entry_points: list[str]) -> FileStat
     for path in paths:
         suffix = path.suffix.lower()
         name = path.name
+        if is_text_pattern_candidate(path):
+            text_result = analyze_text_patterns(path)
+            capabilities.update(text_result.detected_capabilities)
+            warnings.extend(text_result.warnings)
+            evidence.extend(text_result.evidence)
+            rule_evidence.extend(text_result.rule_evidence)
+            url_references.extend(text_result.url_references)
+            domain_references.extend(text_result.domain_references)
+            credential_references.extend(text_result.credential_references)
         if suffix in NATIVE_SUFFIXES:
             if suffix == ".wasm":
                 wasm_files_detected += 1
@@ -146,6 +159,9 @@ def analyze_file_signals(paths: list[Path], entry_points: list[str]) -> FileStat
         warnings=warnings[:100],
         evidence=evidence[:100],
         rule_evidence=rule_evidence[:100],
+        url_references=_unique(url_references)[:100],
+        domain_references=_unique(domain_references)[:100],
+        credential_references=_unique(credential_references)[:100],
         javascript_files_scanned=javascript_files_scanned,
         shell_scripts_detected=shell_scripts_detected,
         native_binaries_detected=native_binaries_detected,
@@ -348,3 +364,11 @@ def _character_ratio(source: str, predicate: Callable[[str], bool]) -> float:
     if not source:
         return 0.0
     return sum(1 for char in source if predicate(char)) / len(source)
+
+
+def _unique(values: list[str]) -> list[str]:
+    unique_values: list[str] = []
+    for value in values:
+        if value not in unique_values:
+            unique_values.append(value)
+    return unique_values

@@ -208,6 +208,24 @@ RULES: dict[str, RuleDefinition] = {
         default_message="setup.cfg metadata file is present.",
         false_positive_note="setup.cfg is usually declarative metadata and is not executable Python code.",
     ),
+    "PKGWHY-NET-001": RuleDefinition(
+        rule_id="PKGWHY-NET-001",
+        name="source_url_or_domain_reference",
+        category=RuleCategory.STATIC_ANALYSIS,
+        severity=RuleSeverity.LOW,
+        confidence=Confidence.MEDIUM,
+        default_message="Source text references a URL or domain.",
+        false_positive_note="URL references can be documentation, examples, tests, or metadata and are not proof of network behavior.",
+    ),
+    "PKGWHY-CRED-001": RuleDefinition(
+        rule_id="PKGWHY-CRED-001",
+        name="credential_like_assignment",
+        category=RuleCategory.STATIC_ANALYSIS,
+        severity=RuleSeverity.MEDIUM,
+        confidence=Confidence.MEDIUM,
+        default_message="Source text contains a credential-like assignment pattern.",
+        false_positive_note="Credential-like names can appear in placeholders, tests, documentation, and configuration examples.",
+    ),
 }
 
 

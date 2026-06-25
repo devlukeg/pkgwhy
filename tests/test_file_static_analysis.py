@@ -118,3 +118,42 @@ build-backend = "hatchling.build"
     assert any(rule.rule_id == "PKGWHY-BUILD-005" and rule.symbol == "hatchling.build" for rule in analysis.rule_evidence)
     assert any(rule.rule_id == "PKGWHY-BUILD-006" for rule in analysis.rule_evidence)
     assert "pyproject.toml declares build backend: hatchling.build" in analysis.evidence
+
+
+def test_analyze_file_signals_extracts_sanitized_url_domain_evidence(tmp_path: Path) -> None:
+    source = tmp_path / "client.py"
+    source.write_text(
+        'API_URL = "https://user:password@api.example.invalid/v1/resource?token=secret-value"\n',
+        encoding="utf-8",
+    )
+
+    analysis = analyze_file_signals([source], entry_points=[])
+
+    assert "URL or domain references" in analysis.detected_capabilities
+    assert analysis.url_references == ["https://api.example.invalid/..."]
+    assert analysis.domain_references == ["api.example.invalid"]
+    assert any(rule.rule_id == "PKGWHY-NET-001" for rule in analysis.rule_evidence)
+    assert "secret-value" not in " ".join(analysis.evidence)
+    assert "user:password" not in " ".join(analysis.url_references)
+
+
+def test_analyze_file_signals_masks_credential_like_assignments(tmp_path: Path) -> None:
+    source = tmp_path / "settings.py"
+    source.write_text(
+        'SERVICE_API_TOKEN = "sk_live_test_value_that_must_not_print"\n',
+        encoding="utf-8",
+    )
+
+    analysis = analyze_file_signals([source], entry_points=[])
+    combined_output = " ".join(
+        analysis.evidence
+        + analysis.credential_references
+        + [item.message for item in analysis.rule_evidence]
+        + [text for item in analysis.rule_evidence for text in item.evidence]
+    )
+
+    assert "Credential or token access patterns" in analysis.detected_capabilities
+    assert analysis.credential_references == ["settings.py:1:SERVICE_API_TOKEN=[masked]"]
+    assert any(rule.rule_id == "PKGWHY-CRED-001" for rule in analysis.rule_evidence)
+    assert "sk_live_test_value_that_must_not_print" not in combined_output
+    assert "[masked]" in combined_output
