@@ -32,7 +32,7 @@ def assess_installed_provenance(metadata: PackageMetadata) -> PackageProvenance:
         warnings.append("Installed metadata does not declare project URLs.")
 
     return PackageProvenance(
-        package=metadata.identity.name,
+        package=metadata.identity.normalized_name,
         version=metadata.identity.version,
         repository_url=urls.repository,
         documentation_url=urls.documentation,

@@ -28,7 +28,12 @@ def load_osv_records(path: Path, package_name: str | None = None) -> list[Vulner
 def parse_osv_payload(payload: dict[str, Any] | list[Any], package_name: str | None = None) -> list[VulnerabilityRecord]:
     """Parse a minimal OSV response or vulnerability list into internal records."""
     if isinstance(payload, dict):
-        vulnerabilities = payload.get("vulns", [])
+        if isinstance(payload.get("vulns"), list):
+            vulnerabilities = payload["vulns"]
+        elif isinstance(payload.get("id"), str):
+            vulnerabilities = [payload]
+        else:
+            vulnerabilities = []
     else:
         vulnerabilities = payload
 

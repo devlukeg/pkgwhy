@@ -6,7 +6,7 @@ Know why a package exists before you or your agent trusts it.
 
 ## Status
 
-`pkgwhy` is in local release-candidate readiness review. It is useful for local package inspection experiments, conservative static package review, agent decision-support prototypes, and feedback on the CLI and local private-registry shape.
+`pkgwhy` is in local release-candidate readiness review for the `0.3.0a0` pre-alpha candidate. It is useful for local package inspection experiments, conservative static package review, agent decision-support prototypes, and feedback on the CLI and local private-registry shape.
 
 It is not a production security scanner, not malware-detection certainty, and not a sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
 

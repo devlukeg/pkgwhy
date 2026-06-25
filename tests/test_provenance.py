@@ -5,12 +5,13 @@ from pkgwhy.provenance.installed import assess_installed_provenance
 
 def test_installed_provenance_marks_unimplemented_trust_checks() -> None:
     metadata = PackageMetadata(
-        identity=PackageIdentity(name="example", normalized_name="example", version="0.1.0"),
+        identity=PackageIdentity(name="Example", normalized_name="example", version="0.1.0"),
         project_urls=ProjectUrls(repository="https://example.test/repo", raw={"Source": "https://example.test/repo"}),
     )
 
     provenance = assess_installed_provenance(metadata)
 
+    assert provenance.package == "example"
     assert provenance.repository_url == "https://example.test/repo"
     assert provenance.trusted_publishing_status == "unknown"
     assert provenance.attestation_status == "not_implemented"
@@ -42,3 +43,23 @@ def test_pypi_provenance_payload_extracts_release_activity_without_attestation_c
     assert provenance.release_activity_status == "latest_release_upload:2026-01-02"
     assert provenance.trusted_publishing_status == "unknown"
     assert provenance.attestation_status == "not_implemented"
+
+
+def test_pypi_provenance_ignores_empty_url_values() -> None:
+    provenance = provenance_from_pypi_payload(
+        "Example",
+        {
+            "info": {
+                "home_page": " ",
+                "project_urls": {
+                    "Source": "",
+                    "Documentation": "   ",
+                },
+            },
+            "releases": {},
+        },
+    )
+
+    assert provenance.repository_url is None
+    assert provenance.documentation_url is None
+    assert provenance.homepage_url is None

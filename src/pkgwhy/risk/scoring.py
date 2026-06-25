@@ -146,8 +146,9 @@ def judge_inspection(
                 evidence=["Distribution metadata did not expose files for static inspection."],
             )
         )
-        risk = RiskLevel.UNKNOWN
-        confidence = Confidence.LOW
+        if risk not in {RiskLevel.HIGH, RiskLevel.CRITICAL}:
+            risk = RiskLevel.UNKNOWN
+            confidence = Confidence.LOW
 
     decision = _decision_for_risk(risk)
     recommendation = _recommendation_for_risk(risk)

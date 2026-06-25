@@ -10,12 +10,12 @@ def match_vulnerabilities(package: str, version: str | None, records: list[Vulne
     """Return conservative matches for one package/version against advisory records."""
     if version is None:
         return []
-    matches: list[VulnerabilityMatch] = []
+    matches: dict[str, VulnerabilityMatch] = {}
     for record in records:
         match = match_vulnerability(package, version, record)
         if match is not None:
-            matches.append(match)
-    return sorted(matches, key=lambda item: item.vulnerability_id)
+            matches.setdefault(match.vulnerability_id, match)
+    return sorted(matches.values(), key=lambda item: item.vulnerability_id)
 
 
 def match_vulnerability(package: str, version: str, record: VulnerabilityRecord) -> VulnerabilityMatch | None:
@@ -23,7 +23,7 @@ def match_vulnerability(package: str, version: str, record: VulnerabilityRecord)
         return None
 
     evidence: list[str] = []
-    if version in record.affected_versions:
+    if _version_in_list(version, record.affected_versions):
         evidence.append(f"Version {version} is explicitly listed as affected by {record.id}.")
         return _build_match(record, package, version, evidence)
 
@@ -70,6 +70,22 @@ def _version_in_range(version: str, affected_range: VulnerabilityRange) -> bool:
             return False
 
     return True
+
+
+def _version_in_list(version: str, candidates: list[str]) -> bool:
+    if version in candidates:
+        return True
+    try:
+        parsed_version = Version(version)
+    except InvalidVersion:
+        return False
+    for candidate in candidates:
+        try:
+            if parsed_version == Version(candidate):
+                return True
+        except InvalidVersion:
+            continue
+    return False
 
 
 def _build_match(record: VulnerabilityRecord, package: str, version: str, evidence: list[str]) -> VulnerabilityMatch:

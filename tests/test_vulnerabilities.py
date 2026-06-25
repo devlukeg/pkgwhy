@@ -21,6 +21,15 @@ def test_parse_osv_payload_extracts_python_advisory_records() -> None:
     assert records[0].source == "OSV.dev"
 
 
+def test_parse_osv_payload_accepts_single_advisory_object() -> None:
+    payload = _osv_payload("Demo-Pkg", ["1.2.3"])["vulns"][0]
+
+    records = parse_osv_payload(payload)
+
+    assert len(records) == 1
+    assert records[0].id == "TEST-VULN-0001"
+
+
 def test_version_matching_is_conservative_for_fixed_ranges() -> None:
     records = parse_osv_payload(_osv_payload("demo-pkg", []))
 
@@ -28,6 +37,16 @@ def test_version_matching_is_conservative_for_fixed_ranges() -> None:
     assert not match_vulnerabilities("demo-pkg", "2.0.0", records)
     assert not match_vulnerabilities("other-pkg", "1.5.0", records)
     assert not match_vulnerabilities("demo-pkg", "not-a-version", records)
+
+
+def test_version_matching_deduplicates_and_compares_explicit_versions_semantically() -> None:
+    payload = _osv_payload("demo-pkg", ["1.0"])
+    records = parse_osv_payload({"vulns": payload["vulns"] + payload["vulns"]})
+
+    matches = match_vulnerabilities("demo-pkg", "1.0.0", records)
+
+    assert len(matches) == 1
+    assert matches[0].vulnerability_id == "TEST-VULN-0001"
 
 
 def test_judgement_includes_known_vulnerability_rule_evidence() -> None:

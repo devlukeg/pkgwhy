@@ -11,7 +11,7 @@ from rich.table import Table
 
 from pkgwhy.agent.judge import inspect_installed_package, judge_installed_package
 from pkgwhy.core.constants import CAPABILITY_EXPOSURE_NOTE
-from pkgwhy.core.models import PackageMetadata
+from pkgwhy.core.models import PackageMetadata, VulnerabilityMatch
 from pkgwhy.dependencies.reason import explain_dependency_reason
 from pkgwhy.explanations.explain import explain_package
 from pkgwhy.imports.scanner import scan_project_imports
@@ -221,6 +221,7 @@ def audit(
                 audit_warnings.append(str(exc))
                 osv_records = []
             matches.extend(match_vulnerabilities(package_name, package_version, osv_records))
+        matches = _dedupe_vulnerability_matches(matches)
         judgements.append(judge_installed_package(package_name, known_vulnerabilities=matches))
 
     report = build_audit_report(judgements, warnings=audit_warnings)
@@ -450,3 +451,10 @@ def _emit_or_write(rendered: str, output: Path | None) -> None:
         console.print(f"Could not write report to {output}: {exc}")
         raise typer.Exit(1) from exc
     console.print(f"Wrote report to {output}")
+
+
+def _dedupe_vulnerability_matches(matches: list[VulnerabilityMatch]) -> list[VulnerabilityMatch]:
+    deduped: dict[str, VulnerabilityMatch] = {}
+    for match in matches:
+        deduped.setdefault(match.vulnerability_id, match)
+    return sorted(deduped.values(), key=lambda item: item.vulnerability_id)

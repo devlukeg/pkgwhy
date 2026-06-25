@@ -2,7 +2,7 @@
 
 ## Supported Status
 
-`pkgwhy` is currently in local `0.3.0a0` foundation readiness review. It is not a production security scanner and should not be treated as a definitive malware detector.
+`pkgwhy` is in local release-candidate readiness review for the `0.3.0a0` pre-alpha candidate. It is not a production security scanner and should not be treated as a definitive malware detector.
 
 ## Reporting Security Issues
 

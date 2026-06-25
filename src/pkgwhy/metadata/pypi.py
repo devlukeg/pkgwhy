@@ -32,7 +32,11 @@ def provenance_from_pypi_payload(package_name: str, payload: dict[str, Any]) -> 
     info = info if isinstance(info, dict) else {}
     project_urls = info.get("project_urls")
     project_urls = project_urls if isinstance(project_urls, dict) else {}
-    normalized_urls = {str(key): str(value) for key, value in project_urls.items() if isinstance(value, str)}
+    normalized_urls = {
+        str(key): value.strip()
+        for key, value in project_urls.items()
+        if isinstance(value, str) and value.strip()
+    }
     repository_url = _find_url(normalized_urls, ("source", "repository", "github", "code"))
     documentation_url = _find_url(normalized_urls, ("doc", "documentation"))
     homepage_url = _string_or_none(info.get("home_page")) or _find_url(normalized_urls, ("homepage", "home-page"))
@@ -110,4 +114,7 @@ def _parse_datetime(value: str) -> datetime | None:
 
 
 def _string_or_none(value: Any) -> str | None:
-    return value if isinstance(value, str) and value else None
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped if stripped else None
