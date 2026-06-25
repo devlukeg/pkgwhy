@@ -29,6 +29,10 @@ def judge_inspection(
     confidence = Confidence.MEDIUM
     provenance = assess_installed_provenance(metadata)
 
+    for rule in inspection.rule_evidence:
+        risk_rules.append(rule)
+        risk = _raise_risk(risk, _risk_for_rule(rule))
+
     for vulnerability in known_vulnerabilities:
         fixed = f" Fixed versions: {', '.join(vulnerability.fixed_versions)}." if vulnerability.fixed_versions else ""
         message = (
@@ -206,6 +210,16 @@ def _risk_for_vulnerability(vulnerability: VulnerabilityMatch) -> RiskLevel:
     if "critical" in severity:
         return RiskLevel.CRITICAL
     return RiskLevel.HIGH
+
+
+def _risk_for_rule(rule: RiskRuleEvidence) -> RiskLevel:
+    if rule.severity == RuleSeverity.CRITICAL:
+        return RiskLevel.CRITICAL
+    if rule.severity == RuleSeverity.HIGH:
+        return RiskLevel.HIGH
+    if rule.severity == RuleSeverity.MEDIUM:
+        return RiskLevel.MEDIUM
+    return RiskLevel.LOW
 
 
 def _severity_for_vulnerability(vulnerability: VulnerabilityMatch) -> RuleSeverity:

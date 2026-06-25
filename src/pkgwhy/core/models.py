@@ -227,6 +227,7 @@ class PythonStaticAnalysis(BaseModel):
     detected_capabilities: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
+    rule_evidence: list[RiskRuleEvidence] = Field(default_factory=list)
     files_scanned: int = 0
 
 
@@ -254,6 +255,7 @@ class PackageInspection(BaseModel):
     detected_capabilities: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
+    rule_evidence: list[RiskRuleEvidence] = Field(default_factory=list)
     file_analysis: FileStaticAnalysis = Field(default_factory=FileStaticAnalysis)
 
 
