@@ -22,6 +22,8 @@ from pkgwhy.registry.run import RUNNER_ISOLATION_WARNING, run_local_tool
 from pkgwhy.registry.tools import judge_tool
 from pkgwhy.reports.audit import build_audit_report, render_audit_markdown
 from pkgwhy.typosquat.detector import detect_typosquats
+from pkgwhy.vulnerabilities.matching import match_vulnerabilities
+from pkgwhy.vulnerabilities.osv import OSVClientError, load_osv_records, query_osv
 
 app = typer.Typer(no_args_is_help=True, help="Explain, inspect, judge packages, and run local private tools.")
 registry_app = typer.Typer(no_args_is_help=True, help="Manage local private registries.")
@@ -181,6 +183,14 @@ def audit(
     as_json: Annotated[bool, typer.Option("--json", help="Emit schema-versioned JSON audit report.")] = False,
     markdown: Annotated[bool, typer.Option("--markdown", help="Emit Markdown audit report.")] = False,
     output: Annotated[Path | None, typer.Option(help="Optional output path for JSON or Markdown reports.")] = None,
+    vulnerability_file: Annotated[
+        Path | None,
+        typer.Option(help="Optional local OSV-like JSON file with vulnerability data. No network is used."),
+    ] = None,
+    osv: Annotated[
+        bool,
+        typer.Option("--osv", help="Query OSV.dev for known vulnerabilities. Network is never used unless this is set."),
+    ] = False,
 ) -> None:
     """Audit installed packages with conservative static judgements."""
     if limit <= 0:
@@ -191,9 +201,29 @@ def audit(
         raise typer.BadParameter("--output requires --json or --markdown")
 
     packages = list_installed_packages()[:limit]
-    names = [package.identity.name for package in packages]
-    judgements = [judge_installed_package(name) for name in names]
-    report = build_audit_report(judgements)
+    vulnerability_records = []
+    audit_warnings: list[str] = []
+    if vulnerability_file is not None:
+        try:
+            vulnerability_records = load_osv_records(vulnerability_file)
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc)) from exc
+
+    judgements = []
+    for package in packages:
+        package_name = package.identity.name
+        package_version = package.identity.version
+        matches = match_vulnerabilities(package_name, package_version, vulnerability_records)
+        if osv:
+            try:
+                osv_records = query_osv(package_name, package_version)
+            except OSVClientError as exc:
+                audit_warnings.append(str(exc))
+                osv_records = []
+            matches.extend(match_vulnerabilities(package_name, package_version, osv_records))
+        judgements.append(judge_installed_package(package_name, known_vulnerabilities=matches))
+
+    report = build_audit_report(judgements, warnings=audit_warnings)
 
     if as_json:
         rendered = json.dumps(report, indent=2, sort_keys=True)
@@ -209,6 +239,7 @@ def audit(
     table.add_column("Version")
     table.add_column("Risk")
     table.add_column("Decision")
+    table.add_column("Vulns")
     table.add_column("Warnings")
     for judgement in judgements:
         table.add_row(
@@ -216,9 +247,12 @@ def audit(
             judgement.version or "unknown",
             judgement.risk_level.value,
             judgement.decision.value,
+            str(len(judgement.known_vulnerabilities)),
             str(len(judgement.warnings)),
         )
     console.print(table)
+    for warning in audit_warnings:
+        console.print(f"Warning: {warning}")
 
 
 @app.command()

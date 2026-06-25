@@ -57,7 +57,7 @@ def test_audit_command_outputs_markdown() -> None:
 
     assert result.exit_code == 0
     assert "# pkgwhy Audit Report" in result.output
-    assert "| Package | Version | Risk | Decision | Warnings |" in result.output
+    assert "| Package | Version | Risk | Decision | Vulnerabilities | Warnings |" in result.output
 
 
 def test_audit_rejects_invalid_output_mode_combination() -> None:

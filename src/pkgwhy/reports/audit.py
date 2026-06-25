@@ -10,13 +10,17 @@ AUDIT_SCHEMA_VERSION = "pkgwhy.audit.v1"
 class AuditReport(TypedDict):
     schema_version: str
     package_count: int
+    vulnerability_match_count: int
+    warnings: list[str]
     packages: list[dict[str, Any]]
 
 
-def build_audit_report(judgements: list[PackageJudgement]) -> AuditReport:
+def build_audit_report(judgements: list[PackageJudgement], warnings: list[str] | None = None) -> AuditReport:
     return {
         "schema_version": AUDIT_SCHEMA_VERSION,
         "package_count": len(judgements),
+        "vulnerability_match_count": sum(len(judgement.known_vulnerabilities) for judgement in judgements),
+        "warnings": warnings or [],
         "packages": [judgement.model_dump(mode="json") for judgement in judgements],
     }
 
@@ -29,8 +33,8 @@ def render_audit_markdown(judgements: list[PackageJudgement]) -> str:
         "",
         "> Python packages run with the same permissions as the Python process. Static signals are not proof of runtime behavior or intent.",
         "",
-        "| Package | Version | Risk | Decision | Warnings |",
-        "| --- | --- | --- | --- | --- |",
+        "| Package | Version | Risk | Decision | Vulnerabilities | Warnings |",
+        "| --- | --- | --- | --- | --- | --- |",
     ]
     for judgement in judgements:
         warning_count = len(judgement.warnings)
@@ -40,6 +44,7 @@ def render_audit_markdown(judgements: list[PackageJudgement]) -> str:
             f"{_escape_markdown_table_cell(judgement.version or 'unknown')} | "
             f"{_escape_markdown_table_cell(judgement.risk_level.value)} | "
             f"{_escape_markdown_table_cell(judgement.decision.value)} | "
+            f"{len(judgement.known_vulnerabilities)} | "
             f"{warning_count} |"
         )
     return "\n".join(lines) + "\n"

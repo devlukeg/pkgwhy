@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pkgwhy.core.models import PackageIdentity, PackageInspection, PackageJudgement, PackageMetadata
+from pkgwhy.core.models import PackageIdentity, PackageInspection, PackageJudgement, PackageMetadata, VulnerabilityMatch
 from pkgwhy.core.models import ReadabilityStatus, SourceAvailability
 from pkgwhy.inspection.files import (
     analyze_file_signals,
@@ -59,7 +59,7 @@ def inspect_installed_package(name: str) -> PackageInspection | None:
     )
 
 
-def judge_installed_package(name: str) -> PackageJudgement:
+def judge_installed_package(name: str, known_vulnerabilities: list[VulnerabilityMatch] | None = None) -> PackageJudgement:
     inspection = inspect_installed_package(name)
     if inspection is None:
         metadata = PackageMetadata(
@@ -76,4 +76,4 @@ def judge_installed_package(name: str) -> PackageJudgement:
             warnings=["Package is not installed in the active Python environment."],
             evidence=["Checked active environment metadata without importing package code."],
         )
-    return judge_inspection(inspection)
+    return judge_inspection(inspection, known_vulnerabilities=known_vulnerabilities)

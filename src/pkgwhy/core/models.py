@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, field_validator
 
-from pkgwhy.core.constants import CAPABILITY_EXPOSURE_NOTE, PACKAGE_JUDGEMENT_SCHEMA_VERSION
+from pkgwhy.core.constants import CAPABILITY_EXPOSURE_NOTE, PACKAGE_JUDGEMENT_SCHEMA_VERSION, RISK_MODEL_VERSION
 
 
 class RiskLevel(StrEnum):
@@ -47,6 +47,14 @@ class Confidence(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
+
+
+class RuleSeverity(StrEnum):
+    INFO = "info"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
 
 
 class DependencyStatus(StrEnum):
@@ -103,6 +111,80 @@ class PackageMetadata(BaseModel):
     project_urls: ProjectUrls = Field(default_factory=ProjectUrls)
     entry_points: list[str] = Field(default_factory=list)
     metadata_available: bool = True
+
+
+class VulnerabilityRange(BaseModel):
+    """Conservative affected-version range parsed from advisory data."""
+
+    introduced: str | None = None
+    fixed: str | None = None
+    last_affected: str | None = None
+    range_type: str | None = None
+
+
+class VulnerabilityRecord(BaseModel):
+    """Source-attributed vulnerability advisory record."""
+
+    id: str
+    aliases: list[str] = Field(default_factory=list)
+    package_name: str
+    ecosystem: str | None = None
+    summary: str | None = None
+    details: str | None = None
+    severity: list[str] = Field(default_factory=list)
+    affected_ranges: list[VulnerabilityRange] = Field(default_factory=list)
+    affected_versions: list[str] = Field(default_factory=list)
+    fixed_versions: list[str] = Field(default_factory=list)
+    references: list[str] = Field(default_factory=list)
+    source: str
+    source_url: str | None = None
+
+
+class VulnerabilityMatch(BaseModel):
+    """A conservative package-version match against a vulnerability record."""
+
+    vulnerability_id: str
+    package: str
+    version: str
+    aliases: list[str] = Field(default_factory=list)
+    summary: str | None = None
+    severity: list[str] = Field(default_factory=list)
+    fixed_versions: list[str] = Field(default_factory=list)
+    references: list[str] = Field(default_factory=list)
+    source: str
+    source_url: str | None = None
+    confidence: Confidence = Confidence.MEDIUM
+    evidence: list[str] = Field(default_factory=list)
+
+
+class PackageProvenance(BaseModel):
+    """Metadata-derived source-trust signals without claiming unavailable attestations."""
+
+    package: str
+    version: str | None = None
+    repository_url: str | None = None
+    documentation_url: str | None = None
+    homepage_url: str | None = None
+    project_urls: dict[str, str] = Field(default_factory=dict)
+    metadata_source: str = "installed_distribution_metadata"
+    source_distribution_status: str = "unknown"
+    trusted_publishing_status: str = "unknown"
+    attestation_status: str = "not_implemented"
+    release_activity_status: str = "unknown"
+    confidence: Confidence = Confidence.LOW
+    warnings: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
+
+
+class RiskRuleEvidence(BaseModel):
+    """One versioned risk-rule contribution to a package judgement."""
+
+    rule_id: str
+    name: str
+    severity: RuleSeverity
+    confidence: Confidence
+    message: str
+    evidence: list[str] = Field(default_factory=list)
 
 
 class LargestFile(BaseModel):
@@ -180,6 +262,7 @@ class PackageJudgement(BaseModel):
     """Agent-readable conservative judgement for an inspected package."""
 
     schema_version: str = PACKAGE_JUDGEMENT_SCHEMA_VERSION
+    risk_model_version: str = RISK_MODEL_VERSION
     package: str
     version: str | None = None
     decision: AgentDecision
@@ -192,6 +275,9 @@ class PackageJudgement(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     recommendation: str
     evidence: list[str] = Field(default_factory=list)
+    risk_rules: list[RiskRuleEvidence] = Field(default_factory=list)
+    known_vulnerabilities: list[VulnerabilityMatch] = Field(default_factory=list)
+    provenance: PackageProvenance | None = None
     capability_exposure_note: str = CAPABILITY_EXPOSURE_NOTE
 
 

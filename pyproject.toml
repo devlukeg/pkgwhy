@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pkgwhy"
-version = "0.2.0a0"
-description = "Offline-first Python package intelligence and local private-tool execution with conservative static inspection."
+version = "0.3.0a0"
+description = "Offline-first Python package intelligence with conservative vulnerability, provenance, and static risk signals."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

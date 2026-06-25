@@ -21,6 +21,8 @@ def test_judge_inspection_uses_conservative_warning_for_unknown_source() -> None
     assert judgement.risk_level == "medium"
     assert judgement.decision == "allow_with_caution"
     assert "Source availability is unknown from installed files." in judgement.warnings
+    assert judgement.risk_model_version == "pkgwhy.risk_model.v1"
+    assert any(rule.rule_id == "PKGWHY-RISK-002" for rule in judgement.risk_rules)
     assert judgement.capability_exposure_note == CAPABILITY_EXPOSURE_NOTE
 
 
@@ -43,6 +45,7 @@ def test_judge_inspection_warns_on_static_capability_signals_without_overclaimin
     assert judgement.risk_level == "medium"
     assert judgement.decision == "allow_with_caution"
     assert any("This is not proof of unsafe behavior" in warning for warning in judgement.warnings)
+    assert any(rule.rule_id == "PKGWHY-RISK-005" for rule in judgement.risk_rules)
 
 
 def test_judge_inspection_warns_on_static_file_signals_without_overclaiming() -> None:
@@ -71,3 +74,4 @@ def test_judge_inspection_warns_on_static_file_signals_without_overclaiming() ->
     assert any("Shell script files present" in warning for warning in judgement.warnings)
     assert any("WASM binary code present" in warning for warning in judgement.warnings)
     assert all("malicious" not in warning.lower() for warning in judgement.warnings)
+    assert {rule.rule_id for rule in judgement.risk_rules} == {"PKGWHY-RISK-005"}

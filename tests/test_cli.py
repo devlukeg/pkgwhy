@@ -28,6 +28,7 @@ def test_judge_json_for_missing_package_is_stable() -> None:
     data = json.loads(result.output)
     PackageJudgement.model_validate(data)
     assert data["schema_version"] == "pkgwhy.package_judgement.v1"
+    assert data["risk_model_version"] == "pkgwhy.risk_model.v1"
     assert data["package"] == package_name
     assert data["risk_level"] == "unknown"
     assert data["decision"] == "review_manually"
@@ -45,6 +46,7 @@ def test_judge_json_contains_agent_contract_fields_for_installed_package() -> No
     data = json.loads(result.output)
     PackageJudgement.model_validate(data)
     assert data["schema_version"] == "pkgwhy.package_judgement.v1"
+    assert data["risk_model_version"] == "pkgwhy.risk_model.v1"
     assert data["package"] == "typer"
     assert data["decision"] in {decision.value for decision in AgentDecision}
     assert data["risk_level"] in {risk.value for risk in RiskLevel}
@@ -52,6 +54,10 @@ def test_judge_json_contains_agent_contract_fields_for_installed_package() -> No
     assert isinstance(data["detected_capabilities"], list)
     assert isinstance(data["warnings"], list)
     assert isinstance(data["evidence"], list)
+    assert isinstance(data["risk_rules"], list)
+    assert isinstance(data["known_vulnerabilities"], list)
+    assert data["provenance"] is not None
+    assert data["provenance"]["attestation_status"] == "not_implemented"
     assert "not proof" in data["capability_exposure_note"].lower()
 
 

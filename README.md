@@ -2,7 +2,7 @@
 
 Know why a package exists before you or your agent trusts it.
 
-`pkgwhy` is an offline-first Python package intelligence and local private-tool CLI. It explains installed packages, inspects local package files without importing them, reports conservative static security signals, produces agent-readable JSON judgements, and can publish and run local private Python tools from a local registry.
+`pkgwhy` is an offline-first Python package intelligence and local private-tool CLI. It explains installed packages, inspects local package files without importing them, reports conservative vulnerability, provenance, and static security signals, produces agent-readable JSON judgements, and can publish and run local private Python tools from a local registry.
 
 ## Status
 
@@ -10,7 +10,7 @@ Know why a package exists before you or your agent trusts it.
 
 It is not a production security scanner, not malware-detection certainty, and not a sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
 
-Current packaged version candidate: `0.2.0a0`.
+Current packaged version candidate: `0.3.0a0`.
 
 ## What Works Now
 
@@ -24,6 +24,7 @@ pkgwhy inspect typer
 pkgwhy judge typer --json
 pkgwhy risk typer
 pkgwhy audit --limit 5 --json
+pkgwhy audit --limit 5 --json --vulnerability-file ./osv-fixture.json
 # "reqeusts" is intentionally misspelled to demonstrate typo detection.
 pkgwhy typos reqeusts pandas-stubs
 ```
@@ -40,7 +41,11 @@ Implemented capabilities include:
 - Native compiled file, WASM, shell script, package-manager, setup/install-time, and CLI-entrypoint signals from file metadata.
 - AST-only Python source scanning for filesystem, network, subprocess, environment, credential-pattern, dynamic-code, deserialisation, and encoded-payload signals.
 - Typosquatting similarity signals with false-positive guards for common ecosystem package families.
-- Conservative risk level, decision, warning, recommendation, evidence, and confidence output.
+- Optional OSV-like vulnerability record parsing from local JSON files.
+- Explicit opt-in OSV.dev query boundary for known-vulnerability lookup.
+- Conservative version matching for affected and fixed version ranges.
+- Metadata-derived provenance/source-trust fields from installed metadata, with unsupported attestation and trusted-publishing checks marked as unknown or not implemented.
+- Conservative risk level, decision, warning, recommendation, evidence, confidence, risk model version, and rule-ID output.
 - Stable JSON output for agent workflows.
 
 The local private-tool MVP supports a local registry, local publishing, tool judgement, and controlled local execution:
@@ -78,8 +83,9 @@ Current runner policy is intentionally conservative:
 
 These are roadmap items, not current features:
 
-- Optional PyPI/source lookup and cache.
-- Vulnerability database integration.
+- Complete vulnerability database coverage, transitive vulnerability analysis, or guaranteed advisory freshness.
+- Default online vulnerability lookup. Network access is only used when explicitly requested.
+- Cached PyPI/source lookup.
 - Cloud/private remote registry backends.
 - `pull`, mirroring, and remote synchronization.
 - Tool dependency installation in the runner.
@@ -150,6 +156,20 @@ Audit a small slice of the current environment:
 ```bash
 pkgwhy audit --limit 2 --json
 ```
+
+Include controlled local OSV-like vulnerability data in an audit:
+
+```bash
+pkgwhy audit --limit 2 --json --vulnerability-file ./osv-response.json
+```
+
+Query OSV.dev explicitly during an audit:
+
+```bash
+pkgwhy audit --limit 2 --json --osv
+```
+
+Vulnerability data can be incomplete or unavailable. `pkgwhy` reports source-attributed matches and fixed versions only when the supplied advisory data contains them.
 
 Check package names for typosquatting similarity signals:
 
@@ -223,6 +243,7 @@ Field shape for `pkgwhy judge <package> --json`:
 ```json
 {
   "schema_version": "pkgwhy.package_judgement.v1",
+  "risk_model_version": "pkgwhy.risk_model.v1",
   "package": "package-name",
   "version": "installed-version-or-null",
   "decision": "allow_with_caution",
@@ -235,6 +256,24 @@ Field shape for `pkgwhy judge <package> --json`:
   "warnings": [],
   "recommendation": "conservative recommendation text",
   "evidence": [],
+  "risk_rules": [],
+  "known_vulnerabilities": [],
+  "provenance": {
+    "package": "package-name",
+    "version": "installed-version-or-null",
+    "repository_url": null,
+    "documentation_url": null,
+    "homepage_url": null,
+    "project_urls": {},
+    "metadata_source": "installed_distribution_metadata",
+    "source_distribution_status": "unknown",
+    "trusted_publishing_status": "unknown",
+    "attestation_status": "not_implemented",
+    "release_activity_status": "unknown",
+    "confidence": "low",
+    "warnings": [],
+    "evidence": []
+  },
   "capability_exposure_note": "Python packages run with the same permissions as the Python process. This analysis detects capabilities used or referenced by package code and metadata; static signals are not proof of runtime behavior or intent."
 }
 ```
@@ -341,6 +380,10 @@ Agent decisions:
 - `block`
 
 The current risk engine is deliberately conservative and early. Treat it as decision support for humans and agents, not a final verdict.
+
+Risk rule output includes `risk_model_version` and per-rule `rule_id`, severity, confidence, message, and evidence fields. These rule IDs are a pre-alpha stability candidate, not a long-term compatibility guarantee yet.
+
+Known-vulnerability output is source-attributed. A missing vulnerability match does not prove that a package has no vulnerabilities, because advisory databases and local fixtures can be incomplete or unavailable.
 
 ## Private Registry Roadmap
 

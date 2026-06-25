@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0a0 - Unreleased pre-alpha
+
+- Add a vulnerability/provenance/risk-model foundation while keeping `pkgwhy` in pre-alpha decision-support positioning.
+- Add OSV-like vulnerability record models, parser, explicit OSV.dev client boundary, and conservative version-range matching.
+- Add optional `pkgwhy audit --vulnerability-file` support for controlled local advisory data and explicit `pkgwhy audit --osv` support for live OSV.dev lookup.
+- Add metadata-derived provenance/source-trust summaries to package judgement JSON, with Trusted Publishing, attestation verification, and sdist/wheel comparison marked as unknown or not implemented.
+- Add `pkgwhy.risk_model.v1`, rule IDs, rule severity, confidence, and evidence fields to package judgement JSON.
+- Document that vulnerability databases can be incomplete and that missing vulnerability matches are not proof of safety.
+
 ## 0.2.0a0 - Unreleased pre-alpha
 
 - Prepare the first PyPI/TestPyPI developer-preview candidate with the local registry and runner MVP included.
