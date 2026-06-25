@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.0a0 - Unreleased pre-alpha
+
+- Add schema-versioned agent policy defaults with conservative non-interactive decisions for package use.
+- Add `pkgwhy agent policy`, `pkgwhy agent precheck <package> --json`, and package-focused `pkgwhy agent judge <package> --json`.
+- Add schema-versioned agent package precheck output that embeds the package judgement and records policy reasons.
+- Add compact local agent decision logs that omit full package evidence.
+- Harden local registry publish and judgement paths by failing closed on corrupt registry indexes.
+- Block duplicate owner/name/version publishes instead of silently replacing existing registry entries.
+- Reject symlinked tool bundle members during local publish and keep stored registry paths bounded to the registry root during tool judgement.
+- Add `pkgwhy run --non-interactive` to apply stricter tool execution policy from the CLI.
+- Include successful pre-run policy decision, reasons, and warnings in local tool execution logs.
+- Continue to treat signatures as `not_implemented` and virtual environments as dependency isolation only, not OS sandboxing.
+
 ## 0.5.0a0 - Unreleased pre-alpha
 
 - Start the experimental dynamic sandbox design phase without enabling arbitrary dynamic package execution.

@@ -2,15 +2,15 @@
 
 Know why a package exists before you or your agent trusts it.
 
-`pkgwhy` is an offline-first Python package intelligence and local private-tool CLI. It explains installed packages, inspects local package files without importing them, reports conservative vulnerability, provenance, and static security signals, produces agent-readable JSON judgements, and can publish and run local private Python tools from a local registry.
+`pkgwhy` is an offline-first Python package intelligence, agent policy, and local private-tool CLI. It explains installed packages, inspects local package files without importing them, reports conservative vulnerability, provenance, and static security signals, produces agent-readable JSON judgements, and can publish and run local private Python tools from a local registry.
 
 ## Status
 
-`pkgwhy` is in pre-alpha readiness review for the `0.4.0a0` candidate. It is useful for local package inspection experiments, conservative static package review, agent decision-support prototypes, and feedback on the CLI and local private-registry shape.
+`pkgwhy` is in pre-alpha readiness review for the `0.6.0a0` candidate. It is useful for local package inspection experiments, conservative static package review, agent decision-support prototypes, and feedback on the CLI, policy, and local private-registry shape.
 
 It is not a production security scanner, not malware-detection certainty, and not a full sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
 
-Current packaged version candidate: `0.4.0a0`.
+Current packaged version candidate: `0.6.0a0`.
 
 ## What Works Now
 
@@ -22,6 +22,8 @@ pkgwhy explain typer
 pkgwhy why typer
 pkgwhy inspect typer
 pkgwhy judge typer --json
+pkgwhy agent policy --json
+pkgwhy agent precheck typer --json
 pkgwhy risk typer
 pkgwhy audit --limit 5 --json
 pkgwhy audit --limit 5 --json --vulnerability-file ./osv-fixture.json
@@ -50,6 +52,9 @@ Implemented capabilities include:
 - Conservative risk level, decision, warning, recommendation, evidence, confidence, risk model version, and rule-ID output.
 - Human `inspect`, `risk`, and `judge` reports that show compact rule-evidence summaries, while JSON reports include structured rule details.
 - Stable JSON output for agent workflows.
+- Schema-versioned agent policy and package precheck output.
+- Conservative non-interactive agent defaults that block unknown or high-risk package use until a human reviews the evidence.
+- Compact local agent decision logs that omit full package evidence.
 
 The local private-tool MVP supports a local registry, local publishing, tool judgement, and controlled local execution:
 
@@ -62,6 +67,7 @@ pkgwhy publish ./my_tool.py
 pkgwhy tool inspect local/my_tool
 pkgwhy tool judge local/my_tool --json
 pkgwhy run local/my_tool
+pkgwhy run local/my_tool --non-interactive
 ```
 
 `pkgwhy run` resolves tools only from the configured local registry, verifies the stored bundle hash before execution, runs simple Python-script entrypoints in a per-tool virtual environment, and writes execution metadata logs under the registry directory.
@@ -75,12 +81,16 @@ This run uses a Python virtual environment for dependency isolation. It does not
 Current runner policy is intentionally conservative:
 
 - Unknown tools are not resolved or run; a valid local registry entry is required.
+- Duplicate owner/name/version publishes are blocked instead of silently replacing a registry entry.
+- Corrupt registry indexes fail closed for publish and tool-judgement paths.
+- Symlinks are not bundled, and stored registry paths must remain inside the registry root.
 - Bundle hash mismatch or a missing bundle blocks execution.
 - `sandbox_only` and `block` tool judgements block execution.
 - Non-interactive execution is blocked unless both the judgement and manifest agent policy allow it.
 - Tools with declared dependencies are not run yet because dependency installation is not implemented.
 - Unsupported entrypoints, including shell scripts, absolute paths, and path traversal, are rejected.
 - Tool signatures report `not_implemented`; unsigned local tools are a manual-review signal, not a verified trust claim.
+- Successful run logs include the pre-run policy decision, reasons, and warnings.
 
 ## What Is Not Implemented Yet
 
@@ -94,6 +104,8 @@ These are roadmap items, not current features:
 - Tool dependency installation in the runner.
 - Tool bundle signing and signature verification.
 - Dynamic sandbox analysis for arbitrary packages.
+- Tool-specific `pkgwhy agent judge` expansion beyond the current package precheck path.
+- `pkgwhy agent explain-decision <review-id>`.
 - Cloud/model-backed review.
 - Billing, API keys, team plans, or enterprise deployment.
 - OS-level sandboxing or container isolation.
@@ -148,6 +160,16 @@ Emit machine-readable judgement JSON:
 ```bash
 pkgwhy judge typer --json
 ```
+
+Inspect the default agent policy and run a conservative agent precheck:
+
+```bash
+pkgwhy agent policy --json
+pkgwhy agent precheck typer --json
+pkgwhy agent judge typer --json
+```
+
+`pkgwhy agent precheck` applies policy to the package judgement. In the default non-interactive mode, unknown and high-risk package decisions are blocked until a human reviews the judgement evidence. The command writes a compact local decision log under the user config directory and does not install, import, or execute the package.
 
 Run a conservative risk report:
 
@@ -238,6 +260,12 @@ Run a local private tool after hash verification and policy checks:
 pkgwhy run local/my_tool
 ```
 
+Apply the stricter non-interactive runner policy:
+
+```bash
+pkgwhy run local/my_tool --non-interactive
+```
+
 ## Agent JSON Contracts
 
 Package judgement schema version: `pkgwhy.package_judgement.v1`.
@@ -283,6 +311,58 @@ Field shape for `pkgwhy judge <package> --json`:
 ```
 
 Values are environment-specific. Run `pkgwhy judge <installed-package> --json` locally for actual installed-package evidence.
+
+Agent policy schema version: `pkgwhy.agent_policy.v1`.
+
+Field shape for `pkgwhy agent policy --json`:
+
+```json
+{
+  "schema_version": "pkgwhy.agent_policy.v1",
+  "allow_public_pypi": false,
+  "allow_unpinned_dependencies": false,
+  "allow_unsigned_tools": false,
+  "require_pkgwhy_judgement": true,
+  "require_hash_verification": true,
+  "require_signature_verification": false,
+  "non_interactive_default_decision": "block",
+  "unknown_package_decision": "review_manually",
+  "high_risk_package_decision": "review_manually",
+  "critical_risk_package_decision": "block",
+  "non_interactive_unknown_package_decision": "block",
+  "non_interactive_high_risk_package_decision": "block",
+  "non_interactive_critical_risk_package_decision": "block",
+  "tool_execution_requires_local_registry": true,
+  "dynamic_analysis_default_decision": "block"
+}
+```
+
+Agent package precheck schema version: `pkgwhy.agent_package_precheck.v1`.
+
+Field shape for `pkgwhy agent precheck <package> --json`:
+
+```json
+{
+  "schema_version": "pkgwhy.agent_package_precheck.v1",
+  "policy_schema_version": "pkgwhy.agent_policy.v1",
+  "package": "package-name",
+  "version": "installed-version-or-null",
+  "target_type": "package",
+  "non_interactive": true,
+  "decision": "block",
+  "risk_level": "unknown",
+  "confidence": "low",
+  "policy_decision_source": "agent_policy",
+  "reasons": [],
+  "warnings": [],
+  "recommendation": "conservative recommendation text",
+  "package_judgement": {
+    "schema_version": "pkgwhy.package_judgement.v1"
+  }
+}
+```
+
+The embedded `package_judgement` contains the same package judgement shape as `pkgwhy judge --json`. Compact local agent decision logs use `pkgwhy.agent_decision_log.v1` and intentionally omit the full judgement evidence.
 
 Tool judgement schema version: `pkgwhy.tool_judgement.v1`.
 
@@ -370,7 +450,7 @@ These signals can be legitimate. They are review prompts, not proof of malicious
 
 ## Dynamic Sandbox Roadmap
 
-Dynamic analysis is planned as an experimental `0.5.0` area, but it is not production-ready and must remain opt-in. Dynamic analysis intentionally executes code, so it has a different safety boundary from static inspection.
+Dynamic analysis has an experimental `0.5.x` command skeleton, but it is not production-ready and must remain opt-in. Dynamic analysis intentionally executes code, so it has a different safety boundary from static inspection.
 
 The design is documented in [docs/dynamic-sandbox.md](docs/dynamic-sandbox.md). The key constraints are:
 
@@ -481,7 +561,7 @@ Known-vulnerability output is source-attributed. A missing vulnerability match d
 
 Native extensions, WASM files, minified JavaScript, URL references, and credential-like names are not automatically malicious. They are evidence for review, and the surrounding package purpose and source context still matter.
 
-## Private Registry Roadmap
+## Private Registry And Agent Policy
 
 `pkgwhy` is intended to grow into a private, security-aware executable layer for Python tools and AI-agent skills. The current MVP is local-only:
 
@@ -494,6 +574,14 @@ pkgwhy run local/my_tool
 ```
 
 The runner executes only tools resolved from the configured local registry. It does not run arbitrary public package code, does not install tool dependencies in the MVP, and blocks execution if the stored bundle hash does not verify. Local registry entries are file-backed records under the configured registry path; no cloud registry, account, upload, pull, or remote sync is implemented in this preview.
+
+The `0.6.0a0` pre-alpha adds policy-as-code foundations for agents:
+
+- `pkgwhy agent policy` shows conservative default policy.
+- `pkgwhy agent precheck <package> --json` applies policy to package judgement JSON.
+- `pkgwhy agent judge <package> --json` is currently a package precheck alias.
+- Non-interactive package prechecks block unknown and high-risk package decisions by default.
+- Agent decision logs are local, compact, and do not include full static evidence.
 
 The MVP runner uses Python virtual environments for dependency isolation. A virtual environment is not a full operating-system sandbox, and `pkgwhy` states that clearly before each run:
 
@@ -521,12 +609,13 @@ python -m venv .venv
 
 ## Roadmap
 
-1. Complete public release review and packaging for the current local package-intelligence, registry, tool-judgement, and runner MVP.
-2. Optional PyPI/source lookup and cache.
-3. Tool dependency installation in the runner.
-4. Tool bundle signing and signature verification.
-5. Cloud/private remote registry backends.
-6. Cloud/model-backed review as an optional future service.
+1. Complete public release review and packaging for the current package-intelligence, agent-policy, registry, tool-judgement, dynamic-skeleton, and runner MVP.
+2. Expand agent policy validation, tool-specific agent judgement, and decision explanation.
+3. Optional PyPI/source lookup and cache.
+4. Tool dependency installation in the runner.
+5. Tool bundle signing and signature verification.
+6. Cloud/private remote registry backends.
+7. Cloud/model-backed review as an optional future service.
 
 ## License
 

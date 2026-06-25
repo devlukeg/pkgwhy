@@ -2,7 +2,7 @@
 
 ## Supported Status
 
-`pkgwhy` is a pre-alpha project. The current local candidate is `0.4.0a0`, with `0.5.0` dynamic sandbox design work beginning. It is not a production security scanner and should not be treated as a definitive malware detector or full sandbox.
+`pkgwhy` is a pre-alpha project. The current local candidate is `0.6.0a0`, including static evidence hardening, a safe-fail dynamic command skeleton, agent policy foundations, and local registry/runner hardening. It is not a production security scanner and should not be treated as a definitive malware detector or full sandbox.
 
 ## Reporting Security Issues
 
@@ -30,7 +30,11 @@ Provenance analysis is currently metadata-derived. Repository, documentation, ho
 
 `pkgwhy run` is a separate local private-tool execution feature. It intentionally executes local private tool code only after resolving a valid local registry entry, verifying the stored bundle hash, and applying policy checks. This execution path is separate from package inspection and must not be treated as evidence that package inspection imports or executes inspected package code.
 
-The local runner blocks missing or hash-mismatched bundles, unsupported entrypoints, declared dependencies, and non-interactive runs that are not allowed by both judgement and manifest policy. It uses a Python virtual environment for dependency isolation only; it does not provide OS-level filesystem, network, process, or user permission sandboxing.
+The local runner blocks missing or hash-mismatched bundles, corrupt registry indexes, unsupported entrypoints, declared dependencies, and non-interactive runs that are not allowed by both judgement and manifest policy. It uses a Python virtual environment for dependency isolation only; it does not provide OS-level filesystem, network, process, or user permission sandboxing.
+
+Local registry publishing blocks duplicate owner/name/version records and rejects symlinks in tool bundles. Registry-stored manifest and bundle paths must resolve inside the registry root.
+
+Agent policy commands are decision support. `pkgwhy agent precheck <package> --json` applies conservative policy to package judgement JSON and defaults to blocking unknown or high-risk package use in non-interactive mode until a human reviews the evidence. Agent decision logs are local compact summaries and intentionally omit full package evidence. They are not a tamper-proof audit system.
 
 Runner warning:
 
@@ -48,6 +52,8 @@ Dynamic analysis is a separate experimental roadmap area. Dynamic analysis inten
 - Source distribution versus wheel comparison is not implemented yet.
 - No runner dependency installation yet.
 - No tool bundle signing or signature verification yet.
+- No tamper-proof audit log, remote attestation, or signed decision record yet.
+- No tool-specific agent judgement beyond the current package precheck alias yet.
 - No cloud registry, remote pull, hosted review API, or account-based registry auth yet.
 - Typosquatting detection is heuristic and conservative. It can miss risky names and can surface false positives.
 - Static URL/domain and credential-pattern extraction is heuristic. It can miss references and can surface documentation, examples, tests, or placeholders.

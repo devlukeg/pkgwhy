@@ -14,6 +14,7 @@ python -m venv .venv
 
 - Do not import or execute inspected package code during inspection.
 - Keep inspection paths separate from the explicit `pkgwhy run` execution path for local private tools.
+- Keep agent policy decisions separate from package inspection and local tool execution.
 - Prefer static metadata, file, text, and AST analysis.
 - Use conservative security language.
 - Do not claim malware certainty without definitive evidence.
@@ -29,6 +30,10 @@ Run:
 ```bash
 .venv/bin/python -m pytest
 git diff --check
+.venv/bin/python -m pkgwhy --help
+.venv/bin/python -m pkgwhy agent policy --help
+.venv/bin/python -m pkgwhy registry --help
+.venv/bin/python -m pkgwhy run --help
 .venv/bin/python -m build
 .venv/bin/python -m twine check dist/*
 ```
