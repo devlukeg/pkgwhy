@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
+import typer
 from typer.testing import CliRunner
 
 from pkgwhy.cli import app
@@ -10,6 +11,17 @@ from pkgwhy.metadata.installed import get_installed_package
 
 
 runner = CliRunner()
+
+
+def _command_option_names(*path: str) -> set[str]:
+    command = typer.main.get_command(app)
+    for name in path:
+        command = command.commands[name]
+    return {
+        option
+        for parameter in command.params
+        for option in getattr(parameter, "opts", ())
+    }
 
 
 def test_cli_help() -> None:
@@ -91,8 +103,10 @@ def test_dynamic_inspect_help_surfaces_safe_options() -> None:
     result = runner.invoke(app, ["dynamic", "inspect", "--help"])
 
     assert result.exit_code == 0
-    assert "--container" in result.output
-    assert "--network" in result.output
+    option_names = _command_option_names("dynamic", "inspect")
+    assert "--container" in option_names
+    assert "--network" in option_names
+    assert "--json" in option_names
 
 
 def test_dynamic_inspect_fails_safely_without_backend(monkeypatch) -> None:
