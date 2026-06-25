@@ -28,8 +28,10 @@ from pkgwhy.vulnerabilities.osv import OSVClientError, load_osv_records, query_o
 app = typer.Typer(no_args_is_help=True, help="Explain, inspect, judge packages, and run local private tools.")
 registry_app = typer.Typer(no_args_is_help=True, help="Manage local private registries.")
 tool_app = typer.Typer(no_args_is_help=True, help="Inspect and judge local private tools.")
+dynamic_app = typer.Typer(no_args_is_help=True, help="Experimental dynamic sandbox analysis.")
 app.add_typer(registry_app, name="registry")
 app.add_typer(tool_app, name="tool")
+app.add_typer(dynamic_app, name="dynamic")
 console = Console()
 
 
@@ -317,6 +319,33 @@ def run(reference: Annotated[str, typer.Argument(help="Tool name or owner/name r
         print(result.stderr, end="" if result.stderr.endswith("\n") else "\n")
     console.print(f"Execution log: {result.log_path}")
     raise typer.Exit(result.exit_code)
+
+
+@dynamic_app.command("inspect")
+def dynamic_inspect(
+    target: Annotated[str, typer.Argument(help="Target package or artifact reference to analyze dynamically.")],
+    container: Annotated[
+        bool,
+        typer.Option("--container", help="Require a disposable container backend. Host execution is never used."),
+    ] = False,
+    network: Annotated[
+        str,
+        typer.Option("--network", help="Network mode for a future sandbox backend. Only 'off' is accepted currently."),
+    ] = "off",
+) -> None:
+    """Experimental dynamic analysis skeleton that fails safely until a sandbox backend exists."""
+    console.print("Experimental dynamic analysis is not a production sandbox.")
+    console.print("Static package inspection remains the default pkgwhy review path.")
+    console.print("Refusing to run dynamic analysis for unknown package code on the host.")
+    if network != "off":
+        console.print("Only --network off is accepted in this pre-alpha skeleton.")
+        raise typer.Exit(1)
+    if not container:
+        console.print("No sandbox backend selected. Use --container once a backend is implemented.")
+        raise typer.Exit(1)
+    console.print("Container sandbox backend is not implemented or available in this build.")
+    console.print(f"Target was not executed: {target}")
+    raise typer.Exit(1)
 
 
 @tool_app.command("inspect")

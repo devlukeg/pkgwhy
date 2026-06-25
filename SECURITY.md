@@ -38,7 +38,7 @@ Runner warning:
 This run uses a Python virtual environment for dependency isolation. It does not fully sandbox operating-system permissions.
 ```
 
-Dynamic analysis is a separate experimental roadmap area. Dynamic analysis intentionally executes code and must not run unknown package code on the host. Future dynamic analysis must be opt-in, use a disposable sandbox boundary, disable network access by default, use temporary scratch filesystem access by default, avoid host secrets, and fail safely if the requested sandbox backend is unavailable. Empty process, filesystem, or network event lists must not be treated as proof that no behavior occurred.
+Dynamic analysis is a separate experimental roadmap area. Dynamic analysis intentionally executes code and must not run unknown package code on the host. The current `pkgwhy dynamic inspect` command is a safe-fail skeleton: it reports that no sandbox backend is available and refuses to execute the target. Future dynamic analysis must be opt-in, use a disposable sandbox boundary, disable network access by default, use temporary scratch filesystem access by default, avoid host secrets, and fail safely if the requested sandbox backend is unavailable. Empty process, filesystem, or network event lists must not be treated as proof that no behavior occurred.
 
 ## Current Limitations
 

@@ -384,6 +384,16 @@ The design is documented in [docs/dynamic-sandbox.md](docs/dynamic-sandbox.md). 
 - missing sandbox backends should fail safely instead of falling back to host execution;
 - empty event lists are not proof of safety.
 
+The current command surface is a safe-fail skeleton:
+
+```bash
+pkgwhy dynamic --help
+pkgwhy dynamic inspect --help
+pkgwhy dynamic inspect demo-target --container --network off
+```
+
+Until a sandbox backend exists, `pkgwhy dynamic inspect` refuses to execute the target and reports that the backend is unavailable.
+
 `pkgwhy run` is still a separate local private-tool execution path and is not dynamic package analysis.
 
 ## Risk And Agent Decisions

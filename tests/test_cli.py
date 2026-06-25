@@ -17,6 +17,39 @@ def test_cli_help() -> None:
 
     assert result.exit_code == 0
     assert "Explain, inspect, judge packages, and run local private tools" in result.output
+    assert "dynamic" in result.output
+
+
+def test_dynamic_help_surfaces_experimental_command() -> None:
+    result = runner.invoke(app, ["dynamic", "--help"])
+
+    assert result.exit_code == 0
+    assert "Experimental dynamic sandbox analysis" in result.output
+
+
+def test_dynamic_inspect_help_surfaces_safe_options() -> None:
+    result = runner.invoke(app, ["dynamic", "inspect", "--help"])
+
+    assert result.exit_code == 0
+    assert "--container" in result.output
+    assert "--network" in result.output
+
+
+def test_dynamic_inspect_fails_safely_without_backend() -> None:
+    result = runner.invoke(app, ["dynamic", "inspect", "demo-target", "--container"])
+
+    assert result.exit_code == 1
+    assert "not a production sandbox" in result.output
+    assert "Refusing to run dynamic analysis" in result.output
+    assert "Container sandbox backend is not implemented" in result.output
+    assert "Target was not executed: demo-target" in result.output
+
+
+def test_dynamic_inspect_rejects_network_enabled_mode() -> None:
+    result = runner.invoke(app, ["dynamic", "inspect", "demo-target", "--container", "--network", "on"])
+
+    assert result.exit_code == 1
+    assert "Only --network off is accepted" in result.output
 
 
 def test_judge_json_for_missing_package_is_stable() -> None:

@@ -10,6 +10,16 @@ Dynamic package analysis is not implemented yet.
 
 There is no production malware sandbox, no arbitrary package execution, no dynamic package installation, and no claim of full operating-system sandboxing. Static inspection remains the default package review path.
 
+The current CLI surface is a safe-fail skeleton:
+
+```bash
+pkgwhy dynamic --help
+pkgwhy dynamic inspect --help
+pkgwhy dynamic inspect <target> --container --network off
+```
+
+Until a sandbox backend exists, `pkgwhy dynamic inspect` refuses to execute the target and reports that the backend is unavailable. It must not fall back to host execution.
+
 `pkgwhy run` is a separate local private-tool execution path. It resolves tools from a configured local registry and verifies bundle hashes before running them in a Python virtual environment. A virtual environment is dependency isolation only; it is not an operating-system sandbox.
 
 ## Separation Of Modes
@@ -95,4 +105,3 @@ Controlled fixture execution is not evidence that arbitrary package execution is
 - No host-home or project-wide filesystem access.
 - No production malware-detection claim.
 - No claim of full sandboxing.
-
