@@ -154,6 +154,15 @@ RULES: dict[str, RuleDefinition] = {
         default_message="Python unsafe YAML load construct referenced.",
         false_positive_note="YAML loading can be safe when using safe loaders or trusted inputs; review call arguments.",
     ),
+    "PKGWHY-PY-009": RuleDefinition(
+        rule_id="PKGWHY-PY-009",
+        name="python_obfuscation_bootstrap_signal",
+        category=RuleCategory.STATIC_ANALYSIS,
+        severity=RuleSeverity.HIGH,
+        confidence=Confidence.MEDIUM,
+        default_message="Python obfuscation-bootstrap pattern referenced.",
+        false_positive_note="Obfuscation-bootstrap names can appear in comments, fixtures, or vendored compatibility code.",
+    ),
     "PKGWHY-BUILD-001": RuleDefinition(
         rule_id="PKGWHY-BUILD-001",
         name="executable_setup_py_present",

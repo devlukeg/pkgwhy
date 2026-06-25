@@ -13,6 +13,7 @@ def test_installed_provenance_marks_unimplemented_trust_checks() -> None:
 
     assert provenance.package == "example"
     assert provenance.repository_url == "https://example.test/repo"
+    assert provenance.metadata_source == "installed_distribution_metadata"
     assert provenance.trusted_publishing_status == "unknown"
     assert provenance.attestation_status == "not_implemented"
     assert provenance.source_distribution_status == "unknown"

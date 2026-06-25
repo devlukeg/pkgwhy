@@ -3,10 +3,13 @@ from __future__ import annotations
 import re
 from enum import StrEnum
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
 from pkgwhy.core.constants import CAPABILITY_EXPOSURE_NOTE, PACKAGE_JUDGEMENT_SCHEMA_VERSION, RISK_MODEL_VERSION
+
+RiskModelVersion = Literal["pkgwhy.risk_model.v1"]
 
 
 class RiskLevel(StrEnum):
@@ -176,7 +179,7 @@ class PackageProvenance(BaseModel):
     documentation_url: str | None = None
     homepage_url: str | None = None
     project_urls: dict[str, str] = Field(default_factory=dict)
-    metadata_source: str = "installed_distribution_metadata"
+    metadata_source: str = "unknown"
     source_distribution_status: str = "unknown"
     trusted_publishing_status: str = "unknown"
     attestation_status: str = "not_implemented"
@@ -283,7 +286,7 @@ class PackageJudgement(BaseModel):
     """Agent-readable conservative judgement for an inspected package."""
 
     schema_version: str = PACKAGE_JUDGEMENT_SCHEMA_VERSION
-    risk_model_version: str = RISK_MODEL_VERSION
+    risk_model_version: RiskModelVersion = RISK_MODEL_VERSION
     package: str
     version: str | None = None
     decision: AgentDecision

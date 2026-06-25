@@ -494,5 +494,25 @@ def _format_rule_location(rule: RiskRuleEvidence) -> str:
 def _dedupe_vulnerability_matches(matches: list[VulnerabilityMatch]) -> list[VulnerabilityMatch]:
     deduped: dict[str, VulnerabilityMatch] = {}
     for match in matches:
-        deduped.setdefault(match.vulnerability_id, match)
+        existing = deduped.get(match.vulnerability_id)
+        if existing is None or _vulnerability_match_rank(match) > _vulnerability_match_rank(existing):
+            deduped[match.vulnerability_id] = match
     return sorted(deduped.values(), key=lambda item: item.vulnerability_id)
+
+
+def _vulnerability_match_rank(match: VulnerabilityMatch) -> tuple[int, bool, int, bool, int]:
+    severity_order = {
+        "CRITICAL": 5,
+        "HIGH": 4,
+        "MODERATE": 3,
+        "MEDIUM": 3,
+        "LOW": 2,
+    }
+    strongest_severity = max((severity_order.get(value.upper(), 1) for value in match.severity), default=0)
+    return (
+        strongest_severity,
+        bool(match.fixed_versions),
+        len(match.evidence),
+        bool(match.source_url),
+        len(match.references),
+    )

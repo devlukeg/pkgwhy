@@ -169,6 +169,8 @@ def test_analyze_file_signals_masks_credential_like_assignments(tmp_path: Path) 
             [
                 'SERVICE_API_TOKEN = "sk_live_test_value_that_must_not_print"',
                 'API_KEY = "example_value_that_must_not_print"',
+                '"API_KEY": "json_value_that_must_not_print"',
+                'SERVICE_SECRET: str = "typed_value_that_must_not_print"',
             ]
         ),
         encoding="utf-8",
@@ -186,10 +188,14 @@ def test_analyze_file_signals_masks_credential_like_assignments(tmp_path: Path) 
     assert analysis.credential_references == [
         "settings.py:1:SERVICE_API_TOKEN=(masked)",
         "settings.py:2:API_KEY=(masked)",
+        "settings.py:3:API_KEY=(masked)",
+        "settings.py:4:SERVICE_SECRET=(masked)",
     ]
     assert any(rule.rule_id == "PKGWHY-CRED-001" for rule in analysis.rule_evidence)
     assert "sk_live_test_value_that_must_not_print" not in combined_output
     assert "example_value_that_must_not_print" not in combined_output
+    assert "json_value_that_must_not_print" not in combined_output
+    assert "typed_value_that_must_not_print" not in combined_output
     assert "(masked)" in combined_output
 
 
@@ -204,3 +210,19 @@ def test_analyze_file_signals_ignores_type_annotation_credential_substrings(tmp_
 
     assert analysis.credential_references == []
     assert not any(rule.rule_id == "PKGWHY-CRED-001" for rule in analysis.rule_evidence)
+
+
+def test_analyze_file_signals_prioritizes_rule_evidence_before_cap(tmp_path: Path) -> None:
+    files: list[Path] = []
+    for index in range(105):
+        source = tmp_path / f"link-{index}.txt"
+        source.write_text(f"https://example-{index}.invalid/path\n", encoding="utf-8")
+        files.append(source)
+    executable = tmp_path / "helper.exe"
+    executable.write_bytes(b"")
+    files.append(executable)
+
+    analysis = analyze_file_signals(files, entry_points=[])
+
+    assert len(analysis.rule_evidence) == 100
+    assert any(rule.rule_id == "PKGWHY-BIN-003" and rule.file_path == "helper.exe" for rule in analysis.rule_evidence)

@@ -6,7 +6,7 @@ from collections.abc import Callable
 from importlib.metadata import Distribution
 from pathlib import Path
 
-from pkgwhy.core.models import FileStaticAnalysis, ReadabilityStatus, RuleSeverity, SourceAvailability
+from pkgwhy.core.models import FileStaticAnalysis, ReadabilityStatus, RiskRuleEvidence, RuleSeverity, SourceAvailability
 from pkgwhy.inspection.size import JAVASCRIPT_SUFFIXES, NATIVE_SUFFIXES
 from pkgwhy.inspection.text_patterns import analyze_text_patterns, is_text_pattern_candidate
 from pkgwhy.risk.rules import make_rule_evidence
@@ -179,7 +179,7 @@ def analyze_file_signals(paths: list[Path], entry_points: list[str]) -> FileStat
         detected_capabilities=sorted(capabilities),
         warnings=warnings[:100],
         evidence=evidence[:100],
-        rule_evidence=rule_evidence[:100],
+        rule_evidence=_prioritize_rule_evidence(rule_evidence),
         url_references=_unique(url_references)[:100],
         domain_references=_unique(domain_references)[:100],
         credential_references=_unique(credential_references)[:100],
@@ -261,10 +261,13 @@ def _analyze_build_metadata(path: Path) -> FileStaticAnalysis:
             ],
         )
 
+    source = _read_small_text(path)
+    if source is None:
+        return FileStaticAnalysis(warnings=["Skipped large or unreadable pyproject.toml during static scan."])
+
     try:
-        source = path.read_text(encoding="utf-8")
         data = tomllib.loads(source)
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+    except tomllib.TOMLDecodeError as exc:
         return FileStaticAnalysis(warnings=[f"Could not statically parse pyproject.toml: {exc.__class__.__name__}"])
 
     build_system = data.get("build-system")
@@ -511,3 +514,27 @@ def _unique(values: list[str]) -> list[str]:
         if value not in unique_values:
             unique_values.append(value)
     return unique_values
+
+
+def _prioritize_rule_evidence(rules: list[RiskRuleEvidence], limit: int = 100) -> list[RiskRuleEvidence]:
+    severity_order = {
+        RuleSeverity.CRITICAL: 0,
+        RuleSeverity.HIGH: 1,
+        RuleSeverity.MEDIUM: 2,
+        RuleSeverity.LOW: 3,
+        RuleSeverity.INFO: 4,
+    }
+    deduped: dict[tuple[str, str | None, int | None, str | None, str], RiskRuleEvidence] = {}
+    for rule in rules:
+        key = (rule.rule_id, rule.file_path, rule.line_number, rule.symbol, rule.message)
+        deduped.setdefault(key, rule)
+    return sorted(
+        deduped.values(),
+        key=lambda rule: (
+            severity_order.get(rule.severity, 5),
+            rule.rule_id,
+            rule.file_path or "",
+            rule.line_number or 0,
+            rule.symbol or "",
+        ),
+    )[:limit]

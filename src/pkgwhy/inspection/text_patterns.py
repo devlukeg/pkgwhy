@@ -23,8 +23,11 @@ TEXT_PATTERN_SUFFIXES = {
 
 URL_PATTERN = re.compile(r"https?://[^\s'\"<>)\]}]+", re.IGNORECASE)
 CREDENTIAL_ASSIGNMENT_PATTERN = re.compile(
-    r"\b(?P<name>(?:[A-Za-z_][A-Za-z0-9]*[_-])*(?:api[_-]?key|token|secret|password|credential)(?:[_-][A-Za-z0-9]+)*)\b"
-    r"\s*(?:=|:\s*(?=['\"]))\s*"
+    r"(?<![A-Za-z0-9_])['\"]?"
+    r"(?P<name>(?:[A-Za-z_][A-Za-z0-9]*[_-])*(?:api[_-]?key|token|secret|password|credential)"
+    r"(?:[_-](?:value|id|key|token|secret|password|credential))*)"
+    r"['\"]?(?![A-Za-z0-9_])"
+    r"\s*(?:=|:\s*(?:[A-Za-z_][A-Za-z0-9_\[\], .|]*\s*=)?)\s*"
     r"(?P<quote>['\"])"
     r"(?P<value>[A-Za-z0-9_\-./+=]{8,})"
     r"(?P=quote)",

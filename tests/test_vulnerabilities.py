@@ -4,8 +4,8 @@ import pytest
 from typer.testing import CliRunner
 
 from pkgwhy.agent.judge import judge_installed_package
-from pkgwhy.cli import app
-from pkgwhy.core.models import PackageMetadata
+from pkgwhy.cli import _dedupe_vulnerability_matches, app
+from pkgwhy.core.models import PackageMetadata, VulnerabilityMatch
 from pkgwhy.metadata.installed import list_installed_packages
 from pkgwhy.vulnerabilities.matching import match_vulnerabilities
 from pkgwhy.vulnerabilities.osv import parse_osv_payload
@@ -49,6 +49,14 @@ def test_version_matching_ignores_non_version_ranges() -> None:
     assert not match_vulnerabilities("demo-pkg", "1.5.0", records)
 
 
+def test_version_matching_ignores_semver_ranges_without_pep440_claims() -> None:
+    payload = _osv_payload("demo-pkg", [])
+    payload["vulns"][0]["affected"][0]["ranges"][0]["type"] = "SEMVER"
+    records = parse_osv_payload(payload)
+
+    assert not match_vulnerabilities("demo-pkg", "1.5.0", records)
+
+
 def test_version_matching_deduplicates_and_compares_explicit_versions_semantically() -> None:
     payload = _osv_payload("demo-pkg", ["1.0"])
     records = parse_osv_payload({"vulns": payload["vulns"] + payload["vulns"]})
@@ -57,6 +65,32 @@ def test_version_matching_deduplicates_and_compares_explicit_versions_semantical
 
     assert len(matches) == 1
     assert matches[0].vulnerability_id == "TEST-VULN-0001"
+
+
+def test_cli_vulnerability_dedupe_keeps_stronger_match() -> None:
+    weak = VulnerabilityMatch(
+        vulnerability_id="TEST-VULN-0001",
+        package="demo-pkg",
+        version="1.0.0",
+        severity=["LOW"],
+        source="fixture",
+        evidence=["weak match"],
+    )
+    strong = VulnerabilityMatch(
+        vulnerability_id="TEST-VULN-0001",
+        package="demo-pkg",
+        version="1.0.0",
+        severity=["HIGH"],
+        fixed_versions=["2.0.0"],
+        references=["https://example.invalid/advisory"],
+        source="fixture",
+        source_url="https://example.invalid/advisory",
+        evidence=["strong match", "range match"],
+    )
+
+    matches = _dedupe_vulnerability_matches([weak, strong])
+
+    assert matches == [strong]
 
 
 def test_judgement_includes_known_vulnerability_rule_evidence() -> None:

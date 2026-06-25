@@ -38,6 +38,7 @@ def assess_installed_provenance(metadata: PackageMetadata) -> PackageProvenance:
         documentation_url=urls.documentation,
         homepage_url=urls.homepage,
         project_urls=raw_urls,
+        metadata_source="installed_distribution_metadata",
         confidence=confidence,
         warnings=warnings,
         evidence=evidence,

@@ -102,6 +102,11 @@ CREDENTIAL_PATTERNS = tuple(
 PACKAGE_MANAGER_PATTERN = re.compile(
     r"(\bpython\s+-m\s+pip\b|\bpip3?\s+(install|uninstall|remove)|\buv\s+(add|remove|sync|pip)|\bpoetry\s+(add|remove|install))"
 )
+LARGE_ENCODED_LITERAL_PATTERN = re.compile(r"^[A-Za-z0-9+/]{120,}={0,2}$")
+PYTHON_OBFUSCATION_BOOTSTRAP_PATTERN = re.compile(
+    r"(__pyarmor__|pyarmor_runtime|pytransform|__armor_enter__|__armor_exit__)",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -225,6 +230,39 @@ def _capabilities_from_tree(tree: ast.AST) -> list[PythonSignal]:
                         symbol="credential-like string literal",
                     ),
                 )
+            if LARGE_ENCODED_LITERAL_PATTERN.fullmatch(node.value.strip()):
+                _add_signal(
+                    detected,
+                    PythonSignal(
+                        capability="Encoded payload handling signals",
+                        detail="large encoded-looking string literal",
+                        rule_id="PKGWHY-PY-004",
+                        line_number=getattr(node, "lineno", None),
+                        symbol="large encoded-looking string literal",
+                    ),
+                )
+            if PYTHON_OBFUSCATION_BOOTSTRAP_PATTERN.search(node.value):
+                _add_signal(
+                    detected,
+                    PythonSignal(
+                        capability="Python obfuscation signals",
+                        detail="obfuscation-bootstrap string literal",
+                        rule_id="PKGWHY-PY-009",
+                        line_number=getattr(node, "lineno", None),
+                        symbol="obfuscation-bootstrap string literal",
+                    ),
+                )
+        elif isinstance(node, ast.Name) and PYTHON_OBFUSCATION_BOOTSTRAP_PATTERN.search(node.id):
+            _add_signal(
+                detected,
+                PythonSignal(
+                    capability="Python obfuscation signals",
+                    detail=node.id,
+                    rule_id="PKGWHY-PY-009",
+                    line_number=getattr(node, "lineno", None),
+                    symbol=node.id,
+                ),
+            )
     return list(detected.values())
 
 

@@ -91,3 +91,26 @@ def test_analyze_python_files_reports_parse_warning(tmp_path: Path) -> None:
 
     assert analysis.files_scanned == 0
     assert any("Could not statically parse Python file" in warning for warning in analysis.warnings)
+
+
+def test_analyze_python_files_reports_encoded_literals_and_obfuscation_bootstrap(tmp_path: Path) -> None:
+    source = tmp_path / "encoded.py"
+    encoded = "A" * 140
+    source.write_text(
+        dedent(
+            f"""
+            payload = "{encoded}"
+            __pyarmor__ = "bootstrap"
+            marker = "pytransform"
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    analysis = analyze_python_files([source])
+
+    assert "Encoded payload handling signals" in analysis.detected_capabilities
+    assert "Python obfuscation signals" in analysis.detected_capabilities
+    assert any(rule.rule_id == "PKGWHY-PY-004" and rule.symbol == "large encoded-looking string literal" for rule in analysis.rule_evidence)
+    assert any(rule.rule_id == "PKGWHY-PY-009" for rule in analysis.rule_evidence)
+    assert encoded not in " ".join(analysis.evidence)

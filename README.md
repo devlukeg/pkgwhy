@@ -6,7 +6,7 @@ Know why a package exists before you or your agent trusts it.
 
 ## Status
 
-`pkgwhy` is in local release-candidate readiness review for the `0.4.0a0` pre-alpha candidate. It is useful for local package inspection experiments, conservative static package review, agent decision-support prototypes, and feedback on the CLI and local private-registry shape.
+`pkgwhy` is in pre-alpha readiness review for the `0.4.0a0` candidate. It is useful for local package inspection experiments, conservative static package review, agent decision-support prototypes, and feedback on the CLI and local private-registry shape.
 
 It is not a production security scanner, not malware-detection certainty, and not a sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
 
@@ -406,6 +406,7 @@ Current pre-alpha rule IDs:
 - `PKGWHY-PY-006`: Python environment or secret-like access reference.
 - `PKGWHY-PY-007`: Python package-manager manipulation reference.
 - `PKGWHY-PY-008`: Python unsafe YAML load reference.
+- `PKGWHY-PY-009`: Python obfuscation-bootstrap signal.
 - `PKGWHY-BUILD-001`: executable `setup.py` present.
 - `PKGWHY-BUILD-002`: setup-time subprocess or shell reference.
 - `PKGWHY-BUILD-003`: setup-time network reference.
