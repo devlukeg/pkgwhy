@@ -308,11 +308,17 @@ def publish(path: Annotated[Path, typer.Argument(help="Local .py file or folder 
 
 
 @app.command()
-def run(reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference from the local registry.")]) -> None:
+def run(
+    reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference from the local registry.")],
+    non_interactive: Annotated[
+        bool,
+        typer.Option("--non-interactive", help="Apply conservative non-interactive tool execution policy."),
+    ] = False,
+) -> None:
     """Run a hash-verified local private tool from the current local registry."""
     print(RUNNER_ISOLATION_WARNING, file=sys.stderr)
     try:
-        result = run_local_tool(reference)
+        result = run_local_tool(reference, non_interactive=non_interactive)
     except ValueError as exc:
         console.print(str(exc))
         raise typer.Exit(1) from exc

@@ -602,3 +602,6 @@ class ToolRunResult(BaseModel):
     stderr: str
     log_path: Path
     warning: str
+    policy_decision: AgentDecision
+    policy_reasons: list[str] = Field(default_factory=list)
+    policy_warnings: list[str] = Field(default_factory=list)

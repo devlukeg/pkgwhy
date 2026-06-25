@@ -92,6 +92,9 @@ def run_local_tool(reference: str, *, non_interactive: bool = False) -> ToolRunR
         stderr=stderr,
         log_path=log_dir / f"{started_at_dt.strftime('%Y%m%dT%H%M%S%fZ')}.json",
         warning=RUNNER_ISOLATION_WARNING,
+        policy_decision=policy_result.decision,
+        policy_reasons=policy_result.reasons,
+        policy_warnings=policy_result.warnings,
     )
     _write_execution_log(result)
     return result

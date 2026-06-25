@@ -39,6 +39,12 @@ def test_run_local_tool_executes_controlled_script_and_logs_metadata(
     assert log_data["tool"] == "local/hello_runner"
     assert log_data["exit_code"] == 0
     assert log_data["warning"] == RUNNER_ISOLATION_WARNING
+    assert log_data["policy_decision"] == "review_manually"
+    assert log_data["policy_reasons"] == []
+    assert any(
+        "signature verification is not implemented" in warning.lower()
+        for warning in log_data["policy_warnings"]
+    )
 
 
 def test_run_cli_prints_warning_output_and_log_path(tmp_path: Path) -> None:
@@ -55,6 +61,22 @@ def test_run_cli_prints_warning_output_and_log_path(tmp_path: Path) -> None:
     assert RUNNER_ISOLATION_WARNING in result.stderr
     assert "cli runner ok" in result.output
     assert "Execution log:" in result.output
+
+
+def test_run_cli_non_interactive_blocks_default_tool(tmp_path: Path) -> None:
+    env = {"PKGWHY_CONFIG_HOME": str(tmp_path / "config")}
+    registry_path = tmp_path / "registry"
+    script = tmp_path / "noninteractive_cli_tool.py"
+    script.write_text("print('should not run')\n", encoding="utf-8")
+
+    assert runner.invoke(app, ["registry", "init", str(registry_path)], env=env).exit_code == 0
+    assert runner.invoke(app, ["publish", str(script)], env=env).exit_code == 0
+    result = runner.invoke(app, ["run", "local/noninteractive_cli_tool", "--non-interactive"], env=env)
+
+    assert result.exit_code == 1
+    assert RUNNER_ISOLATION_WARNING in result.stderr
+    assert "Tool policy blocks execution" in result.output
+    assert "should not run" not in result.output
 
 
 def test_run_local_tool_blocks_hash_mismatch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
