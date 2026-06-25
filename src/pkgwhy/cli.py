@@ -13,6 +13,7 @@ from pkgwhy.agent.judge import inspect_installed_package, judge_installed_packag
 from pkgwhy.core.constants import CAPABILITY_EXPOSURE_NOTE
 from pkgwhy.core.models import PackageMetadata, RiskRuleEvidence, VulnerabilityMatch
 from pkgwhy.dependencies.reason import explain_dependency_reason
+from pkgwhy.dynamic.analysis import build_unavailable_dynamic_result
 from pkgwhy.explanations.explain import explain_package
 from pkgwhy.imports.scanner import scan_project_imports
 from pkgwhy.metadata.installed import get_installed_package, list_installed_packages
@@ -332,19 +333,21 @@ def dynamic_inspect(
         str,
         typer.Option("--network", help="Network mode for a future sandbox backend. Only 'off' is accepted currently."),
     ] = "off",
+    as_json: Annotated[bool, typer.Option("--json", help="Emit schema-versioned dynamic analysis JSON.")] = False,
 ) -> None:
     """Experimental dynamic analysis skeleton that fails safely until a sandbox backend exists."""
-    console.print("Experimental dynamic analysis is not a production sandbox.")
-    console.print("Static package inspection remains the default pkgwhy review path.")
-    console.print("Refusing to run dynamic analysis for unknown package code on the host.")
-    if network != "off":
-        console.print("Only --network off is accepted in this pre-alpha skeleton.")
+    result = build_unavailable_dynamic_result(target, container=container, network=network)
+    if as_json:
+        print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
         raise typer.Exit(1)
-    if not container:
-        console.print("No sandbox backend selected. Use --container once a backend is implemented.")
-        raise typer.Exit(1)
-    console.print("Container sandbox backend is not implemented or available in this build.")
-    console.print(f"Target was not executed: {target}")
+
+    for warning in result.warnings:
+        console.print(warning)
+    if result.limitations:
+        console.print("Limitations:")
+        for limitation in result.limitations:
+            console.print(f"  - {limitation}")
+    console.print(f"Target was not executed: {result.target}")
     raise typer.Exit(1)
 
 

@@ -7,7 +7,12 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from pkgwhy.core.constants import CAPABILITY_EXPOSURE_NOTE, PACKAGE_JUDGEMENT_SCHEMA_VERSION, RISK_MODEL_VERSION
+from pkgwhy.core.constants import (
+    CAPABILITY_EXPOSURE_NOTE,
+    DYNAMIC_ANALYSIS_SCHEMA_VERSION,
+    PACKAGE_JUDGEMENT_SCHEMA_VERSION,
+    RISK_MODEL_VERSION,
+)
 
 RiskModelVersion = Literal["pkgwhy.risk_model.v1"]
 
@@ -44,6 +49,21 @@ class ToolRunStatus(StrEnum):
     COMPLETED = "completed"
     FAILED = "failed"
     BLOCKED = "blocked"
+
+
+class DynamicAnalysisStatus(StrEnum):
+    BLOCKED = "blocked"
+    BACKEND_UNAVAILABLE = "backend_unavailable"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class DynamicNetworkMode(StrEnum):
+    OFF = "off"
+
+
+class DynamicFilesystemMode(StrEnum):
+    SCRATCH = "scratch"
 
 
 class Confidence(StrEnum):
@@ -303,6 +323,47 @@ class PackageJudgement(BaseModel):
     known_vulnerabilities: list[VulnerabilityMatch] = Field(default_factory=list)
     provenance: PackageProvenance | None = None
     capability_exposure_note: str = CAPABILITY_EXPOSURE_NOTE
+
+
+class DynamicProcessEvent(BaseModel):
+    """Observed process event from a dynamic backend."""
+
+    command: list[str] = Field(default_factory=list)
+    exit_code: int | None = None
+    duration_ms: int | None = Field(default=None, ge=0)
+
+
+class DynamicFilesystemEvent(BaseModel):
+    """Observed filesystem event from a dynamic backend."""
+
+    path: str
+    action: str
+
+
+class DynamicNetworkEvent(BaseModel):
+    """Observed network event from a dynamic backend."""
+
+    destination: str
+    action: str
+    protocol: str | None = None
+
+
+class DynamicAnalysisResult(BaseModel):
+    """Schema-versioned dynamic analysis result without fabricated events."""
+
+    schema_version: str = DYNAMIC_ANALYSIS_SCHEMA_VERSION
+    target: str
+    mode: str = "inspect"
+    sandbox_backend: str
+    network_mode: DynamicNetworkMode = DynamicNetworkMode.OFF
+    filesystem_mode: DynamicFilesystemMode = DynamicFilesystemMode.SCRATCH
+    status: DynamicAnalysisStatus
+    warnings: list[str] = Field(default_factory=list)
+    process_events: list[DynamicProcessEvent] = Field(default_factory=list)
+    filesystem_events: list[DynamicFilesystemEvent] = Field(default_factory=list)
+    network_events: list[DynamicNetworkEvent] = Field(default_factory=list)
+    decision: AgentDecision
+    limitations: list[str] = Field(default_factory=list)
 
 
 class TyposquatCandidate(BaseModel):

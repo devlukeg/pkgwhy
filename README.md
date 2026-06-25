@@ -396,6 +396,30 @@ Until a sandbox backend exists, `pkgwhy dynamic inspect` refuses to execute the 
 
 `pkgwhy run` is still a separate local private-tool execution path and is not dynamic package analysis.
 
+Dynamic analysis result schema version: `pkgwhy.dynamic_analysis.v1`.
+
+Field shape for `pkgwhy dynamic inspect <target> --container --json` while no backend is available:
+
+```json
+{
+  "schema_version": "pkgwhy.dynamic_analysis.v1",
+  "target": "target-name",
+  "mode": "inspect",
+  "sandbox_backend": "container",
+  "network_mode": "off",
+  "filesystem_mode": "scratch",
+  "status": "backend_unavailable",
+  "warnings": [],
+  "process_events": [],
+  "filesystem_events": [],
+  "network_events": [],
+  "decision": "block",
+  "limitations": []
+}
+```
+
+Event lists are populated only when a future backend actually observes events. Empty event lists are not proof of safety.
+
 ## Risk And Agent Decisions
 
 Risk levels:

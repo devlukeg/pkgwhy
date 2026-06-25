@@ -82,6 +82,12 @@ Docker may be one backend, but the CLI must not require Docker for static inspec
 
 Future dynamic result JSON should distinguish observed events from unavailable telemetry:
 
+- schema version: `pkgwhy.dynamic_analysis.v1`;
+- target and mode;
+- sandbox backend;
+- network mode;
+- filesystem mode;
+- status and decision;
 - process events: started process, command, exit code, duration, resource limits reached;
 - filesystem events: created, modified, deleted, or read paths inside the scratch workspace where observable;
 - network events: attempted DNS, connect, or HTTP destinations where observable;

@@ -49,7 +49,26 @@ def test_dynamic_inspect_rejects_network_enabled_mode() -> None:
     result = runner.invoke(app, ["dynamic", "inspect", "demo-target", "--container", "--network", "on"])
 
     assert result.exit_code == 1
-    assert "Only --network off is accepted" in result.output
+    assert "Only network mode 'off' is accepted" in result.output
+
+
+def test_dynamic_inspect_json_uses_schema_and_empty_events() -> None:
+    result = runner.invoke(app, ["dynamic", "inspect", "demo-target", "--container", "--json"])
+
+    assert result.exit_code == 1
+    data = json.loads(result.output)
+    assert data["schema_version"] == "pkgwhy.dynamic_analysis.v1"
+    assert data["target"] == "demo-target"
+    assert data["mode"] == "inspect"
+    assert data["sandbox_backend"] == "container"
+    assert data["network_mode"] == "off"
+    assert data["filesystem_mode"] == "scratch"
+    assert data["status"] == "backend_unavailable"
+    assert data["decision"] == "block"
+    assert data["process_events"] == []
+    assert data["filesystem_events"] == []
+    assert data["network_events"] == []
+    assert any("No dynamic sandbox backend" in limitation for limitation in data["limitations"])
 
 
 def test_judge_json_for_missing_package_is_stable() -> None:
