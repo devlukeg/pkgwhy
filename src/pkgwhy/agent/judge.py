@@ -40,7 +40,8 @@ def inspect_installed_package(name: str) -> PackageInspection | None:
     ]
     evidence.extend(file_analysis.evidence)
     evidence.extend(python_analysis.evidence)
-    rule_evidence = list(python_analysis.rule_evidence)
+    rule_evidence = list(file_analysis.rule_evidence)
+    rule_evidence.extend(python_analysis.rule_evidence)
     warnings: list[str] = []
     warnings.extend(file_analysis.warnings)
     warnings.extend(python_analysis.warnings)

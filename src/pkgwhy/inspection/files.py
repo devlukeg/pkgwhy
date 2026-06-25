@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import re
+import tomllib
 from collections.abc import Callable
 from importlib.metadata import Distribution
 from pathlib import Path
 
 from pkgwhy.core.models import FileStaticAnalysis, ReadabilityStatus, SourceAvailability
 from pkgwhy.inspection.size import JAVASCRIPT_SUFFIXES, NATIVE_SUFFIXES
+from pkgwhy.risk.rules import make_rule_evidence
 
 SHELL_SUFFIXES = {".sh", ".bash", ".zsh", ".fish", ".ksh"}
 INSTALL_TIME_SCRIPT_NAMES = {"setup.py"}
+BUILD_METADATA_NAMES = {"pyproject.toml", "setup.cfg"}
 MAX_TEXT_SCAN_BYTES = 500_000
 LONG_JS_LINE_LENGTH = 500
 MINIFIED_JS_LINE_LENGTH = 1_000
@@ -34,6 +37,9 @@ JS_OBFUSCATION_PATTERNS = {
     re.compile(r"while\s*\(\s*!!\[\]\s*\)"): "control-flow flattening pattern",
     re.compile(r"debugger\s*;"): "JavaScript anti-debugging statement",
 }
+SETUP_SUBPROCESS_PATTERN = re.compile(r"\b(subprocess|os\.system|os\.popen|Popen|check_call|check_output)\b")
+SETUP_NETWORK_PATTERN = re.compile(r"\b(requests|httpx|urllib|socket|urlopen)\b")
+SETUP_DYNAMIC_PATTERN = re.compile(r"\b(eval|exec|compile|__import__|importlib\.import_module)\b")
 
 
 def distribution_file_paths(dist: Distribution | None, limit: int = 200) -> list[Path]:
@@ -87,6 +93,7 @@ def analyze_file_signals(paths: list[Path], entry_points: list[str]) -> FileStat
     capabilities: set[str] = set()
     warnings: list[str] = []
     evidence: list[str] = []
+    rule_evidence = []
     javascript_files_scanned = 0
     shell_scripts_detected = 0
     native_binaries_detected = 0
@@ -116,24 +123,134 @@ def analyze_file_signals(paths: list[Path], entry_points: list[str]) -> FileStat
             capabilities.update(js_result.detected_capabilities)
             warnings.extend(js_result.warnings)
             evidence.extend(js_result.evidence)
+            rule_evidence.extend(js_result.rule_evidence)
         if _is_shell_script(path):
             shell_scripts_detected += 1
             capabilities.add("Shell script files present")
             evidence.append(f"Shell script file present: {name}")
         if name in INSTALL_TIME_SCRIPT_NAMES:
+            setup_result = _analyze_setup_py(path)
             setup_files_detected += 1
-            capabilities.add("Install-time setup files present")
-            evidence.append(f"Install-time setup script present: {name}")
+            capabilities.update(setup_result.detected_capabilities)
+            warnings.extend(setup_result.warnings)
+            evidence.extend(setup_result.evidence)
+            rule_evidence.extend(setup_result.rule_evidence)
+        elif name in BUILD_METADATA_NAMES:
+            build_result = _analyze_build_metadata(path)
+            warnings.extend(build_result.warnings)
+            evidence.extend(build_result.evidence)
+            rule_evidence.extend(build_result.rule_evidence)
 
     return FileStaticAnalysis(
         detected_capabilities=sorted(capabilities),
         warnings=warnings[:100],
         evidence=evidence[:100],
+        rule_evidence=rule_evidence[:100],
         javascript_files_scanned=javascript_files_scanned,
         shell_scripts_detected=shell_scripts_detected,
         native_binaries_detected=native_binaries_detected,
         wasm_files_detected=wasm_files_detected,
         setup_files_detected=setup_files_detected,
+    )
+
+
+def _analyze_setup_py(path: Path) -> FileStaticAnalysis:
+    name = path.name
+    capabilities = {"Install-time setup files present"}
+    warnings = [
+        "setup.py is executable Python used by some build/install flows. pkgwhy reports static signals only and does not run it."
+    ]
+    evidence = [f"Install-time setup script present: {name}"]
+    rule_evidence = [
+        make_rule_evidence(
+            "PKGWHY-BUILD-001",
+            message="Executable setup.py file is present.",
+            evidence=[f"{name} is present."],
+            file_path=name,
+            symbol="setup.py",
+        )
+    ]
+    source = _read_small_text(path)
+    if source is None:
+        return FileStaticAnalysis(
+            detected_capabilities=sorted(capabilities),
+            warnings=warnings,
+            evidence=evidence,
+            rule_evidence=rule_evidence,
+        )
+
+    for rule_id, capability, pattern, detail in (
+        ("PKGWHY-BUILD-002", "Subprocess or shell execution signals", SETUP_SUBPROCESS_PATTERN, "subprocess or shell reference"),
+        ("PKGWHY-BUILD-003", "Network access signals", SETUP_NETWORK_PATTERN, "network access reference"),
+        ("PKGWHY-BUILD-004", "Dynamic code execution signals", SETUP_DYNAMIC_PATTERN, "dynamic execution reference"),
+    ):
+        line_number = _first_matching_line(source, pattern)
+        if line_number is None:
+            continue
+        capabilities.add(capability)
+        warnings.append(f"setup.py contains {detail}: {name}:{line_number}")
+        evidence.append(f"setup.py static signal in {name}:{line_number}: {detail}.")
+        rule_evidence.append(
+            make_rule_evidence(
+                rule_id,
+                message=f"setup.py contains {detail}.",
+                evidence=[f"{name}:{line_number} contains {detail}."],
+                file_path=name,
+                line_number=line_number,
+                symbol=detail,
+            )
+        )
+
+    return FileStaticAnalysis(
+        detected_capabilities=sorted(capabilities),
+        warnings=warnings,
+        evidence=evidence,
+        rule_evidence=rule_evidence,
+    )
+
+
+def _analyze_build_metadata(path: Path) -> FileStaticAnalysis:
+    if path.name == "setup.cfg":
+        return FileStaticAnalysis(
+            evidence=["setup.cfg metadata file present."],
+            rule_evidence=[
+                make_rule_evidence(
+                    "PKGWHY-BUILD-006",
+                    message="setup.cfg metadata file is present.",
+                    evidence=["setup.cfg is present."],
+                    file_path=path.name,
+                    symbol="setup.cfg",
+                )
+            ],
+        )
+
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        return FileStaticAnalysis(warnings=[f"Could not statically parse pyproject.toml: {exc.__class__.__name__}"])
+
+    build_system = data.get("build-system")
+    if not isinstance(build_system, dict):
+        return FileStaticAnalysis(evidence=["pyproject.toml present without build-system table."])
+
+    backend = build_system.get("build-backend")
+    if not isinstance(backend, str) or not backend.strip():
+        return FileStaticAnalysis(evidence=["pyproject.toml build-system table present without build-backend."])
+
+    line_number = _first_matching_line(path.read_text(encoding="utf-8"), re.compile(r"build-backend\s*="))
+    evidence = [f"pyproject.toml declares build backend: {backend}"]
+    return FileStaticAnalysis(
+        evidence=evidence,
+        rule_evidence=[
+            make_rule_evidence(
+                "PKGWHY-BUILD-005",
+                message=f"Build backend declared: {backend}.",
+                evidence=evidence,
+                file_path=path.name,
+                line_number=line_number,
+                symbol=backend,
+            )
+        ],
     )
 
 
@@ -197,6 +314,22 @@ def _analyze_javascript_file(path: Path) -> FileStaticAnalysis:
         evidence=evidence,
         javascript_files_scanned=1,
     )
+
+
+def _read_small_text(path: Path) -> str | None:
+    try:
+        if path.stat().st_size > MAX_TEXT_SCAN_BYTES:
+            return None
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def _first_matching_line(source: str, pattern: re.Pattern[str]) -> int | None:
+    for index, line in enumerate(source.splitlines(), start=1):
+        if pattern.search(line):
+            return index
+    return None
 
 
 def _is_shell_script(path: Path) -> bool:

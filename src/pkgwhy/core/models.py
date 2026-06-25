@@ -237,6 +237,7 @@ class FileStaticAnalysis(BaseModel):
     detected_capabilities: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
+    rule_evidence: list[RiskRuleEvidence] = Field(default_factory=list)
     javascript_files_scanned: int = Field(default=0, ge=0)
     shell_scripts_detected: int = Field(default=0, ge=0)
     native_binaries_detected: int = Field(default=0, ge=0)

@@ -19,6 +19,12 @@ def test_rule_catalog_defines_current_rule_metadata() -> None:
         "PKGWHY-PY-006",
         "PKGWHY-PY-007",
         "PKGWHY-PY-008",
+        "PKGWHY-BUILD-001",
+        "PKGWHY-BUILD-002",
+        "PKGWHY-BUILD-003",
+        "PKGWHY-BUILD-004",
+        "PKGWHY-BUILD-005",
+        "PKGWHY-BUILD-006",
     }
 
     assert required_rules <= set(RULES)

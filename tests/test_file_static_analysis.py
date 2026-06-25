@@ -39,6 +39,7 @@ def test_analyze_file_signals_detects_binary_wasm_shell_and_setup_files(tmp_path
     assert analysis.wasm_files_detected == 1
     assert analysis.shell_scripts_detected == 1
     assert analysis.setup_files_detected == 1
+    assert any(rule.rule_id == "PKGWHY-BUILD-001" for rule in analysis.rule_evidence)
 
 
 def test_analyze_file_signals_detects_shell_shebang_without_shell_suffix(tmp_path: Path) -> None:
@@ -70,3 +71,50 @@ def test_analyze_file_signals_avoids_javascript_call_substring_false_positives(t
 
     assert "JavaScript dynamic code execution signals" not in analysis.detected_capabilities
     assert "Encoded payload handling signals" not in analysis.detected_capabilities
+
+
+def test_analyze_file_signals_reports_setup_time_static_patterns(tmp_path: Path) -> None:
+    setup = tmp_path / "setup.py"
+    setup.write_text(
+        "\n".join(
+            [
+                "import subprocess",
+                "import urllib.request",
+                "subprocess.run(['python', '-m', 'pip', 'install', 'demo'])",
+                "urllib.request.urlopen('https://example.invalid')",
+                "exec('x = 1')",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    analysis = analyze_file_signals([setup], entry_points=[])
+    rules = {rule.rule_id: rule for rule in analysis.rule_evidence}
+
+    assert "Subprocess or shell execution signals" in analysis.detected_capabilities
+    assert "Network access signals" in analysis.detected_capabilities
+    assert "Dynamic code execution signals" in analysis.detected_capabilities
+    assert rules["PKGWHY-BUILD-002"].file_path == "setup.py"
+    assert rules["PKGWHY-BUILD-002"].line_number == 1
+    assert rules["PKGWHY-BUILD-003"].line_number == 2
+    assert rules["PKGWHY-BUILD-004"].line_number == 5
+
+
+def test_analyze_file_signals_reports_build_metadata_without_execution(tmp_path: Path) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    setup_cfg = tmp_path / "setup.cfg"
+    pyproject.write_text(
+        """
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+""",
+        encoding="utf-8",
+    )
+    setup_cfg.write_text("[metadata]\nname = demo\n", encoding="utf-8")
+
+    analysis = analyze_file_signals([pyproject, setup_cfg], entry_points=[])
+
+    assert any(rule.rule_id == "PKGWHY-BUILD-005" and rule.symbol == "hatchling.build" for rule in analysis.rule_evidence)
+    assert any(rule.rule_id == "PKGWHY-BUILD-006" for rule in analysis.rule_evidence)
+    assert "pyproject.toml declares build backend: hatchling.build" in analysis.evidence
