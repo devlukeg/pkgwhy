@@ -18,6 +18,60 @@ def test_cli_help() -> None:
     assert result.exit_code == 0
     assert "Explain, inspect, judge packages, and run local private tools" in result.output
     assert "dynamic" in result.output
+    assert "agent" in result.output
+
+
+def test_agent_help_surfaces_policy_commands() -> None:
+    result = runner.invoke(app, ["agent", "--help"])
+
+    assert result.exit_code == 0
+    assert "Agent-facing policy and package precheck commands" in result.output
+    assert "policy" in result.output
+    assert "precheck" in result.output
+
+
+def test_agent_policy_json_is_schema_versioned_and_conservative() -> None:
+    result = runner.invoke(app, ["agent", "policy", "--json"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["schema_version"] == "pkgwhy.agent_policy.v1"
+    assert data["allow_public_pypi"] is False
+    assert data["allow_unpinned_dependencies"] is False
+    assert data["allow_unsigned_tools"] is False
+    assert data["non_interactive_default_decision"] == "block"
+
+
+def test_agent_precheck_missing_package_blocks_non_interactive_json() -> None:
+    package_name = "definitely-not-installed-pkgwhy-agent-precheck-4c7f6"
+    assert get_installed_package(package_name) is None
+
+    result = runner.invoke(app, ["agent", "precheck", package_name, "--json"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["schema_version"] == "pkgwhy.agent_package_precheck.v1"
+    assert data["policy_schema_version"] == "pkgwhy.agent_policy.v1"
+    assert data["target_type"] == "package"
+    assert data["package"] == package_name
+    assert data["risk_level"] == "unknown"
+    assert data["decision"] == "block"
+    assert data["non_interactive"] is True
+    assert data["policy_decision_source"] == "agent_policy"
+    assert data["package_judgement"]["schema_version"] == "pkgwhy.package_judgement.v1"
+
+
+def test_agent_judge_interactive_missing_package_requires_review_json() -> None:
+    package_name = "definitely-not-installed-pkgwhy-agent-judge-a0186"
+    assert get_installed_package(package_name) is None
+
+    result = runner.invoke(app, ["agent", "judge", package_name, "--interactive", "--json"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["schema_version"] == "pkgwhy.agent_package_precheck.v1"
+    assert data["decision"] == "review_manually"
+    assert data["non_interactive"] is False
 
 
 def test_dynamic_help_surfaces_experimental_command() -> None:

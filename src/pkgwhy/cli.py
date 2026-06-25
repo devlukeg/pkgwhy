@@ -11,12 +11,13 @@ from rich.table import Table
 
 from pkgwhy.agent.judge import inspect_installed_package, judge_installed_package
 from pkgwhy.core.constants import CAPABILITY_EXPOSURE_NOTE
-from pkgwhy.core.models import PackageMetadata, RiskRuleEvidence, VulnerabilityMatch
+from pkgwhy.core.models import AgentPackagePrecheckResult, PackageMetadata, RiskRuleEvidence, VulnerabilityMatch
 from pkgwhy.dependencies.reason import explain_dependency_reason
 from pkgwhy.dynamic.analysis import build_unavailable_dynamic_result
 from pkgwhy.explanations.explain import explain_package
 from pkgwhy.imports.scanner import scan_project_imports
 from pkgwhy.metadata.installed import get_installed_package, list_installed_packages
+from pkgwhy.policy.agent_policy import default_agent_policy, evaluate_package_policy
 from pkgwhy.registry.local import add_registry, init_local_registry, list_registries, use_registry
 from pkgwhy.registry.publish import publish_local_tool
 from pkgwhy.registry.run import RUNNER_ISOLATION_WARNING, run_local_tool
@@ -30,9 +31,11 @@ app = typer.Typer(no_args_is_help=True, help="Explain, inspect, judge packages, 
 registry_app = typer.Typer(no_args_is_help=True, help="Manage local private registries.")
 tool_app = typer.Typer(no_args_is_help=True, help="Inspect and judge local private tools.")
 dynamic_app = typer.Typer(no_args_is_help=True, help="Experimental dynamic sandbox analysis.")
+agent_app = typer.Typer(no_args_is_help=True, help="Agent-facing policy and package precheck commands.")
 app.add_typer(registry_app, name="registry")
 app.add_typer(tool_app, name="tool")
 app.add_typer(dynamic_app, name="dynamic")
+app.add_typer(agent_app, name="agent")
 console = Console()
 
 
@@ -322,6 +325,60 @@ def run(reference: Annotated[str, typer.Argument(help="Tool name or owner/name r
     raise typer.Exit(result.exit_code)
 
 
+@agent_app.command("policy")
+def agent_policy(as_json: Annotated[bool, typer.Option("--json", help="Emit schema-versioned agent policy JSON.")] = False) -> None:
+    """Show conservative default policy for agent package and tool decisions."""
+    policy = default_agent_policy()
+    if as_json:
+        print(json.dumps(policy.model_dump(mode="json"), indent=2, sort_keys=True))
+        return
+    console.print("[bold]Agent policy[/bold]")
+    console.print(f"Schema: {policy.schema_version}")
+    console.print(f"Public PyPI allowed by default: {policy.allow_public_pypi}")
+    console.print(f"Unpinned dependencies allowed by default: {policy.allow_unpinned_dependencies}")
+    console.print(f"Unsigned tools allowed by default: {policy.allow_unsigned_tools}")
+    console.print(f"Non-interactive default decision: {policy.non_interactive_default_decision.value}")
+    console.print(f"Unknown package decision: {policy.unknown_package_decision.value}")
+    console.print(f"Non-interactive unknown package decision: {policy.non_interactive_unknown_package_decision.value}")
+    console.print(f"High-risk package decision: {policy.high_risk_package_decision.value}")
+    console.print(f"Non-interactive high-risk package decision: {policy.non_interactive_high_risk_package_decision.value}")
+    console.print("Policy is decision support; it does not install, import, or execute packages.")
+
+
+@agent_app.command("precheck")
+def agent_precheck(
+    package: Annotated[str, typer.Argument(help="Installed package name to judge against agent policy.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Emit schema-versioned agent precheck JSON.")] = False,
+    non_interactive: Annotated[
+        bool,
+        typer.Option(
+            "--non-interactive/--interactive",
+            help="Apply conservative non-interactive agent defaults.",
+        ),
+    ] = True,
+) -> None:
+    """Apply conservative agent policy to an installed package judgement."""
+    result = _build_agent_package_precheck(package, non_interactive=non_interactive)
+    _emit_agent_package_precheck(result, as_json=as_json)
+
+
+@agent_app.command("judge")
+def agent_judge(
+    package: Annotated[str, typer.Argument(help="Installed package name to judge against agent policy.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Emit schema-versioned agent judgement JSON.")] = False,
+    non_interactive: Annotated[
+        bool,
+        typer.Option(
+            "--non-interactive/--interactive",
+            help="Apply conservative non-interactive agent defaults.",
+        ),
+    ] = True,
+) -> None:
+    """Alias for package precheck until tool-specific agent judgement is expanded."""
+    result = _build_agent_package_precheck(package, non_interactive=non_interactive)
+    _emit_agent_package_precheck(result, as_json=as_json)
+
+
 @dynamic_app.command("inspect")
 def dynamic_inspect(
     target: Annotated[str, typer.Argument(help="Target package or artifact reference to analyze dynamically.")],
@@ -521,6 +578,31 @@ def _format_rule_location(rule: RiskRuleEvidence) -> str:
     if rule.symbol:
         return rule.symbol
     return ""
+
+
+def _build_agent_package_precheck(package: str, *, non_interactive: bool) -> AgentPackagePrecheckResult:
+    judgement = judge_installed_package(package)
+    return evaluate_package_policy(judgement, non_interactive=non_interactive)
+
+
+def _emit_agent_package_precheck(result: AgentPackagePrecheckResult, *, as_json: bool) -> None:
+    if as_json:
+        print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
+        return
+    console.print(f"[bold]{result.package}[/bold]")
+    console.print(f"Decision: {result.decision.value}")
+    console.print(f"Risk level: {result.risk_level.value}")
+    console.print(f"Confidence: {result.confidence.value}")
+    console.print(f"Policy source: {result.policy_decision_source}")
+    console.print(f"Recommendation: {result.recommendation}")
+    if result.reasons:
+        console.print("Policy reasons:")
+        for reason in result.reasons:
+            console.print(f"  - {reason}")
+    if result.warnings:
+        console.print("Warnings:")
+        for warning in result.warnings:
+            console.print(f"  - {warning}")
 
 
 def _dedupe_vulnerability_matches(matches: list[VulnerabilityMatch]) -> list[VulnerabilityMatch]:
