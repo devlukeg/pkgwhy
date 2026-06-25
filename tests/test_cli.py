@@ -35,13 +35,15 @@ def test_dynamic_inspect_help_surfaces_safe_options() -> None:
     assert "--network" in result.output
 
 
-def test_dynamic_inspect_fails_safely_without_backend() -> None:
+def test_dynamic_inspect_fails_safely_without_backend(monkeypatch) -> None:
+    monkeypatch.setattr("pkgwhy.dynamic.analysis.shutil.which", lambda _: None)
+
     result = runner.invoke(app, ["dynamic", "inspect", "demo-target", "--container"])
 
     assert result.exit_code == 1
     assert "not a production sandbox" in result.output
     assert "Refusing to run dynamic analysis" in result.output
-    assert "Container sandbox backend is not implemented" in result.output
+    assert "Docker container backend is unavailable" in result.output
     assert "Target was not executed: demo-target" in result.output
 
 
@@ -52,7 +54,9 @@ def test_dynamic_inspect_rejects_network_enabled_mode() -> None:
     assert "Only network mode 'off' is accepted" in result.output
 
 
-def test_dynamic_inspect_json_uses_schema_and_empty_events() -> None:
+def test_dynamic_inspect_json_uses_schema_and_empty_events(monkeypatch) -> None:
+    monkeypatch.setattr("pkgwhy.dynamic.analysis.shutil.which", lambda _: None)
+
     result = runner.invoke(app, ["dynamic", "inspect", "demo-target", "--container", "--json"])
 
     assert result.exit_code == 1

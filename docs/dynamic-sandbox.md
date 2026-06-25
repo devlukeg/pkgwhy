@@ -78,6 +78,8 @@ The preferred future backend is a disposable container or equivalent isolated en
 
 Docker may be one backend, but the CLI must not require Docker for static inspection or normal package judgement.
 
+The current `--container` path checks only whether a `docker` executable exists. It does not invoke Docker, start a container, mount files, install packages, or execute target code.
+
 ## Event Model Goals
 
 Future dynamic result JSON should distinguish observed events from unavailable telemetry:

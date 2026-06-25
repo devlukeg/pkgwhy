@@ -5,7 +5,9 @@ from pkgwhy.core.models import DynamicAnalysisResult, DynamicFilesystemEvent
 from pkgwhy.dynamic.analysis import build_unavailable_dynamic_result, run_controlled_fixture
 
 
-def test_unavailable_dynamic_result_blocks_without_events() -> None:
+def test_unavailable_dynamic_result_blocks_without_events(monkeypatch) -> None:
+    monkeypatch.setattr("pkgwhy.dynamic.analysis.shutil.which", lambda _: None)
+
     result = build_unavailable_dynamic_result("demo-target", container=True, network="off")
 
     assert result.schema_version == "pkgwhy.dynamic_analysis.v1"
@@ -20,6 +22,17 @@ def test_unavailable_dynamic_result_blocks_without_events() -> None:
     assert result.filesystem_events == []
     assert result.network_events == []
     assert any("Empty event lists are not proof" in limitation for limitation in result.limitations)
+    assert any("Docker container backend is unavailable" in warning for warning in result.warnings)
+
+
+def test_unavailable_dynamic_result_detects_docker_without_invoking_it(monkeypatch) -> None:
+    monkeypatch.setattr("pkgwhy.dynamic.analysis.shutil.which", lambda _: "/usr/bin/docker")
+
+    result = build_unavailable_dynamic_result("demo-target", container=True, network="off")
+
+    assert result.status == "backend_unavailable"
+    assert any("Docker executable was detected" in warning for warning in result.warnings)
+    assert any("does not invoke Docker" in limitation for limitation in result.limitations)
 
 
 def test_dynamic_result_model_accepts_observed_events_when_backend_supplies_them() -> None:

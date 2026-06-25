@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -44,7 +45,12 @@ def build_unavailable_dynamic_result(
         limitations.append("Network-enabled dynamic analysis is not supported.")
         status = DynamicAnalysisStatus.BLOCKED
     elif container:
-        warnings.append("Container sandbox backend is not implemented or available in this build.")
+        docker_path = shutil.which("docker")
+        if docker_path is None:
+            warnings.append("Docker container backend is unavailable: docker executable was not found.")
+        else:
+            warnings.append("Docker executable was detected, but container execution is not implemented in this build.")
+        limitations.append("Docker is detected by executable lookup only; pkgwhy does not invoke Docker in this build.")
     else:
         warnings.append("No sandbox backend selected. Host execution is not allowed.")
 

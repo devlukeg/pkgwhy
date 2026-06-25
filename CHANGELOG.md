@@ -7,6 +7,7 @@
 - Add a safe-fail `pkgwhy dynamic inspect` command skeleton that refuses host execution until a sandbox backend exists.
 - Add schema-versioned dynamic analysis result models with empty event lists unless a backend actually observes events.
 - Add controlled fixture-only dynamic execution test support that runs only local test fixtures under a fixture root with a scratch working directory and minimal environment.
+- Add a Docker executable detection boundary for the future container backend without invoking Docker or running containers.
 - Document that missing sandbox backends must fail safely rather than falling back to host execution.
 
 ## 0.4.0a0 - Unreleased pre-alpha
