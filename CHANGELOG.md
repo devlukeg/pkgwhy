@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0a0 - Unreleased pre-alpha
+
+- Add stronger static-analysis rule evidence while keeping `pkgwhy` in pre-alpha decision-support positioning.
+- Add structured file/line/symbol evidence for Python dynamic execution, dynamic imports, deserialisation-risk APIs, unsafe YAML load, encoded-payload handling, subprocess/shell execution, environment/secret-like references, and package-manager manipulation.
+- Add static setup/build-file analysis for `setup.py`, `setup.cfg`, and `pyproject.toml` build-backend metadata without running build scripts.
+- Add source URL/domain extraction as evidence only, with explicit false-positive notes.
+- Add conservative credential-like assignment detection with suspicious values masked in output.
+- Add JavaScript rule evidence for minification/density, dynamic execution, encoded-payload handling, source-map references, and obfuscation-like patterns.
+- Add native extension, executable, and WASM binary rule evidence while documenting that these artifacts are not automatically malicious.
+- Surface compact rule-evidence summaries in human `inspect`, `risk`, and `judge` output while preserving schema-versioned JSON judgement output.
+
 ## 0.3.0a0 - Unreleased pre-alpha
 
 - Add a vulnerability/provenance/risk-model foundation while keeping `pkgwhy` in pre-alpha decision-support positioning.

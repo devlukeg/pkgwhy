@@ -2,7 +2,7 @@
 
 ## Supported Status
 
-`pkgwhy` is in local release-candidate readiness review for the `0.3.0a0` pre-alpha candidate. It is not a production security scanner and should not be treated as a definitive malware detector.
+`pkgwhy` is in local release-candidate readiness review for the `0.4.0a0` pre-alpha candidate. It is not a production security scanner and should not be treated as a definitive malware detector.
 
 ## Reporting Security Issues
 
@@ -19,6 +19,10 @@ Do not include secrets, private package contents, or credentials in public issue
 `pkgwhy` uses static, metadata-first inspection. It must not import or execute inspected package code merely to inspect it.
 
 Capability analysis reports static signals such as API references, package files, and entry points. These signals are not proof of runtime behavior, intent, or maliciousness.
+
+Static rule evidence can include rule IDs, severity, confidence, file paths, line numbers, symbols, and false-positive notes where available. URL/domain references, native extensions, WASM files, minified JavaScript, source-map references, and credential-like names are review evidence only. They are not proof that code connects to a network, contains a real secret, or is malicious.
+
+Credential-pattern reporting masks suspicious assignment values before output. Do not rely on `pkgwhy` as a secret scanner; use dedicated secret-scanning tools for repository and release gates.
 
 Known-vulnerability analysis is source-attributed decision support. Local OSV-like files and explicit OSV.dev queries can be incomplete, stale, unavailable, or missing ecosystem-specific details. A missing vulnerability match does not prove that a package has no vulnerabilities.
 
@@ -44,6 +48,8 @@ This run uses a Python virtual environment for dependency isolation. It does not
 - No tool bundle signing or signature verification yet.
 - No cloud registry, remote pull, hosted review API, or account-based registry auth yet.
 - Typosquatting detection is heuristic and conservative. It can miss risky names and can surface false positives.
+- Static URL/domain and credential-pattern extraction is heuristic. It can miss references and can surface documentation, examples, tests, or placeholders.
+- JavaScript minification and native/WASM files are not automatically malicious, and static analysis cannot fully explain compiled or generated artifacts.
 - No OS-level sandboxing.
 - No cloud review or remote evidence lookup in the preview.
 - No guarantee that every risky behavior can be detected statically.

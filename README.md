@@ -6,11 +6,11 @@ Know why a package exists before you or your agent trusts it.
 
 ## Status
 
-`pkgwhy` is in local release-candidate readiness review for the `0.3.0a0` pre-alpha candidate. It is useful for local package inspection experiments, conservative static package review, agent decision-support prototypes, and feedback on the CLI and local private-registry shape.
+`pkgwhy` is in local release-candidate readiness review for the `0.4.0a0` pre-alpha candidate. It is useful for local package inspection experiments, conservative static package review, agent decision-support prototypes, and feedback on the CLI and local private-registry shape.
 
 It is not a production security scanner, not malware-detection certainty, and not a sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
 
-Current packaged version candidate: `0.3.0a0`.
+Current packaged version candidate: `0.4.0a0`.
 
 ## What Works Now
 
@@ -37,15 +37,18 @@ Implemented capabilities include:
 - Simple `requirements.txt`, `pyproject.toml`, `uv.lock`, and `poetry.lock` dependency reasoning.
 - Installed package size and largest-file reporting.
 - Source availability and coarse readability signals.
-- JavaScript readability, minification, and suspicious static signals.
-- Native compiled file, WASM, shell script, package-manager, setup/install-time, and CLI-entrypoint signals from file metadata.
-- AST-only Python source scanning for filesystem, network, subprocess, environment, credential-pattern, dynamic-code, deserialisation, and encoded-payload signals.
+- JavaScript readability, minification, source-map, encoded-payload, dynamic-execution, and obfuscation-like static signals.
+- Native compiled file, executable, WASM, shell script, package-manager, setup/install-time, and CLI-entrypoint signals from file metadata.
+- AST-only Python source scanning with file/line evidence for filesystem, network, subprocess, environment, credential-pattern, dynamic-code, dynamic-import, deserialisation, unsafe YAML load, package-manager, and encoded-payload signals.
+- URL/domain extraction from small source/text files as evidence, not proof of network behavior.
+- Conservative credential-like assignment detection with suspicious values masked in output.
 - Typosquatting similarity signals with false-positive guards for common ecosystem package families.
 - Optional OSV-like vulnerability record parsing from local JSON files.
 - Explicit opt-in OSV.dev query boundary for known-vulnerability lookup.
 - Conservative version matching for affected and fixed version ranges.
 - Metadata-derived provenance/source-trust fields from installed metadata, with unsupported attestation and trusted-publishing checks marked as unknown or not implemented.
 - Conservative risk level, decision, warning, recommendation, evidence, confidence, risk model version, and rule-ID output.
+- Human `inspect`, `risk`, and `judge` reports that show compact rule-evidence summaries, while JSON reports include structured rule details.
 - Stable JSON output for agent workflows.
 
 The local private-tool MVP supports a local registry, local publishing, tool judgement, and controlled local execution:
@@ -358,6 +361,9 @@ Examples of static signals:
 - A package declares console scripts.
 - Installed files include native compiled extensions.
 - AST parsing finds `eval`, `exec`, `pickle.loads`, or environment-variable access.
+- Source text contains URL/domain references.
+- Source text contains credential-like assignment names, with suspicious values masked.
+- JavaScript files appear minified, reference `eval`, reference `atob`, include source maps, or contain obfuscation-like patterns.
 
 These signals can be legitimate. They are review prompts, not proof of malicious behavior.
 
@@ -392,8 +398,34 @@ Current pre-alpha rule IDs:
 - `PKGWHY-RISK-004`: native compiled code present.
 - `PKGWHY-RISK-005`: static capability signal.
 - `PKGWHY-RISK-006`: no installed files found through distribution metadata.
+- `PKGWHY-PY-001`: Python dynamic code execution reference.
+- `PKGWHY-PY-002`: Python dynamic import reference.
+- `PKGWHY-PY-003`: Python deserialisation-risk reference.
+- `PKGWHY-PY-004`: Python encoded-payload handling reference.
+- `PKGWHY-PY-005`: Python subprocess or shell execution reference.
+- `PKGWHY-PY-006`: Python environment or secret-like access reference.
+- `PKGWHY-PY-007`: Python package-manager manipulation reference.
+- `PKGWHY-PY-008`: Python unsafe YAML load reference.
+- `PKGWHY-BUILD-001`: executable `setup.py` present.
+- `PKGWHY-BUILD-002`: setup-time subprocess or shell reference.
+- `PKGWHY-BUILD-003`: setup-time network reference.
+- `PKGWHY-BUILD-004`: setup-time dynamic execution reference.
+- `PKGWHY-BUILD-005`: build backend declared.
+- `PKGWHY-BUILD-006`: `setup.cfg` present.
+- `PKGWHY-NET-001`: source URL or domain reference.
+- `PKGWHY-CRED-001`: credential-like assignment with value masked.
+- `PKGWHY-JS-001`: JavaScript minification or density signal.
+- `PKGWHY-JS-002`: JavaScript dynamic execution reference.
+- `PKGWHY-JS-003`: JavaScript encoded-payload signal.
+- `PKGWHY-JS-004`: JavaScript obfuscation-like signal.
+- `PKGWHY-JS-005`: JavaScript source-map reference.
+- `PKGWHY-BIN-001`: native extension or library present.
+- `PKGWHY-BIN-002`: WASM binary present.
+- `PKGWHY-BIN-003`: native executable present.
 
 Known-vulnerability output is source-attributed. A missing vulnerability match does not prove that a package has no vulnerabilities, because advisory databases and local fixtures can be incomplete or unavailable.
+
+Native extensions, WASM files, minified JavaScript, URL references, and credential-like names are not automatically malicious. They are evidence for review, and the surrounding package purpose and source context still matter.
 
 ## Private Registry Roadmap
 
