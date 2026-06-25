@@ -14,12 +14,16 @@ EXCLUDED_DIRS = {".git", ".hg", ".svn", ".venv", "venv", "__pycache__"}
 
 
 def publish_local_tool(path: Path) -> PublishResult:
-    source = path.expanduser().resolve()
+    requested_source = path.expanduser()
+    if requested_source.is_symlink():
+        raise ValueError(f"Publish path must not be a symlink: {requested_source}")
+    source = requested_source.resolve()
     if not source.exists():
         raise ValueError(f"Publish path does not exist: {source}")
 
     registry = current_registry()
     manifest = _manifest_for_source(source)
+    _ensure_version_is_new(registry.path, manifest)
     bundle_path = _bundle_path(registry.path, manifest)
     manifest_path = _manifest_path(registry.path, manifest)
     bundle_path.parent.mkdir(parents=True, exist_ok=True)
@@ -82,6 +86,10 @@ def _write_bundle(source: Path, bundle_path: Path) -> None:
         for child in sorted(source.rglob("*")):
             if _should_skip(child):
                 continue
+            if child.is_symlink():
+                raise ValueError(
+                    f"Symlinks are not supported in tool bundles: {child.relative_to(source)}"
+                )
             archive.add(child, arcname=child.relative_to(source))
 
 
@@ -104,7 +112,7 @@ def _update_index(
     manifest_path: Path,
     sha256: str,
 ) -> None:
-    index = load_registry_index(registry_path)
+    index = load_registry_index(registry_path, strict=True)
     published_at = datetime.now(tz=UTC).isoformat()
     entry = RegistryToolEntry(
         name=manifest.name,
@@ -117,10 +125,18 @@ def _update_index(
         manifest_path=str(manifest_path.relative_to(registry_path)),
         published_at=published_at,
     )
-    index.tools = [
-        existing
-        for existing in index.tools
-        if not (existing.owner == entry.owner and existing.name == entry.name and existing.version == entry.version)
-    ]
     index.tools.append(entry)
     save_registry_index(registry_path, index)
+
+
+def _ensure_version_is_new(registry_path: Path, manifest: ToolManifest) -> None:
+    index = load_registry_index(registry_path, strict=True)
+    for existing in index.tools:
+        if (
+            existing.owner == manifest.owner
+            and existing.name == manifest.name
+            and existing.version == manifest.version
+        ):
+            raise ValueError(
+                f"Tool version is already published: {manifest.owner}/{manifest.name} {manifest.version}"
+            )
