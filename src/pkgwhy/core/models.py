@@ -8,6 +8,8 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 from pkgwhy.core.constants import (
+    AGENT_PACKAGE_PRECHECK_SCHEMA_VERSION,
+    AGENT_POLICY_SCHEMA_VERSION,
     CAPABILITY_EXPOSURE_NOTE,
     DYNAMIC_ANALYSIS_SCHEMA_VERSION,
     PACKAGE_JUDGEMENT_SCHEMA_VERSION,
@@ -31,6 +33,27 @@ class AgentDecision(StrEnum):
     REVIEW_MANUALLY = "review_manually"
     SANDBOX_ONLY = "sandbox_only"
     BLOCK = "block"
+
+
+class AgentPolicyConfig(BaseModel):
+    """Policy-as-code defaults for non-interactive agent package decisions."""
+
+    schema_version: str = AGENT_POLICY_SCHEMA_VERSION
+    allow_public_pypi: bool = False
+    allow_unpinned_dependencies: bool = False
+    allow_unsigned_tools: bool = False
+    require_pkgwhy_judgement: bool = True
+    require_hash_verification: bool = True
+    require_signature_verification: bool = False
+    non_interactive_default_decision: AgentDecision = AgentDecision.BLOCK
+    unknown_package_decision: AgentDecision = AgentDecision.REVIEW_MANUALLY
+    high_risk_package_decision: AgentDecision = AgentDecision.REVIEW_MANUALLY
+    critical_risk_package_decision: AgentDecision = AgentDecision.BLOCK
+    non_interactive_unknown_package_decision: AgentDecision = AgentDecision.BLOCK
+    non_interactive_high_risk_package_decision: AgentDecision = AgentDecision.BLOCK
+    non_interactive_critical_risk_package_decision: AgentDecision = AgentDecision.BLOCK
+    tool_execution_requires_local_registry: bool = True
+    dynamic_analysis_default_decision: AgentDecision = AgentDecision.BLOCK
 
 
 class ToolArtifactType(StrEnum):
@@ -323,6 +346,25 @@ class PackageJudgement(BaseModel):
     known_vulnerabilities: list[VulnerabilityMatch] = Field(default_factory=list)
     provenance: PackageProvenance | None = None
     capability_exposure_note: str = CAPABILITY_EXPOSURE_NOTE
+
+
+class AgentPackagePrecheckResult(BaseModel):
+    """Schema-versioned agent policy decision for one package judgement."""
+
+    schema_version: str = AGENT_PACKAGE_PRECHECK_SCHEMA_VERSION
+    policy_schema_version: str = AGENT_POLICY_SCHEMA_VERSION
+    package: str
+    version: str | None = None
+    target_type: Literal["package"] = "package"
+    non_interactive: bool = True
+    decision: AgentDecision
+    risk_level: RiskLevel
+    confidence: Confidence
+    policy_decision_source: str
+    reasons: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    recommendation: str
+    package_judgement: PackageJudgement
 
 
 class DynamicProcessEvent(BaseModel):
