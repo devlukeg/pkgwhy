@@ -1,9 +1,11 @@
 import json
 
+import pytest
 from typer.testing import CliRunner
 
 from pkgwhy.agent.judge import judge_installed_package
 from pkgwhy.cli import app
+from pkgwhy.core.models import PackageMetadata
 from pkgwhy.metadata.installed import list_installed_packages
 from pkgwhy.vulnerabilities.matching import match_vulnerabilities
 from pkgwhy.vulnerabilities.osv import parse_osv_payload
@@ -39,6 +41,14 @@ def test_version_matching_is_conservative_for_fixed_ranges() -> None:
     assert not match_vulnerabilities("demo-pkg", "not-a-version", records)
 
 
+def test_version_matching_ignores_non_version_ranges() -> None:
+    payload = _osv_payload("demo-pkg", [])
+    payload["vulns"][0]["affected"][0]["ranges"][0]["type"] = "GIT"
+    records = parse_osv_payload(payload)
+
+    assert not match_vulnerabilities("demo-pkg", "1.5.0", records)
+
+
 def test_version_matching_deduplicates_and_compares_explicit_versions_semantically() -> None:
     payload = _osv_payload("demo-pkg", ["1.0"])
     records = parse_osv_payload({"vulns": payload["vulns"] + payload["vulns"]})
@@ -50,7 +60,7 @@ def test_version_matching_deduplicates_and_compares_explicit_versions_semantical
 
 
 def test_judgement_includes_known_vulnerability_rule_evidence() -> None:
-    package = list_installed_packages()[0]
+    package = _first_installed_package()
     records = parse_osv_payload(_osv_payload(package.identity.name, [package.identity.version or "0"]))
     matches = match_vulnerabilities(package.identity.name, package.identity.version, records)
 
@@ -63,7 +73,7 @@ def test_judgement_includes_known_vulnerability_rule_evidence() -> None:
 
 
 def test_audit_json_includes_fixture_vulnerability_matches(tmp_path) -> None:
-    package = list_installed_packages()[0]
+    package = _first_installed_package()
     vulnerability_file = tmp_path / "osv.json"
     vulnerability_file.write_text(
         json.dumps(_osv_payload(package.identity.name, [package.identity.version or "0"])),
@@ -106,3 +116,10 @@ def _osv_payload(package: str, affected_versions: list[str]) -> dict:
             }
         ]
     }
+
+
+def _first_installed_package() -> PackageMetadata:
+    packages = list_installed_packages()
+    if not packages:
+        pytest.skip("No installed packages discovered in active test environment.")
+    return packages[0]

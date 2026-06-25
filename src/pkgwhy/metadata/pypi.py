@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 from typing import Any
 from urllib import error, request
+from urllib.parse import quote
 
 from pkgwhy.core.models import Confidence, PackageProvenance
 from pkgwhy.metadata.installed import normalize_package_name
@@ -17,7 +18,7 @@ class PyPIMetadataError(RuntimeError):
 
 def fetch_pypi_project(package_name: str, *, timeout_seconds: float = 10.0) -> dict[str, Any]:
     """Fetch PyPI JSON explicitly; callers decide when network access is allowed."""
-    url = PYPI_JSON_URL.format(package=package_name)
+    url = PYPI_JSON_URL.format(package=quote(package_name, safe=""))
     req = request.Request(url, headers={"Accept": "application/json"}, method="GET")
     try:
         with request.urlopen(req, timeout=timeout_seconds) as response:
