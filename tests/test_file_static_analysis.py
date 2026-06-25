@@ -16,29 +16,36 @@ def test_analyze_file_signals_detects_javascript_minification_and_dynamic_patter
     assert "Encoded payload handling signals" in analysis.detected_capabilities
     assert any("appears minified" in warning for warning in analysis.warnings)
     assert infer_readability([script], analysis) == ReadabilityStatus.MINIFIED
+    assert any(rule.rule_id == "PKGWHY-JS-001" for rule in analysis.rule_evidence)
+    assert any(rule.rule_id == "PKGWHY-JS-002" and rule.line_number == 1 for rule in analysis.rule_evidence)
+    assert any(rule.rule_id == "PKGWHY-JS-003" and rule.line_number == 1 for rule in analysis.rule_evidence)
 
 
 def test_analyze_file_signals_detects_binary_wasm_shell_and_setup_files(tmp_path: Path) -> None:
     native = tmp_path / "extension.so"
+    executable = tmp_path / "helper.exe"
     wasm = tmp_path / "module.wasm"
     shell = tmp_path / "install.sh"
     setup = tmp_path / "setup.py"
-    for path in [native, wasm, shell, setup]:
+    for path in [native, executable, wasm, shell, setup]:
         path.write_bytes(b"")
     shell.write_text("#!/bin/sh\necho ok\n", encoding="utf-8")
     setup.write_text("from setuptools import setup\n", encoding="utf-8")
 
-    analysis = analyze_file_signals([native, wasm, shell, setup], entry_points=["pkgwhy = pkgwhy.cli:app"])
+    analysis = analyze_file_signals([native, executable, wasm, shell, setup], entry_points=["pkgwhy = pkgwhy.cli:app"])
 
     assert "Native compiled code present" in analysis.detected_capabilities
     assert "WASM binary code present" in analysis.detected_capabilities
     assert "Shell script files present" in analysis.detected_capabilities
     assert "Install-time setup files present" in analysis.detected_capabilities
     assert "CLI or plugin entrypoints declared in package metadata" in analysis.detected_capabilities
-    assert analysis.native_binaries_detected == 1
+    assert analysis.native_binaries_detected == 2
     assert analysis.wasm_files_detected == 1
     assert analysis.shell_scripts_detected == 1
     assert analysis.setup_files_detected == 1
+    assert any(rule.rule_id == "PKGWHY-BIN-001" and rule.file_path == "extension.so" for rule in analysis.rule_evidence)
+    assert any(rule.rule_id == "PKGWHY-BIN-002" and rule.file_path == "module.wasm" for rule in analysis.rule_evidence)
+    assert any(rule.rule_id == "PKGWHY-BIN-003" and rule.file_path == "helper.exe" for rule in analysis.rule_evidence)
     assert any(rule.rule_id == "PKGWHY-BUILD-001" for rule in analysis.rule_evidence)
 
 
@@ -61,6 +68,23 @@ def test_analyze_file_signals_escalates_heavy_javascript_obfuscation(tmp_path: P
     assert "JavaScript obfuscation signals" in analysis.detected_capabilities
     assert any("likely obfuscated javascript" in warning.lower() for warning in analysis.warnings)
     assert infer_readability([script], analysis) == ReadabilityStatus.LIKELY_OBFUSCATED
+    assert any(rule.rule_id == "PKGWHY-JS-004" and rule.severity == "high" for rule in analysis.rule_evidence)
+
+
+def test_analyze_file_signals_reports_javascript_source_maps_and_large_encoded_strings(tmp_path: Path) -> None:
+    script = tmp_path / "bundle.js"
+    encoded = "A" * 90
+    script.write_text(
+        f"const payload = '{encoded}';\n//# sourceMappingURL=bundle.js.map\n",
+        encoding="utf-8",
+    )
+
+    analysis = analyze_file_signals([script], entry_points=[])
+
+    assert "Encoded payload handling signals" in analysis.detected_capabilities
+    assert any(rule.rule_id == "PKGWHY-JS-003" and rule.line_number == 1 for rule in analysis.rule_evidence)
+    assert any(rule.rule_id == "PKGWHY-JS-005" and rule.line_number == 2 for rule in analysis.rule_evidence)
+    assert encoded not in " ".join(analysis.evidence)
 
 
 def test_analyze_file_signals_avoids_javascript_call_substring_false_positives(tmp_path: Path) -> None:

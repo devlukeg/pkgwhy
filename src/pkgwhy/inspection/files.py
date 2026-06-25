@@ -6,7 +6,7 @@ from collections.abc import Callable
 from importlib.metadata import Distribution
 from pathlib import Path
 
-from pkgwhy.core.models import FileStaticAnalysis, ReadabilityStatus, SourceAvailability
+from pkgwhy.core.models import FileStaticAnalysis, ReadabilityStatus, RuleSeverity, SourceAvailability
 from pkgwhy.inspection.size import JAVASCRIPT_SUFFIXES, NATIVE_SUFFIXES
 from pkgwhy.inspection.text_patterns import analyze_text_patterns, is_text_pattern_candidate
 from pkgwhy.risk.rules import make_rule_evidence
@@ -38,6 +38,8 @@ JS_OBFUSCATION_PATTERNS = {
     re.compile(r"while\s*\(\s*!!\[\]\s*\)"): "control-flow flattening pattern",
     re.compile(r"debugger\s*;"): "JavaScript anti-debugging statement",
 }
+JS_LARGE_ENCODED_PATTERN = re.compile(r"['\"][A-Za-z0-9+/]{80,}={0,2}['\"]")
+JS_SOURCE_MAP_PATTERN = re.compile(r"sourceMappingURL\s*=", re.IGNORECASE)
 SETUP_SUBPROCESS_PATTERN = re.compile(r"\b(subprocess|os\.system|os\.popen|Popen|check_call|check_output)\b")
 SETUP_NETWORK_PATTERN = re.compile(r"\b(requests|httpx|urllib|socket|urlopen)\b")
 SETUP_DYNAMIC_PATTERN = re.compile(r"\b(eval|exec|compile|__import__|importlib\.import_module)\b")
@@ -125,10 +127,29 @@ def analyze_file_signals(paths: list[Path], entry_points: list[str]) -> FileStat
                 wasm_files_detected += 1
                 capabilities.add("WASM binary code present")
                 evidence.append(f"WASM file present: {name}")
+                rule_evidence.append(
+                    make_rule_evidence(
+                        "PKGWHY-BIN-002",
+                        message="WebAssembly binary file is present.",
+                        evidence=[f"WASM file present: {name}."],
+                        file_path=name,
+                        symbol=suffix,
+                    )
+                )
             else:
                 native_binaries_detected += 1
                 capabilities.add("Native compiled code present")
                 evidence.append(f"Native or executable file present: {name}")
+                binary_rule_id = "PKGWHY-BIN-003" if suffix == ".exe" else "PKGWHY-BIN-001"
+                rule_evidence.append(
+                    make_rule_evidence(
+                        binary_rule_id,
+                        message=f"Native or executable file present: {name}.",
+                        evidence=[f"File extension {suffix} detected for {name}."],
+                        file_path=name,
+                        symbol=suffix,
+                    )
+                )
         if suffix in JAVASCRIPT_SUFFIXES:
             capabilities.add("Browser or JavaScript code present")
             js_result = _analyze_javascript_file(path)
@@ -285,6 +306,7 @@ def _analyze_javascript_file(path: Path) -> FileStaticAnalysis:
     capabilities: set[str] = set()
     warnings: list[str] = []
     evidence: list[str] = [f"Statically scanned JavaScript file: {path.name}"]
+    rule_evidence = []
 
     lines = source.splitlines() or [source]
     longest_line = max((len(line) for line in lines), default=0)
@@ -294,23 +316,101 @@ def _analyze_javascript_file(path: Path) -> FileStaticAnalysis:
     if path.name.endswith(".min.js") or longest_line >= MINIFIED_JS_LINE_LENGTH:
         warnings.append(f"JavaScript file {JS_APPEARS_MINIFIED_WARNING}: {path.name}")
         evidence.append(f"JavaScript minification signal in {path.name}: long line or .min.js filename.")
+        rule_evidence.append(
+            make_rule_evidence(
+                "PKGWHY-JS-001",
+                message="JavaScript file appears minified.",
+                evidence=[f"{path.name} has .min.js filename or a line at least {MINIFIED_JS_LINE_LENGTH} characters long."],
+                file_path=path.name,
+                line_number=_first_long_line(lines, MINIFIED_JS_LINE_LENGTH),
+                symbol="minified-javascript",
+            )
+        )
     elif longest_line >= LONG_JS_LINE_LENGTH and whitespace_ratio < LOW_WHITESPACE_RATIO:
         warnings.append(f"JavaScript file {JS_MAY_BE_MINIFIED_WARNING}: {path.name}")
         evidence.append(f"JavaScript readability signal in {path.name}: long line with low whitespace ratio.")
+        rule_evidence.append(
+            make_rule_evidence(
+                "PKGWHY-JS-001",
+                message="JavaScript file may be minified.",
+                evidence=[f"{path.name} has a long line with low whitespace ratio."],
+                file_path=path.name,
+                line_number=_first_long_line(lines, LONG_JS_LINE_LENGTH),
+                symbol="minified-javascript",
+            )
+        )
 
     if whitespace_ratio < LOW_WHITESPACE_RATIO and punctuation_ratio > HIGH_PUNCTUATION_RATIO:
         warnings.append(f"JavaScript file has low whitespace and high punctuation ratios: {path.name}")
         evidence.append(f"JavaScript density signal in {path.name}: low whitespace and high punctuation.")
+        rule_evidence.append(
+            make_rule_evidence(
+                "PKGWHY-JS-001",
+                message="JavaScript file has low whitespace and high punctuation ratios.",
+                evidence=[f"{path.name} has low whitespace and high punctuation ratios."],
+                file_path=path.name,
+                symbol="javascript-density",
+            )
+        )
 
     for pattern, detail in JS_DYNAMIC_PATTERNS.items():
         if pattern.search(source):
             capabilities.add("JavaScript dynamic code execution signals")
             evidence.append(f"JavaScript dynamic execution signal in {path.name}: {detail}.")
+            rule_evidence.append(
+                make_rule_evidence(
+                    "PKGWHY-JS-002",
+                    message=f"JavaScript dynamic execution signal: {detail}.",
+                    evidence=[f"{path.name}:{_first_matching_line(source, pattern) or 1} references {detail}."],
+                    file_path=path.name,
+                    line_number=_first_matching_line(source, pattern),
+                    symbol=detail,
+                )
+            )
 
     for pattern, detail in JS_ENCODED_PATTERNS.items():
         if pattern.search(source):
             capabilities.add("Encoded payload handling signals")
             evidence.append(f"JavaScript encoded payload signal in {path.name}: {detail}.")
+            rule_evidence.append(
+                make_rule_evidence(
+                    "PKGWHY-JS-003",
+                    message=f"JavaScript encoded payload signal: {detail}.",
+                    evidence=[f"{path.name}:{_first_matching_line(source, pattern) or 1} references {detail}."],
+                    file_path=path.name,
+                    line_number=_first_matching_line(source, pattern),
+                    symbol=detail,
+                )
+            )
+
+    large_encoded_line = _first_matching_line(source, JS_LARGE_ENCODED_PATTERN)
+    if large_encoded_line is not None:
+        capabilities.add("Encoded payload handling signals")
+        evidence.append(f"JavaScript large encoded-string signal in {path.name}:{large_encoded_line}.")
+        rule_evidence.append(
+            make_rule_evidence(
+                "PKGWHY-JS-003",
+                message="JavaScript large encoded-string signal detected.",
+                evidence=[f"{path.name}:{large_encoded_line} contains a large encoded-looking string; value omitted."],
+                file_path=path.name,
+                line_number=large_encoded_line,
+                symbol="large encoded-looking string",
+            )
+        )
+
+    source_map_line = _first_matching_line(source, JS_SOURCE_MAP_PATTERN)
+    if source_map_line is not None:
+        evidence.append(f"JavaScript source-map reference in {path.name}:{source_map_line}.")
+        rule_evidence.append(
+            make_rule_evidence(
+                "PKGWHY-JS-005",
+                message="JavaScript source-map reference detected.",
+                evidence=[f"{path.name}:{source_map_line} references sourceMappingURL."],
+                file_path=path.name,
+                line_number=source_map_line,
+                symbol="sourceMappingURL",
+            )
+        )
 
     obfuscation_signals = [
         detail for pattern, detail in JS_OBFUSCATION_PATTERNS.items() if pattern.search(source)
@@ -319,15 +419,37 @@ def _analyze_javascript_file(path: Path) -> FileStaticAnalysis:
         warnings.append(f"JavaScript file has {JS_LIKELY_OBFUSCATED_WARNING} signals: {path.name}")
         capabilities.add("JavaScript obfuscation signals")
         evidence.append(f"JavaScript obfuscation signals in {path.name}: {', '.join(sorted(obfuscation_signals))}.")
+        rule_evidence.append(
+            make_rule_evidence(
+                "PKGWHY-JS-004",
+                message="JavaScript file has likely obfuscated signals.",
+                evidence=[f"{path.name} contains signals: {', '.join(sorted(obfuscation_signals))}."],
+                severity=RuleSeverity.HIGH,
+                file_path=path.name,
+                line_number=_first_obfuscation_line(source),
+                symbol="javascript-obfuscation",
+            )
+        )
     elif len(obfuscation_signals) >= 2:
         warnings.append(f"JavaScript file has {JS_POSSIBLY_OBFUSCATED_WARNING} signals: {path.name}")
         capabilities.add("JavaScript obfuscation signals")
         evidence.append(f"JavaScript obfuscation signals in {path.name}: {', '.join(sorted(obfuscation_signals))}.")
+        rule_evidence.append(
+            make_rule_evidence(
+                "PKGWHY-JS-004",
+                message="JavaScript file has possible obfuscation signals.",
+                evidence=[f"{path.name} contains signals: {', '.join(sorted(obfuscation_signals))}."],
+                file_path=path.name,
+                line_number=_first_obfuscation_line(source),
+                symbol="javascript-obfuscation",
+            )
+        )
 
     return FileStaticAnalysis(
         detected_capabilities=sorted(capabilities),
         warnings=warnings,
         evidence=evidence,
+        rule_evidence=rule_evidence,
         javascript_files_scanned=1,
     )
 
@@ -346,6 +468,22 @@ def _first_matching_line(source: str, pattern: re.Pattern[str]) -> int | None:
         if pattern.search(line):
             return index
     return None
+
+
+def _first_long_line(lines: list[str], minimum_length: int) -> int | None:
+    for index, line in enumerate(lines, start=1):
+        if len(line) >= minimum_length:
+            return index
+    return None
+
+
+def _first_obfuscation_line(source: str) -> int | None:
+    matching_lines = [
+        line_number
+        for pattern in JS_OBFUSCATION_PATTERNS
+        if (line_number := _first_matching_line(source, pattern)) is not None
+    ]
+    return min(matching_lines) if matching_lines else None
 
 
 def _is_shell_script(path: Path) -> bool:
