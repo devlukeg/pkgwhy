@@ -17,6 +17,7 @@ from pkgwhy.dynamic.analysis import build_unavailable_dynamic_result
 from pkgwhy.explanations.explain import explain_package
 from pkgwhy.imports.scanner import scan_project_imports
 from pkgwhy.metadata.installed import get_installed_package, list_installed_packages
+from pkgwhy.policy.audit_log import write_agent_package_decision_log
 from pkgwhy.policy.agent_policy import default_agent_policy, evaluate_package_policy
 from pkgwhy.registry.local import add_registry, init_local_registry, list_registries, use_registry
 from pkgwhy.registry.publish import publish_local_tool
@@ -365,7 +366,8 @@ def agent_precheck(
 ) -> None:
     """Apply conservative agent policy to an installed package judgement."""
     result = _build_agent_package_precheck(package, non_interactive=non_interactive)
-    _emit_agent_package_precheck(result, as_json=as_json)
+    log_path = write_agent_package_decision_log(result)
+    _emit_agent_package_precheck(result, as_json=as_json, log_path=log_path)
 
 
 @agent_app.command("judge")
@@ -382,7 +384,8 @@ def agent_judge(
 ) -> None:
     """Alias for package precheck until tool-specific agent judgement is expanded."""
     result = _build_agent_package_precheck(package, non_interactive=non_interactive)
-    _emit_agent_package_precheck(result, as_json=as_json)
+    log_path = write_agent_package_decision_log(result)
+    _emit_agent_package_precheck(result, as_json=as_json, log_path=log_path)
 
 
 @dynamic_app.command("inspect")
@@ -591,7 +594,12 @@ def _build_agent_package_precheck(package: str, *, non_interactive: bool) -> Age
     return evaluate_package_policy(judgement, non_interactive=non_interactive)
 
 
-def _emit_agent_package_precheck(result: AgentPackagePrecheckResult, *, as_json: bool) -> None:
+def _emit_agent_package_precheck(
+    result: AgentPackagePrecheckResult,
+    *,
+    as_json: bool,
+    log_path: Path | None = None,
+) -> None:
     if as_json:
         print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
         return
@@ -601,6 +609,8 @@ def _emit_agent_package_precheck(result: AgentPackagePrecheckResult, *, as_json:
     console.print(f"Confidence: {result.confidence.value}")
     console.print(f"Policy source: {result.policy_decision_source}")
     console.print(f"Recommendation: {result.recommendation}")
+    if log_path is not None:
+        console.print(f"Decision log: {log_path}")
     if result.reasons:
         console.print("Policy reasons:")
         for reason in result.reasons:

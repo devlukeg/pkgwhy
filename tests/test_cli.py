@@ -42,11 +42,12 @@ def test_agent_policy_json_is_schema_versioned_and_conservative() -> None:
     assert data["non_interactive_default_decision"] == "block"
 
 
-def test_agent_precheck_missing_package_blocks_non_interactive_json() -> None:
+def test_agent_precheck_missing_package_blocks_non_interactive_json(tmp_path: Path) -> None:
+    env = {"PKGWHY_CONFIG_HOME": str(tmp_path / "config")}
     package_name = "definitely-not-installed-pkgwhy-agent-precheck-4c7f6"
     assert get_installed_package(package_name) is None
 
-    result = runner.invoke(app, ["agent", "precheck", package_name, "--json"])
+    result = runner.invoke(app, ["agent", "precheck", package_name, "--json"], env=env)
 
     assert result.exit_code == 0
     data = json.loads(result.output)
@@ -59,19 +60,24 @@ def test_agent_precheck_missing_package_blocks_non_interactive_json() -> None:
     assert data["non_interactive"] is True
     assert data["policy_decision_source"] == "agent_policy"
     assert data["package_judgement"]["schema_version"] == "pkgwhy.package_judgement.v1"
+    log_files = list((tmp_path / "config" / "agent-decisions").rglob("*.json"))
+    assert len(log_files) == 1
 
 
-def test_agent_judge_interactive_missing_package_requires_review_json() -> None:
+def test_agent_judge_interactive_missing_package_requires_review_json(tmp_path: Path) -> None:
+    env = {"PKGWHY_CONFIG_HOME": str(tmp_path / "config")}
     package_name = "definitely-not-installed-pkgwhy-agent-judge-a0186"
     assert get_installed_package(package_name) is None
 
-    result = runner.invoke(app, ["agent", "judge", package_name, "--interactive", "--json"])
+    result = runner.invoke(app, ["agent", "judge", package_name, "--interactive", "--json"], env=env)
 
     assert result.exit_code == 0
     data = json.loads(result.output)
     assert data["schema_version"] == "pkgwhy.agent_package_precheck.v1"
     assert data["decision"] == "review_manually"
     assert data["non_interactive"] is False
+    log_files = list((tmp_path / "config" / "agent-decisions").rglob("*.json"))
+    assert len(log_files) == 1
 
 
 def test_dynamic_help_surfaces_experimental_command() -> None:
