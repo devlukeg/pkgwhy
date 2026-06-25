@@ -8,7 +8,7 @@ Know why a package exists before you or your agent trusts it.
 
 `pkgwhy` is in pre-alpha readiness review for the `0.4.0a0` candidate. It is useful for local package inspection experiments, conservative static package review, agent decision-support prototypes, and feedback on the CLI and local private-registry shape.
 
-It is not a production security scanner, not malware-detection certainty, and not a sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
+It is not a production security scanner, not malware-detection certainty, and not a full sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
 
 Current packaged version candidate: `0.4.0a0`.
 
@@ -93,6 +93,7 @@ These are roadmap items, not current features:
 - `pull`, mirroring, and remote synchronization.
 - Tool dependency installation in the runner.
 - Tool bundle signing and signature verification.
+- Dynamic sandbox analysis for arbitrary packages.
 - Cloud/model-backed review.
 - Billing, API keys, team plans, or enterprise deployment.
 - OS-level sandboxing or container isolation.
@@ -366,6 +367,24 @@ Examples of static signals:
 - JavaScript files appear minified, reference `eval`, reference `atob`, include source maps, or contain obfuscation-like patterns.
 
 These signals can be legitimate. They are review prompts, not proof of malicious behavior.
+
+## Dynamic Sandbox Roadmap
+
+Dynamic analysis is planned as an experimental `0.5.0` area, but it is not production-ready and must remain opt-in. Dynamic analysis intentionally executes code, so it has a different safety boundary from static inspection.
+
+The design is documented in [docs/dynamic-sandbox.md](docs/dynamic-sandbox.md). The key constraints are:
+
+- static package inspection remains the default;
+- no unknown package code should run on the host;
+- no arbitrary dynamic package installation, import, or CLI execution;
+- a future dynamic backend should use a disposable sandbox boundary;
+- network should be off by default;
+- filesystem access should default to a temporary scratch directory;
+- host secrets should not be inherited;
+- missing sandbox backends should fail safely instead of falling back to host execution;
+- empty event lists are not proof of safety.
+
+`pkgwhy run` is still a separate local private-tool execution path and is not dynamic package analysis.
 
 ## Risk And Agent Decisions
 

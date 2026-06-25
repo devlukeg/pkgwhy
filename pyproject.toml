@@ -64,6 +64,7 @@ packages = ["src/pkgwhy"]
 include = [
   "CHANGELOG.md",
   "CONTRIBUTING.md",
+  "docs/**",
   "LICENSE",
   "README.md",
   "SECURITY.md",

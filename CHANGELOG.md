@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0a0 - Unreleased pre-alpha
+
+- Start the experimental dynamic sandbox design phase without enabling arbitrary dynamic package execution.
+- Add a dynamic sandbox threat model covering static-vs-dynamic boundaries, no-host-execution defaults, network-off defaults, scratch filesystem expectations, no-secrets constraints, event model goals, and current limitations.
+- Document that missing sandbox backends must fail safely rather than falling back to host execution.
+
 ## 0.4.0a0 - Unreleased pre-alpha
 
 - Add stronger static-analysis rule evidence while keeping `pkgwhy` in pre-alpha decision-support positioning.
