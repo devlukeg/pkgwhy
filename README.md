@@ -169,7 +169,7 @@ pkgwhy agent precheck typer --json
 pkgwhy agent judge typer --json
 ```
 
-`pkgwhy agent precheck` applies policy to the package judgement. In the default non-interactive mode, unknown and high-risk package decisions are blocked until a human reviews the judgement evidence. The command writes a compact local decision log under the user config directory and does not install, import, or execute the package.
+`pkgwhy agent precheck` applies policy to the package judgement. In the default non-interactive mode, unknown and high-risk package decisions are blocked until a human reviews the judgement evidence. The command writes a compact local decision log under the user config directory when that directory is writable and does not install, import, or execute the package.
 
 Run a conservative risk report:
 
@@ -581,7 +581,7 @@ The `0.6.0a0` pre-alpha adds policy-as-code foundations for agents:
 - `pkgwhy agent precheck <package> --json` applies policy to package judgement JSON.
 - `pkgwhy agent judge <package> --json` is currently a package precheck alias.
 - Non-interactive package prechecks block unknown and high-risk package decisions by default.
-- Agent decision logs are local, compact, and do not include full static evidence.
+- Agent decision logs are local, compact, best-effort when the config directory is writable, and do not include full static evidence.
 
 The MVP runner uses Python virtual environments for dependency isolation. A virtual environment is not a full operating-system sandbox, and `pkgwhy` states that clearly before each run:
 

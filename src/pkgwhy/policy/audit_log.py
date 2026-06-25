@@ -15,13 +15,20 @@ def write_agent_package_decision_log(
     result: AgentPackagePrecheckResult,
     *,
     log_root: Path | None = None,
-) -> Path:
-    """Write a compact local audit record for an agent package decision."""
+) -> Path | None:
+    """Write a compact local audit record for an agent package decision.
+
+    Audit logging is best-effort: an unwritable local config directory must not
+    prevent the policy decision itself from being returned.
+    """
 
     created_at = datetime.now(tz=UTC)
     root = log_root or config_dir() / "agent-decisions"
     package_dir = root / _safe_path_segment(result.package)
-    package_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        package_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return None
     log_path = package_dir / f"{created_at.strftime('%Y%m%dT%H%M%S%fZ')}.json"
     payload = {
         "schema_version": AGENT_DECISION_LOG_SCHEMA_VERSION,
@@ -41,7 +48,10 @@ def write_agent_package_decision_log(
         "reasons": list(result.reasons),
         "warnings": list(result.warnings),
     }
-    log_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    try:
+        log_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    except OSError:
+        return None
     return log_path
 
 
