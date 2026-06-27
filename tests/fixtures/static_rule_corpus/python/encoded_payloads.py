@@ -7,3 +7,4 @@ ENCODED_FIXTURE = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 def unpack(payload):
     base64.b64decode(payload)
     zlib.decompress(payload)
+    __pyarmor__ = "bootstrap"

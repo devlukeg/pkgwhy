@@ -15,6 +15,7 @@ from pkgwhy.core.models import (
     SourceAvailability,
 )
 from pkgwhy.reports.audit import AUDIT_SCHEMA_VERSION, render_audit_markdown
+from pkgwhy.vulnerabilities.osv import OSVLookupResult
 
 runner = CliRunner()
 ANSI_STYLE_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -147,6 +148,36 @@ def test_audit_pypi_option_uses_source_attributed_provenance_without_live_networ
     assert provenance["source_distribution_status"] == "present"
     assert provenance["trusted_publishing_status"] == "unknown"
     assert provenance["attestation_status"] == "not_implemented"
+
+
+def test_audit_json_includes_top_level_lookup_warnings(monkeypatch) -> None:
+    installed = PackageMetadata(
+        identity=PackageIdentity(
+            name="controlled-warning-package",
+            normalized_name="controlled-warning-package",
+            version="1.0.0",
+        ),
+        metadata_available=True,
+    )
+
+    def fake_query_osv_cached(package_name: str, version: str | None, **_: object) -> OSVLookupResult:
+        return OSVLookupResult(
+            records=[],
+            cache_status="unavailable",
+            warnings=(f"Controlled OSV.dev warning for {package_name} {version}.",),
+        )
+
+    monkeypatch.setattr("pkgwhy.cli.list_installed_packages", lambda: [installed])
+    monkeypatch.setattr("pkgwhy.cli.query_osv_cached", fake_query_osv_cached)
+
+    result = runner.invoke(app, ["audit", "--limit", "1", "--json", "--osv"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["warnings"] == [
+        "Controlled OSV.dev warning for controlled-warning-package 1.0.0.",
+        "OSV.dev lookup unavailable for controlled-warning-package; no vulnerability result was inferred.",
+    ]
 
 
 def test_audit_markdown_escapes_table_pipes() -> None:
