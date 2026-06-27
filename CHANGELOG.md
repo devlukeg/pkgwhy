@@ -5,6 +5,7 @@
 - Start static rule corpus/schema hardening with a versioned static rule catalog snapshot.
 - Add stable rule ID ordering helpers and tests to catch accidental rule renames, removals, or reordering.
 - Add static rule corpus documentation covering rule categories, rule families, fixture strategy, and compatibility expectations.
+- Add controlled Python static-signal corpus fixtures for dynamic execution, dynamic imports, deserialisation, encoded payloads, subprocess/package-manager use, environment access, URL/domain extraction, and credential masking.
 
 ## 0.7.0a0 - Unreleased pre-alpha
 
