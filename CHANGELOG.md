@@ -8,6 +8,7 @@
 - Add controlled Python static-signal corpus fixtures for dynamic execution, dynamic imports, deserialisation, encoded payloads, subprocess/package-manager use, environment access, URL/domain extraction, and credential masking.
 - Add controlled JavaScript, native, WASM, shell, and build-file corpus fixtures with false-positive coverage for JavaScript call-like substrings.
 - Add normalized golden JSON snapshot tests and schema compatibility policy documentation for agent-facing package, audit, precheck, and tool judgement output.
+- Document static rule ID lifecycle, evidence location expectations, corpus fixture coverage, and false-positive/false-negative limitations.
 
 ## 0.7.0a0 - Unreleased pre-alpha
 

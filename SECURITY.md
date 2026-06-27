@@ -2,7 +2,7 @@
 
 ## Supported Status
 
-`pkgwhy` is a pre-alpha project. The current local candidate is `0.7.0a0`, including static evidence hardening, vulnerability/provenance hardening, a safe-fail dynamic command skeleton, agent policy foundations, and local registry/runner hardening. It is not a production security scanner and should not be treated as a definitive malware detector or full sandbox.
+`pkgwhy` is a pre-alpha project. The current local candidate line is `0.8.0a0`, including static evidence hardening, vulnerability/provenance hardening, static rule corpus/schema hardening, a safe-fail dynamic command skeleton, agent policy foundations, and local registry/runner hardening. It is not a production security scanner and should not be treated as a definitive malware detector or full sandbox.
 
 ## Reporting Security Issues
 
