@@ -103,6 +103,38 @@ def test_audit_writes_json_report_to_output_path(tmp_path: Path) -> None:
     assert data["schema_version"] == AUDIT_SCHEMA_VERSION
 
 
+def test_audit_pypi_option_uses_source_attributed_provenance_without_live_network(monkeypatch) -> None:
+    def fake_fetch_pypi_project(package_name: str) -> dict:
+        return {
+            "info": {
+                "version": "9.9.9",
+                "project_urls": {"Source": f"https://example.test/{package_name}/source"},
+            },
+            "releases": {
+                "9.9.9": [
+                    {
+                        "filename": f"{package_name}-9.9.9.tar.gz",
+                        "packagetype": "sdist",
+                        "upload_time_iso_8601": "2026-01-02T03:04:05Z",
+                    }
+                ]
+            },
+        }
+
+    monkeypatch.setattr("pkgwhy.cli.fetch_pypi_project", fake_fetch_pypi_project)
+
+    result = runner.invoke(app, ["audit", "--limit", "1", "--json", "--pypi"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["provenance_sources"] == ["pypi_json"]
+    provenance = data["packages"][0]["provenance"]
+    assert provenance["metadata_source"] == "pypi_json"
+    assert provenance["source_distribution_status"] == "present"
+    assert provenance["trusted_publishing_status"] == "unknown"
+    assert provenance["attestation_status"] == "not_implemented"
+
+
 def test_audit_markdown_escapes_table_pipes() -> None:
     judgement = PackageJudgement(
         package="demo|package",

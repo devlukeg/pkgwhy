@@ -42,6 +42,7 @@ def provenance_from_pypi_payload(package_name: str, payload: dict[str, Any]) -> 
     documentation_url = _find_url(normalized_urls, ("doc", "documentation"))
     homepage_url = _string_or_none(info.get("home_page")) or _find_url(normalized_urls, ("homepage", "home-page"))
     latest_release_date = _latest_release_date(payload.get("releases"))
+    source_distribution_status = _source_distribution_status(payload.get("releases"), _string_or_none(info.get("version")))
     evidence = ["Read project metadata from PyPI JSON payload."]
     warnings = [
         "Trusted Publishing status is not inferred from PyPI project JSON.",
@@ -61,6 +62,13 @@ def provenance_from_pypi_payload(package_name: str, payload: dict[str, Any]) -> 
         release_activity_status = "unknown"
         warnings.append("Could not determine latest release upload time from PyPI metadata.")
 
+    if source_distribution_status == "present":
+        evidence.append("PyPI metadata lists at least one source distribution for the inspected release.")
+    elif source_distribution_status == "not_found":
+        warnings.append("PyPI metadata did not list a source distribution for the inspected release.")
+    else:
+        warnings.append("Could not determine source distribution status from PyPI metadata.")
+
     return PackageProvenance(
         package=normalize_package_name(package_name),
         version=_string_or_none(info.get("version")),
@@ -69,7 +77,7 @@ def provenance_from_pypi_payload(package_name: str, payload: dict[str, Any]) -> 
         homepage_url=homepage_url,
         project_urls=normalized_urls,
         metadata_source="pypi_json",
-        source_distribution_status="unknown",
+        source_distribution_status=source_distribution_status,
         trusted_publishing_status="unknown",
         attestation_status="not_implemented",
         release_activity_status=release_activity_status,
@@ -104,6 +112,22 @@ def _latest_release_date(releases: Any) -> str | None:
             if parsed is not None and (latest is None or parsed > latest):
                 latest = parsed
     return latest.date().isoformat() if latest else None
+
+
+def _source_distribution_status(releases: Any, version: str | None) -> str:
+    if not isinstance(releases, dict) or version is None:
+        return "unknown"
+    files = releases.get(version)
+    if not isinstance(files, list):
+        return "unknown"
+    for file_info in files:
+        if not isinstance(file_info, dict):
+            continue
+        package_type = _string_or_none(file_info.get("packagetype"))
+        filename = _string_or_none(file_info.get("filename"))
+        if package_type == "sdist" or (filename is not None and filename.endswith((".tar.gz", ".zip"))):
+            return "present"
+    return "not_found"
 
 
 def _parse_datetime(value: str) -> datetime | None:

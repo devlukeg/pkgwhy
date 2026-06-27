@@ -16,6 +16,7 @@ from pkgwhy.dependencies.reason import explain_dependency_reason
 from pkgwhy.dynamic.analysis import build_unavailable_dynamic_result
 from pkgwhy.explanations.explain import explain_package
 from pkgwhy.imports.scanner import scan_project_imports
+from pkgwhy.metadata.pypi import PyPIMetadataError, fetch_pypi_project, provenance_from_pypi_payload
 from pkgwhy.metadata.installed import get_installed_package, list_installed_packages
 from pkgwhy.policy.audit_log import write_agent_package_decision_log
 from pkgwhy.policy.agent_policy import default_agent_policy, evaluate_package_policy
@@ -26,7 +27,7 @@ from pkgwhy.registry.tools import judge_tool
 from pkgwhy.reports.audit import build_audit_report, render_audit_markdown
 from pkgwhy.typosquat.detector import detect_typosquats
 from pkgwhy.vulnerabilities.matching import match_vulnerabilities
-from pkgwhy.vulnerabilities.osv import OSVClientError, load_osv_records, query_osv
+from pkgwhy.vulnerabilities.osv import load_osv_records, query_osv_cached
 
 app = typer.Typer(no_args_is_help=True, help="Explain, inspect, judge packages, and run local private tools.")
 registry_app = typer.Typer(no_args_is_help=True, help="Manage local private registries.")
@@ -201,6 +202,14 @@ def audit(
         bool,
         typer.Option("--osv", help="Query OSV.dev for known vulnerabilities. Network is never used unless this is set."),
     ] = False,
+    osv_cache_dir: Annotated[
+        Path | None,
+        typer.Option(help="Optional OSV.dev cache directory. Defaults to the pkgwhy user cache."),
+    ] = None,
+    pypi: Annotated[
+        bool,
+        typer.Option("--pypi", help="Query PyPI JSON for provenance metadata. Network is never used unless this is set."),
+    ] = False,
 ) -> None:
     """Audit installed packages with conservative static judgements."""
     if limit <= 0:
@@ -225,14 +234,28 @@ def audit(
         package_version = package.identity.version
         matches = match_vulnerabilities(package_name, package_version, vulnerability_records)
         if osv:
-            try:
-                osv_records = query_osv(package_name, package_version)
-            except OSVClientError as exc:
-                audit_warnings.append(str(exc))
-                osv_records = []
-            matches.extend(match_vulnerabilities(package_name, package_version, osv_records))
+            lookup = query_osv_cached(package_name, package_version, cache_dir=osv_cache_dir)
+            audit_warnings.extend(lookup.warnings)
+            if lookup.cache_status == "fresh":
+                audit_warnings.append(f"OSV.dev lookup succeeded for {package_name}; response cached at {lookup.cache_path}.")
+            elif lookup.cache_status == "stale_cache":
+                audit_warnings.append(f"OSV.dev lookup used stale cached data for {package_name}.")
+            elif lookup.cache_status == "unavailable":
+                audit_warnings.append(f"OSV.dev lookup unavailable for {package_name}; no vulnerability result was inferred.")
+            matches.extend(match_vulnerabilities(package_name, package_version, lookup.records))
         matches = _dedupe_vulnerability_matches(matches)
-        judgements.append(judge_installed_package(package_name, known_vulnerabilities=matches))
+        provenance = None
+        if pypi:
+            try:
+                provenance = provenance_from_pypi_payload(package_name, fetch_pypi_project(package_name))
+            except PyPIMetadataError as exc:
+                audit_warnings.append(
+                    f"PyPI provenance lookup unavailable for {package_name}: {exc}. "
+                    "Provenance fields fall back to installed metadata where available."
+                )
+        judgements.append(
+            judge_installed_package(package_name, known_vulnerabilities=matches, provenance=provenance)
+        )
 
     report = build_audit_report(judgements, warnings=audit_warnings)
 

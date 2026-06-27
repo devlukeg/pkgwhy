@@ -2,7 +2,7 @@
 
 ## Supported Status
 
-`pkgwhy` is a pre-alpha project. The current local candidate is `0.6.0a0`, including static evidence hardening, a safe-fail dynamic command skeleton, agent policy foundations, and local registry/runner hardening. It is not a production security scanner and should not be treated as a definitive malware detector or full sandbox.
+`pkgwhy` is a pre-alpha project. The current local candidate is `0.7.0a0`, including static evidence hardening, vulnerability/provenance hardening, a safe-fail dynamic command skeleton, agent policy foundations, and local registry/runner hardening. It is not a production security scanner and should not be treated as a definitive malware detector or full sandbox.
 
 ## Reporting Security Issues
 
@@ -24,9 +24,9 @@ Static rule evidence can include rule IDs, severity, confidence, file paths, lin
 
 Credential-pattern reporting masks suspicious assignment values before output. Do not rely on `pkgwhy` as a secret scanner; use dedicated secret-scanning tools for repository and release gates.
 
-Known-vulnerability analysis is source-attributed decision support. Local OSV-like files and explicit OSV.dev queries can be incomplete, stale, unavailable, or missing ecosystem-specific details. A missing vulnerability match does not prove that a package has no vulnerabilities.
+Known-vulnerability analysis is source-attributed decision support. Local OSV-like files, explicit OSV.dev queries, and cached OSV responses can be incomplete, stale, unavailable, or missing ecosystem-specific details. A missing vulnerability match does not prove that a package has no vulnerabilities.
 
-Provenance analysis is currently metadata-derived. Repository, documentation, homepage, and release-activity fields are reported only when available from installed metadata or optional metadata payloads. Trusted Publishing, attestation verification, and source distribution versus wheel comparison are not implemented and must be treated as unknown or not implemented.
+Provenance analysis is currently metadata-derived. Repository, documentation, homepage, release-activity, and source-distribution fields are reported only when available from installed metadata or optional PyPI JSON payloads. Trusted Publishing and attestation verification are not implemented and must be treated as unknown or not implemented.
 
 `pkgwhy run` is a separate local private-tool execution feature. It intentionally executes local private tool code only after resolving a valid local registry entry, verifying the stored bundle hash, and applying policy checks. This execution path is separate from package inspection and must not be treated as evidence that package inspection imports or executes inspected package code.
 
@@ -47,9 +47,9 @@ Dynamic analysis is a separate experimental roadmap area. Dynamic analysis inten
 ## Current Limitations
 
 - No complete vulnerability database coverage, guaranteed advisory freshness, or transitive vulnerability analysis yet.
-- OSV.dev lookup is optional and must be explicitly requested.
+- OSV.dev lookup is optional and must be explicitly requested. Cached OSV responses are stale fallback data, not freshness guarantees.
 - Trusted Publishing and attestation verification are not implemented yet.
-- Source distribution versus wheel comparison is not implemented yet.
+- Full source distribution versus wheel comparison is not implemented yet.
 - No runner dependency installation yet.
 - No tool bundle signing or signature verification yet.
 - No tamper-proof audit log, remote attestation, or signed decision record yet.

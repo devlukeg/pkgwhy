@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0a0 - Unreleased pre-alpha
+
+- Harden explicit OSV.dev audit lookups with a local response cache, stale-cache fallback, cache status warnings, and continued offline-by-default behavior.
+- Keep vulnerability matching conservative by treating OSV `limit` events as upper bounds, not fixed-version recommendations.
+- Add advisory source URL evidence to known-vulnerability matches and audit-level vulnerability/provenance source summaries.
+- Add optional `pkgwhy audit --pypi` provenance lookup from PyPI JSON without inferring Trusted Publishing or attestation status.
+- Report PyPI source distribution presence only when PyPI file metadata actually lists a source archive.
+- Add tests for OSV parsing, matching, caching, source attribution, PyPI provenance, and audit integration.
+- Document that cached advisory data can be stale and that missing vulnerability matches are not proof of safety.
+
 ## 0.6.0a0 - Unreleased pre-alpha
 
 - Add schema-versioned agent policy defaults with conservative non-interactive decisions for package use.

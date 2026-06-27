@@ -11,6 +11,8 @@ class AuditReport(TypedDict):
     schema_version: str
     package_count: int
     vulnerability_match_count: int
+    vulnerability_sources: list[str]
+    provenance_sources: list[str]
     warnings: list[str]
     packages: list[dict[str, Any]]
 
@@ -20,6 +22,21 @@ def build_audit_report(judgements: list[PackageJudgement], warnings: list[str] |
         "schema_version": AUDIT_SCHEMA_VERSION,
         "package_count": len(judgements),
         "vulnerability_match_count": sum(len(judgement.known_vulnerabilities) for judgement in judgements),
+        "vulnerability_sources": sorted(
+            {
+                vulnerability.source
+                for judgement in judgements
+                for vulnerability in judgement.known_vulnerabilities
+                if vulnerability.source
+            }
+        ),
+        "provenance_sources": sorted(
+            {
+                judgement.provenance.metadata_source
+                for judgement in judgements
+                if judgement.provenance is not None and judgement.provenance.metadata_source
+            }
+        ),
         "warnings": warnings or [],
         "packages": [judgement.model_dump(mode="json") for judgement in judgements],
     }

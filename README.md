@@ -6,11 +6,11 @@ Know why a package exists before you or your agent trusts it.
 
 ## Status
 
-`pkgwhy` is in pre-alpha readiness review for the `0.6.0a0` candidate. It is useful for local package inspection experiments, conservative static package review, agent decision-support prototypes, and feedback on the CLI, policy, and local private-registry shape.
+`pkgwhy` is in pre-alpha readiness review for the `0.7.0a0` candidate. It is useful for local package inspection experiments, conservative static package review, agent decision-support prototypes, and feedback on the CLI, policy, vulnerability, provenance, and local private-registry shape.
 
 It is not a production security scanner, not malware-detection certainty, and not a full sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
 
-Current packaged version candidate: `0.6.0a0`.
+Current packaged version candidate: `0.7.0a0`.
 
 ## What Works Now
 
@@ -46,9 +46,9 @@ Implemented capabilities include:
 - Conservative credential-like assignment detection with suspicious values masked in output.
 - Typosquatting similarity signals with false-positive guards for common ecosystem package families.
 - Optional OSV-like vulnerability record parsing from local JSON files.
-- Explicit opt-in OSV.dev query boundary for known-vulnerability lookup.
+- Explicit opt-in OSV.dev query boundary for known-vulnerability lookup, with a local response cache and stale-cache fallback when a requested online lookup is unavailable.
 - Conservative version matching for affected and fixed version ranges.
-- Metadata-derived provenance/source-trust fields from installed metadata, with unsupported attestation and trusted-publishing checks marked as unknown or not implemented.
+- Metadata-derived provenance/source-trust fields from installed metadata and optional PyPI JSON, with unsupported attestation and trusted-publishing checks marked as unknown or not implemented.
 - Conservative risk level, decision, warning, recommendation, evidence, confidence, risk model version, and rule-ID output.
 - Human `inspect`, `risk`, and `judge` reports that show compact rule-evidence summaries, while JSON reports include structured rule details.
 - Stable JSON output for agent workflows.
@@ -98,7 +98,7 @@ These are roadmap items, not current features:
 
 - Complete vulnerability database coverage, transitive vulnerability analysis, or guaranteed advisory freshness.
 - Default online vulnerability lookup. Network access is only used when explicitly requested.
-- Cached PyPI/source lookup.
+- Cached PyPI/source lookup beyond the current OSV response cache.
 - Cloud/private remote registry backends.
 - `pull`, mirroring, and remote synchronization.
 - Tool dependency installation in the runner.
@@ -195,7 +195,19 @@ Query OSV.dev explicitly during an audit:
 pkgwhy audit --limit 2 --json --osv
 ```
 
-Vulnerability data can be incomplete or unavailable. `pkgwhy` reports source-attributed matches and fixed versions only when the supplied advisory data contains them.
+Use a specific OSV cache directory:
+
+```bash
+pkgwhy audit --limit 2 --json --osv --osv-cache-dir ./.pkgwhy-osv-cache
+```
+
+Query PyPI JSON explicitly for provenance metadata during an audit:
+
+```bash
+pkgwhy audit --limit 2 --json --pypi
+```
+
+Vulnerability data can be incomplete or unavailable. `pkgwhy` reports source-attributed matches and fixed versions only when the supplied advisory data contains them. Cached OSV responses can be stale, and missing vulnerability matches are not evidence that a package is safe.
 
 Check package names for typosquatting similarity signals:
 
@@ -575,7 +587,7 @@ pkgwhy run local/my_tool
 
 The runner executes only tools resolved from the configured local registry. It does not run arbitrary public package code, does not install tool dependencies in the MVP, and blocks execution if the stored bundle hash does not verify. Local registry entries are file-backed records under the configured registry path; no cloud registry, account, upload, pull, or remote sync is implemented in this preview.
 
-The `0.6.0a0` pre-alpha adds policy-as-code foundations for agents:
+The `0.7.0a0` pre-alpha includes policy-as-code foundations for agents:
 
 - `pkgwhy agent policy` shows conservative default policy.
 - `pkgwhy agent precheck <package> --json` applies policy to package judgement JSON.
@@ -611,7 +623,7 @@ python -m venv .venv
 
 1. Complete public release review and packaging for the current package-intelligence, agent-policy, registry, tool-judgement, dynamic-skeleton, and runner MVP.
 2. Expand agent policy validation, tool-specific agent judgement, and decision explanation.
-3. Optional PyPI/source lookup and cache.
+3. Broader optional PyPI/source lookup and cache.
 4. Tool dependency installation in the runner.
 5. Tool bundle signing and signature verification.
 6. Cloud/private remote registry backends.

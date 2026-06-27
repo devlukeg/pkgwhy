@@ -32,7 +32,13 @@ def test_pypi_provenance_payload_extracts_release_activity_without_attestation_c
                 },
             },
             "releases": {
-                "1.0.0": [{"upload_time_iso_8601": "2026-01-02T03:04:05Z"}],
+                "1.0.0": [
+                    {
+                        "filename": "example-1.0.0.tar.gz",
+                        "packagetype": "sdist",
+                        "upload_time_iso_8601": "2026-01-02T03:04:05Z",
+                    }
+                ],
                 "0.9.0": [{"upload_time_iso_8601": "2025-12-31T00:00:00Z"}],
             },
         },
@@ -42,8 +48,32 @@ def test_pypi_provenance_payload_extracts_release_activity_without_attestation_c
     assert provenance.repository_url == "https://example.test/source"
     assert provenance.documentation_url == "https://example.test/docs"
     assert provenance.release_activity_status == "latest_release_upload:2026-01-02"
+    assert provenance.source_distribution_status == "present"
     assert provenance.trusted_publishing_status == "unknown"
     assert provenance.attestation_status == "not_implemented"
+
+
+def test_pypi_provenance_reports_missing_source_distribution_without_attestation_claims() -> None:
+    provenance = provenance_from_pypi_payload(
+        "Example",
+        {
+            "info": {"version": "1.0.0"},
+            "releases": {
+                "1.0.0": [
+                    {
+                        "filename": "example-1.0.0-py3-none-any.whl",
+                        "packagetype": "bdist_wheel",
+                        "upload_time_iso_8601": "2026-01-02T03:04:05Z",
+                    }
+                ],
+            },
+        },
+    )
+
+    assert provenance.source_distribution_status == "not_found"
+    assert provenance.trusted_publishing_status == "unknown"
+    assert provenance.attestation_status == "not_implemented"
+    assert any("did not list a source distribution" in warning for warning in provenance.warnings)
 
 
 def test_pypi_provenance_ignores_empty_url_values() -> None:

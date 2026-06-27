@@ -5,6 +5,7 @@ from pkgwhy.core.models import (
     Confidence,
     PackageInspection,
     PackageJudgement,
+    PackageProvenance,
     RiskRuleEvidence,
     RiskLevel,
     RuleSeverity,
@@ -19,6 +20,7 @@ from pkgwhy.typosquat.detector import detect_typosquat
 def judge_inspection(
     inspection: PackageInspection,
     known_vulnerabilities: list[VulnerabilityMatch] | None = None,
+    provenance: PackageProvenance | None = None,
 ) -> PackageJudgement:
     metadata = inspection.metadata
     warnings = list(inspection.warnings)
@@ -27,7 +29,7 @@ def judge_inspection(
     known_vulnerabilities = known_vulnerabilities or []
     risk = RiskLevel.LOW
     confidence = Confidence.MEDIUM
-    provenance = assess_installed_provenance(metadata)
+    provenance = provenance or assess_installed_provenance(metadata)
 
     for rule in inspection.rule_evidence:
         risk_rules.append(rule)

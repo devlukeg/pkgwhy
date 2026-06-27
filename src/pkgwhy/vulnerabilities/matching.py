@@ -32,7 +32,9 @@ def match_vulnerability(package: str, version: str, record: VulnerabilityRecord)
             evidence.append(
                 f"Version {version} matched affected range "
                 f"introduced={affected_range.introduced or 'unknown'} "
-                f"fixed={affected_range.fixed or 'none'}."
+                f"fixed={affected_range.fixed or 'none'} "
+                f"last_affected={affected_range.last_affected or 'none'} "
+                f"limit={affected_range.limit or 'none'}."
             )
             return _build_match(record, package, version, evidence)
 
@@ -72,6 +74,13 @@ def _version_in_range(version: str, affected_range: VulnerabilityRange) -> bool:
         except InvalidVersion:
             return False
 
+    if affected_range.limit:
+        try:
+            if parsed_version >= Version(affected_range.limit):
+                return False
+        except InvalidVersion:
+            return False
+
     return True
 
 
@@ -93,6 +102,8 @@ def _version_in_list(version: str, candidates: list[str]) -> bool:
 
 def _build_match(record: VulnerabilityRecord, package: str, version: str, evidence: list[str]) -> VulnerabilityMatch:
     evidence.append(f"Advisory source: {record.source}.")
+    if record.source_url:
+        evidence.append(f"Advisory URL: {record.source_url}.")
     return VulnerabilityMatch(
         vulnerability_id=record.id,
         package=package,
