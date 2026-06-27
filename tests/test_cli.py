@@ -97,7 +97,7 @@ def test_dynamic_help_surfaces_experimental_command() -> None:
 
     assert result.exit_code == 0
     assert "Experimental dynamic analysis" in result.output
-    assert "out of scope for 1.0" in result.output
+    assert "out of scope for 1.0.0" in result.output
 
 
 def test_dynamic_inspect_help_surfaces_safe_options() -> None:
@@ -118,7 +118,7 @@ def test_dynamic_inspect_fails_safely_without_backend(monkeypatch) -> None:
 
     assert result.exit_code == 1
     assert "not a production sandbox" in normalized_output
-    assert "out of scope for 1.0 production security guarantees" in normalized_output
+    assert "out of scope for 1.0.0 production security guarantees" in normalized_output
     assert "Refusing to run dynamic analysis" in normalized_output
     assert "Docker container backend is unavailable" in normalized_output
     assert "Target was not executed: demo-target" in normalized_output
@@ -149,7 +149,7 @@ def test_dynamic_inspect_json_uses_schema_and_empty_events(monkeypatch) -> None:
     assert data["process_events"] == []
     assert data["filesystem_events"] == []
     assert data["network_events"] == []
-    assert any("out of scope for 1.0 production security guarantees" in warning for warning in data["warnings"])
+    assert any("out of scope for 1.0.0 production security guarantees" in warning for warning in data["warnings"])
     assert any("No dynamic sandbox backend" in limitation for limitation in data["limitations"])
 
 

@@ -15,6 +15,7 @@ INTERNAL_PATHS = (
     "AGENT" + "_" + "WORK" + "_" + "ORDER" + ".md",
     "." + "co" + "dex/",
 )
+NORMALIZED_INTERNAL_PATHS = tuple(item.replace("\\", "/").lower() for item in INTERNAL_PATHS)
 
 INTERNAL_TEXT = (
     "Open" + "AI",
@@ -35,8 +36,7 @@ def main() -> int:
     failures: list[str] = []
 
     for name in files:
-        normalized = name.replace("\\", "/")
-        if any(normalized == item.rstrip("/") or normalized.startswith(item) for item in INTERNAL_PATHS):
+        if _is_internal_path(name):
             failures.append(f"internal path is tracked: {name}")
 
     for name in files:
@@ -125,9 +125,13 @@ def _scan_bytes(data: bytes, label: str, failures: list[str]) -> None:
 
 
 def _scan_path_name(name: str, label: str, failures: list[str]) -> None:
-    normalized = name.replace("\\", "/")
-    if any(normalized == item.rstrip("/") or normalized.startswith(item) for item in INTERNAL_PATHS):
+    if _is_internal_path(name):
         failures.append(f"internal path in artifact: {label}")
+
+
+def _is_internal_path(name: str) -> bool:
+    normalized = name.replace("\\", "/").lower()
+    return any(normalized == item.rstrip("/") or normalized.startswith(item) for item in NORMALIZED_INTERNAL_PATHS)
 
 
 def _tracked_files() -> list[str]:

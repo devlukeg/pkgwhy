@@ -24,7 +24,7 @@ Rule evidence appears inside package judgement JSON and audit JSON. Each rule ev
 
 ## Rule Categories
 
-- `vulnerability`: Source-attributed advisory matches from local OSV-like data or explicit OSV.dev lookups.
+- `vulnerability`: Source-attributed advisory matches from local OSV-like data, cached fetched data, or explicit optional OSV.dev lookups.
 - `identity`: Package identity and naming signals, including possible typosquatting similarity.
 - `source`: Source availability signals from installed files and metadata.
 - `metadata`: Package metadata signals, such as missing license metadata or declarative build metadata.
@@ -45,7 +45,7 @@ Rule evidence appears inside package judgement JSON and audit JSON. Each rule ev
 
 ## Corpus Strategy
 
-The release-candidate corpus uses controlled fixtures only. Fixtures should be small, local, and synthetic. They must not contain real malware, real credentials, or real vulnerability claims.
+The release-candidate corpus uses controlled fixtures only. Fixtures should be small, local, and synthetic. They must not contain real malware, real credentials, or real vulnerability claims. Core corpus validation must work offline using local fixtures or cached fetched data; OSV.dev and PyPI-backed inputs are optional online enrichment paths.
 
 The broader corpus roadmap should cover:
 

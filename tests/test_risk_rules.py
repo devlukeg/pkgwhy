@@ -96,8 +96,18 @@ def test_rule_catalog_snapshot_is_json_friendly_and_versioned() -> None:
 
 def test_rules_by_category_preserves_rule_definitions() -> None:
     grouped = rules_by_category()
+    expected_by_category: dict[RuleCategory, list[str]] = {}
+    for rule_id in EXPECTED_RULE_IDS:
+        expected_by_category.setdefault(RULES[rule_id].category, []).append(rule_id)
 
     assert len(grouped[RuleCategory.STATIC_ANALYSIS]) >= 1
     assert RULES["PKGWHY-VULN-001"] in grouped[RuleCategory.VULNERABILITY]
     assert RULES["PKGWHY-BIN-001"] in grouped[RuleCategory.BINARY]
     assert sum(len(items) for items in grouped.values()) == len(RULES)
+    assert {
+        category: tuple(rule.rule_id for rule in definitions)
+        for category, definitions in grouped.items()
+    } == {
+        category: tuple(rule_ids)
+        for category, rule_ids in expected_by_category.items()
+    }

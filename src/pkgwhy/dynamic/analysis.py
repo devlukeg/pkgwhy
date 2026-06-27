@@ -19,7 +19,7 @@ EXPERIMENTAL_DYNAMIC_WARNING = "Experimental dynamic analysis is not a productio
 STATIC_DEFAULT_WARNING = "Static package inspection remains the default pkgwhy review path."
 HOST_EXECUTION_REFUSAL = "Refusing to run dynamic analysis for unknown package code on the host."
 DYNAMIC_OPTION_B_DECISION = (
-    "Dynamic analysis is experimental and out of scope for 1.0 production security guarantees in this build."
+    "Dynamic analysis is experimental and out of scope for 1.0.0 production security guarantees in this build."
 )
 
 

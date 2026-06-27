@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 from typing import Any, TypedDict
 
 from pkgwhy.core.models import PackageJudgement
@@ -72,8 +73,9 @@ def render_audit_markdown(judgements: list[PackageJudgement], warnings: list[str
 
 
 def _escape_markdown_table_cell(value: str) -> str:
-    return value.replace("\\", r"\\").replace("\r", " ").replace("\n", " ").replace("|", r"\|")
+    escaped = html.escape(value, quote=False)
+    return escaped.replace("\\", r"\\").replace("\r", " ").replace("\n", " ").replace("|", r"\|")
 
 
 def _escape_markdown_list_item(value: str) -> str:
-    return value.replace("\\", r"\\").replace("\r", " ").replace("\n", " ")
+    return html.escape(value, quote=False).replace("\\", r"\\").replace("\r", " ").replace("\n", " ")

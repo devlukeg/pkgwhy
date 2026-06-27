@@ -16,16 +16,23 @@ def _asset_fixture(name: str) -> Path:
     return ASSET_CORPUS / name
 
 
+def _rule_tuples(rule_evidence):
+    rules = [(rule.rule_id, rule.file_path, rule.line_number, rule.symbol) for rule in rule_evidence]
+    assert len(rules) == len(set(rules))
+    return set(rules)
+
+
 def test_python_static_corpus_emits_expected_rule_ids_and_locations() -> None:
     paths = [
         _python_fixture("dynamic_execution.py"),
         _python_fixture("deserialisation.py"),
         _python_fixture("encoded_payloads.py"),
+        _python_fixture("import_trap.py"),
         _python_fixture("process_environment_package_manager.py"),
     ]
 
     analysis = analyze_python_files(paths)
-    rules = {(rule.rule_id, rule.file_path, rule.line_number, rule.symbol) for rule in analysis.rule_evidence}
+    rules = _rule_tuples(analysis.rule_evidence)
 
     assert rules == {
         ("PKGWHY-PY-001", "dynamic_execution.py", 5, "eval"),
@@ -52,7 +59,7 @@ def test_python_text_corpus_masks_credentials_and_sanitizes_urls() -> None:
     source = _python_fixture("url_credential_patterns.py")
 
     analysis = analyze_file_signals([source], entry_points=[])
-    rules = {(rule.rule_id, rule.file_path, rule.line_number, rule.symbol) for rule in analysis.rule_evidence}
+    rules = _rule_tuples(analysis.rule_evidence)
     combined_output = " ".join(
         analysis.evidence
         + analysis.credential_references
@@ -77,7 +84,7 @@ def test_javascript_corpus_emits_rule_ids_and_false_positive_controls() -> None:
     false_positive_file = _asset_fixture("javascript_false_positive.js")
 
     analysis = analyze_file_signals([signal_file, false_positive_file], entry_points=[])
-    rules = {(rule.rule_id, rule.file_path, rule.line_number, rule.symbol) for rule in analysis.rule_evidence}
+    rules = _rule_tuples(analysis.rule_evidence)
     false_positive_rules = [rule for rule in analysis.rule_evidence if rule.file_path == false_positive_file.name]
 
     assert rules == {
@@ -104,7 +111,7 @@ def test_native_shell_and_build_file_corpus_emits_expected_rules() -> None:
     ]
 
     analysis = analyze_file_signals(paths, entry_points=[])
-    rules = {(rule.rule_id, rule.file_path, rule.line_number, rule.symbol) for rule in analysis.rule_evidence}
+    rules = _rule_tuples(analysis.rule_evidence)
 
     assert rules == {
         ("PKGWHY-BIN-001", "extension.so", None, ".so"),

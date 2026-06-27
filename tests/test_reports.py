@@ -182,8 +182,8 @@ def test_audit_json_includes_top_level_lookup_warnings(monkeypatch) -> None:
 
 def test_audit_markdown_escapes_table_pipes() -> None:
     judgement = PackageJudgement(
-        package="demo|package",
-        version="1|2",
+        package="<demo>|package",
+        version="<1>|2",
         decision=AgentDecision.ALLOW,
         risk_level=RiskLevel.LOW,
         confidence=Confidence.HIGH,
@@ -195,8 +195,8 @@ def test_audit_markdown_escapes_table_pipes() -> None:
 
     rendered = render_audit_markdown([judgement])
 
-    assert "demo\\|package" in rendered
-    assert "1\\|2" in rendered
+    assert "&lt;demo&gt;\\|package" in rendered
+    assert "&lt;1&gt;\\|2" in rendered
 
 
 def test_audit_markdown_escapes_newlines_and_backslashes() -> None:
@@ -233,7 +233,7 @@ def test_audit_markdown_includes_audit_warnings() -> None:
         recommendation="ok",
     )
 
-    rendered = render_audit_markdown([judgement], warnings=["OSV unavailable\nno result inferred"])
+    rendered = render_audit_markdown([judgement], warnings=["OSV <unavailable>\nno result inferred"])
 
     assert "## Warnings" in rendered
-    assert "- OSV unavailable no result inferred" in rendered
+    assert "- OSV &lt;unavailable&gt; no result inferred" in rendered

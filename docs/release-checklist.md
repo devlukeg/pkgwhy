@@ -39,6 +39,8 @@ Run CLI smokes:
 .venv/bin/python -m pkgwhy dynamic inspect --help
 ```
 
+These default smokes are expected to work offline. Optional online release checks, such as explicit OSV.dev or PyPI provenance lookups, should run only when online checks are in scope for the release pass and failures can be reported as lookup unavailability rather than safety evidence.
+
 Run release artifact checks:
 
 ```bash

@@ -12,7 +12,8 @@
 
 ## Trust Boundaries
 
-- Static package inspection reads installed metadata, package files, AST, text patterns, lockfiles, manifests, and optional source-attributed online metadata.
+- Static package inspection reads locally installed metadata, package files, AST, text patterns, lockfiles, manifests, and cached fetched data without requiring network access.
+- Optional OSV.dev, PyPI, and future source-summary lookups are online enrichment features only. They are not required for baseline package analysis.
 - `pkgwhy run` is explicit execution of local private registry tools after registry, hash, manifest, and policy checks.
 - Dynamic analysis is experimental and out of scope for `1.0.0` production security guarantees. It must not run unknown package code on the host.
 - Optional OSV.dev and PyPI lookups cross the network only when explicitly requested.
