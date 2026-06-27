@@ -6,11 +6,11 @@ Know why a package exists before you or your agent trusts it.
 
 ## Status
 
-`pkgwhy` is in pre-alpha readiness review for the `0.8.0a0` candidate. It is useful for local package inspection experiments, conservative static package review, agent decision-support prototypes, and feedback on the CLI, policy, vulnerability, provenance, and local private-registry shape.
+`pkgwhy` is in pre-alpha readiness review for the `0.9.0a0` candidate. It is useful for local package inspection experiments, conservative static package review, agent decision-support prototypes, and feedback on the CLI, policy, vulnerability, provenance, dynamic-analysis boundary, and local private-registry shape.
 
 It is not a production security scanner, not malware-detection certainty, and not a full sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
 
-Current packaged version candidate: `0.8.0a0`.
+Current packaged version candidate: `0.9.0a0`.
 
 ## What Works Now
 
@@ -464,7 +464,9 @@ These signals can be legitimate. They are review prompts, not proof of malicious
 
 ## Dynamic Sandbox Roadmap
 
-Dynamic analysis has an experimental `0.5.x` command skeleton, but it is not production-ready and must remain opt-in. Dynamic analysis intentionally executes code, so it has a different safety boundary from static inspection.
+Dynamic analysis has an experimental command skeleton, but it is not production-ready and is out of scope for `1.0.0` production security guarantees. Dynamic analysis intentionally executes code, so it has a different safety boundary from static inspection.
+
+For the `1.0.0` readiness line, `pkgwhy` has chosen Option B: no arbitrary package dynamic analysis, no container MVP, and no production sandboxing claim. The command remains as a safe-fail surface for the intended JSON shape and safety boundary.
 
 The design is documented in [docs/dynamic-sandbox.md](docs/dynamic-sandbox.md). The key constraints are:
 
@@ -486,7 +488,7 @@ pkgwhy dynamic inspect --help
 pkgwhy dynamic inspect demo-target --container --network off
 ```
 
-Until a sandbox backend exists, `pkgwhy dynamic inspect` refuses to execute the target and reports that the backend is unavailable.
+Until a sandbox backend exists, `pkgwhy dynamic inspect` refuses to execute the target and reports that the backend is unavailable or blocked.
 
 `pkgwhy run` is still a separate local private-tool execution path and is not dynamic package analysis.
 
@@ -591,7 +593,7 @@ pkgwhy run local/my_tool
 
 The runner executes only tools resolved from the configured local registry. It does not run arbitrary public package code, does not install tool dependencies in the MVP, and blocks execution if the stored bundle hash does not verify. Local registry entries are file-backed records under the configured registry path; no cloud registry, account, upload, pull, or remote sync is implemented in this preview.
 
-The `0.8.0a0` pre-alpha includes policy-as-code foundations for agents:
+The `0.9.0a0` pre-alpha includes policy-as-code foundations for agents:
 
 - `pkgwhy agent policy` shows conservative default policy.
 - `pkgwhy agent precheck <package> --json` applies policy to package judgement JSON.

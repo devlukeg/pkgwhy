@@ -32,7 +32,10 @@ from pkgwhy.vulnerabilities.osv import load_osv_records, query_osv_cached
 app = typer.Typer(no_args_is_help=True, help="Explain, inspect, judge packages, and run local private tools.")
 registry_app = typer.Typer(no_args_is_help=True, help="Manage local private registries.")
 tool_app = typer.Typer(no_args_is_help=True, help="Inspect and judge local private tools.")
-dynamic_app = typer.Typer(no_args_is_help=True, help="Experimental dynamic sandbox analysis.")
+dynamic_app = typer.Typer(
+    no_args_is_help=True,
+    help="Experimental dynamic analysis; out of scope for 1.0 production security guarantees.",
+)
 agent_app = typer.Typer(no_args_is_help=True, help="Agent-facing policy and package precheck commands.")
 app.add_typer(registry_app, name="registry")
 app.add_typer(tool_app, name="tool")
@@ -426,7 +429,7 @@ def dynamic_inspect(
     ] = "off",
     as_json: Annotated[bool, typer.Option("--json", help="Emit schema-versioned dynamic analysis JSON.")] = False,
 ) -> None:
-    """Experimental dynamic analysis skeleton that fails safely until a sandbox backend exists."""
+    """Experimental dynamic analysis skeleton that fails safely and is out of scope for 1.0 guarantees."""
     result = build_unavailable_dynamic_result(target, container=container, network=network)
     if as_json:
         print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))

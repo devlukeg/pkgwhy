@@ -2,7 +2,7 @@
 
 ## Supported Status
 
-`pkgwhy` is a pre-alpha project. The current local candidate line is `0.8.0a0`, including static evidence hardening, vulnerability/provenance hardening, static rule corpus/schema hardening, a safe-fail dynamic command skeleton, agent policy foundations, and local registry/runner hardening. It is not a production security scanner and should not be treated as a definitive malware detector or full sandbox.
+`pkgwhy` is a pre-alpha project. The current local candidate line is `0.9.0a0`, including static evidence hardening, vulnerability/provenance hardening, static rule corpus/schema hardening, an explicit dynamic-analysis out-of-scope decision for `1.0.0`, a safe-fail dynamic command skeleton, agent policy foundations, and local registry/runner hardening. It is not a production security scanner and should not be treated as a definitive malware detector or full sandbox.
 
 ## Reporting Security Issues
 
@@ -42,7 +42,7 @@ Runner warning:
 This run uses a Python virtual environment for dependency isolation. It does not fully sandbox operating-system permissions.
 ```
 
-Dynamic analysis is a separate experimental roadmap area. Dynamic analysis intentionally executes code and must not run unknown package code on the host. The current `pkgwhy dynamic inspect` command is a safe-fail skeleton: it reports that no sandbox backend is available and refuses to execute the target. Future dynamic analysis must be opt-in, use a disposable sandbox boundary, disable network access by default, use temporary scratch filesystem access by default, avoid host secrets, and fail safely if the requested sandbox backend is unavailable. Empty process, filesystem, or network event lists must not be treated as proof that no behavior occurred.
+Dynamic analysis is a separate experimental roadmap area and is out of scope for `1.0.0` production security guarantees. Dynamic analysis intentionally executes code and must not run unknown package code on the host. The current `pkgwhy dynamic inspect` command is a safe-fail skeleton: it reports that no sandbox backend is available or that execution is blocked, and refuses to execute the target. Future dynamic analysis must be opt-in, use a disposable sandbox boundary, disable network access by default, use temporary scratch filesystem access by default, avoid host secrets, and fail safely if the requested sandbox backend is unavailable. Empty process, filesystem, or network event lists must not be treated as proof that no behavior occurred.
 
 ## Current Limitations
 
@@ -58,7 +58,7 @@ Dynamic analysis is a separate experimental roadmap area. Dynamic analysis inten
 - Typosquatting detection is heuristic and conservative. It can miss risky names and can surface false positives.
 - Static URL/domain and credential-pattern extraction is heuristic. It can miss references and can surface documentation, examples, tests, or placeholders.
 - JavaScript minification and native/WASM files are not automatically malicious, and static analysis cannot fully explain compiled or generated artifacts.
-- No OS-level sandboxing or production dynamic sandbox yet.
+- No OS-level sandboxing or production dynamic sandbox in the `1.0.0` readiness line.
 - No cloud review or remote evidence lookup in the preview.
 - No guarantee that every risky behavior can be detected statically.
 

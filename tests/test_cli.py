@@ -96,7 +96,8 @@ def test_dynamic_help_surfaces_experimental_command() -> None:
     result = runner.invoke(app, ["dynamic", "--help"])
 
     assert result.exit_code == 0
-    assert "Experimental dynamic sandbox analysis" in result.output
+    assert "Experimental dynamic analysis" in result.output
+    assert "out of scope for 1.0" in result.output
 
 
 def test_dynamic_inspect_help_surfaces_safe_options() -> None:

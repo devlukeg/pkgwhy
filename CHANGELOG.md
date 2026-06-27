@@ -5,6 +5,7 @@
 - Choose dynamic analysis Option B for the `1.0.0` readiness line: dynamic analysis remains experimental and out of scope for production security guarantees.
 - Keep `pkgwhy dynamic inspect` as a safe-fail CLI skeleton that refuses host execution of unknown package code and does not invoke Docker or run containers.
 - Add tests that assert the dynamic result warnings and limitations carry the explicit Option B boundary.
+- Align README, SECURITY, CLI help, and local package metadata for the `0.9.0a0` dynamic-analysis boundary.
 
 ## 0.8.0a0 - Unreleased pre-alpha
 
