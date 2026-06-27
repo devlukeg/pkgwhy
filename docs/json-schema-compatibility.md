@@ -2,6 +2,8 @@
 
 `pkgwhy` JSON output is intended for conservative decision support by humans and agents. It is not a safety guarantee, malware verdict, or sandboxing claim.
 
+Public command JSON is offline-first by default. Optional online enrichment, such as explicit OSV.dev or PyPI lookups, may add source-attributed evidence, warnings, or status values to the same public schemas, but it must not require a different schema for offline use and must not guarantee non-empty vulnerability, provenance, attestation, or release-activity fields. When enrichment is unavailable, fields may remain empty, `unknown`, `unavailable`, or `not_implemented`.
+
 Current public JSON contracts:
 
 - `pkgwhy.package_judgement.v1` for `pkgwhy judge <package> --json` and embedded package judgements.
@@ -29,6 +31,7 @@ The test suite includes normalized golden snapshots for:
 - `pkgwhy judge <package> --json`
 - `pkgwhy audit --json`
 - `pkgwhy agent precheck <package> --json`
+- `pkgwhy agent judge <package> --json`
 - `pkgwhy tool judge <tool> --json`
 
 Snapshots normalize environment-specific values and pin stable field sets, schema versions, nested schema keys, provenance status values, policy decisions, and hash/signature status values. They intentionally avoid treating a missing vulnerability match as evidence of safety.

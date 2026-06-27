@@ -106,6 +106,30 @@ def test_pypi_provenance_uses_audited_version_for_source_distribution_status() -
     assert provenance.release_activity_status == "audited_release_upload:2026-01-02"
 
 
+def test_pypi_provenance_keeps_missing_audited_version_unknown() -> None:
+    provenance = provenance_from_pypi_payload(
+        "Example",
+        {
+            "info": {"version": "2.0.0"},
+            "releases": {
+                "2.0.0": [
+                    {
+                        "filename": "example-2.0.0.tar.gz",
+                        "packagetype": "sdist",
+                        "upload_time_iso_8601": "2026-02-03T04:05:06Z",
+                    }
+                ],
+            },
+        },
+        audited_version="1.0.0",
+    )
+
+    assert provenance.version == "1.0.0"
+    assert provenance.source_distribution_status == "unknown"
+    assert provenance.release_activity_status == "unknown"
+    assert any("audited version 1.0.0" in warning for warning in provenance.warnings)
+
+
 def test_pypi_provenance_ignores_empty_url_values() -> None:
     provenance = provenance_from_pypi_payload(
         "Example",

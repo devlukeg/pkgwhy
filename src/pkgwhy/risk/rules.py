@@ -334,6 +334,7 @@ def rule_catalog_snapshot() -> dict[str, object]:
             {
                 "rule_id": rule.rule_id,
                 "name": rule.name,
+                "default_message": rule.default_message,
                 "category": rule.category.value,
                 "severity": rule.severity.value,
                 "confidence": rule.confidence.value,

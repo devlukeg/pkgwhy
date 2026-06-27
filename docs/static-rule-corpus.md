@@ -47,7 +47,7 @@ Rule evidence appears inside package judgement JSON and audit JSON. Each rule ev
 
 The `0.8.0` corpus hardening target uses controlled fixtures only. Fixtures should be small, local, and synthetic. They must not contain real malware, real credentials, or real vulnerability claims.
 
-Corpus fixtures should cover:
+The broader corpus roadmap should cover:
 
 - Known-good examples that should not produce high-risk signals.
 - Suspicious package-name examples and legitimate ecosystem-name false-positive controls.

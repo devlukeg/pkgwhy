@@ -88,6 +88,7 @@ def test_rule_catalog_snapshot_is_json_friendly_and_versioned() -> None:
     rules = snapshot["rules"]
     assert isinstance(rules, list)
     assert [item["rule_id"] for item in rules] == list(EXPECTED_RULE_IDS)
+    assert all(isinstance(item["default_message"], str) for item in rules)
     assert all(isinstance(item["category"], str) for item in rules)
     assert all(isinstance(item["severity"], str) for item in rules)
     assert all(isinstance(item["confidence"], str) for item in rules)

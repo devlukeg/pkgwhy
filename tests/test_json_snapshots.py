@@ -53,6 +53,25 @@ def _package_judgement_snapshot(data: dict) -> dict:
     }
 
 
+def _agent_package_precheck_snapshot(data: dict) -> dict:
+    AgentPackagePrecheckResult.model_validate(data)
+    return {
+        "top_level_keys": sorted(data),
+        "schema_version": data["schema_version"],
+        "policy_schema_version": data["policy_schema_version"],
+        "package": data["package"],
+        "version": data["version"],
+        "target_type": data["target_type"],
+        "non_interactive": data["non_interactive"],
+        "decision": data["decision"],
+        "risk_level": data["risk_level"],
+        "confidence": data["confidence"],
+        "policy_decision_source": data["policy_decision_source"],
+        "reason_count": len(data["reasons"]),
+        "package_judgement_snapshot": _package_judgement_snapshot(data["package_judgement"]),
+    }
+
+
 def test_judge_json_golden_snapshot_for_missing_package() -> None:
     data = _json_output(["judge", MISSING_PACKAGE, "--json"])
 
@@ -126,7 +145,8 @@ def test_judge_json_golden_snapshot_for_missing_package() -> None:
     }
 
 
-def test_audit_json_golden_snapshot_for_controlled_package(monkeypatch) -> None:
+def test_audit_json_golden_snapshot_for_controlled_package(monkeypatch, tmp_path: Path) -> None:
+    env = {"PKGWHY_CONFIG_HOME": str(tmp_path / "config")}
     package = PackageMetadata(
         identity=PackageIdentity(
             name=MISSING_PACKAGE,
@@ -137,7 +157,7 @@ def test_audit_json_golden_snapshot_for_controlled_package(monkeypatch) -> None:
     )
     monkeypatch.setattr("pkgwhy.cli.list_installed_packages", lambda: [package])
 
-    data = _json_output(["audit", "--limit", "1", "--json"])
+    data = _json_output(["audit", "--limit", "1", "--json"], env=env)
 
     assert {
         "top_level_keys": sorted(data),
@@ -171,23 +191,44 @@ def test_audit_json_golden_snapshot_for_controlled_package(monkeypatch) -> None:
 def test_agent_precheck_json_golden_snapshot_for_missing_package(tmp_path: Path) -> None:
     env = {"PKGWHY_CONFIG_HOME": str(tmp_path / "config")}
     data = _json_output(["agent", "precheck", MISSING_PACKAGE, "--json"], env=env)
-    AgentPackagePrecheckResult.model_validate(data)
 
-    assert {
-        "top_level_keys": sorted(data),
-        "schema_version": data["schema_version"],
-        "policy_schema_version": data["policy_schema_version"],
-        "package": data["package"],
-        "version": data["version"],
-        "target_type": data["target_type"],
-        "non_interactive": data["non_interactive"],
-        "decision": data["decision"],
-        "risk_level": data["risk_level"],
-        "confidence": data["confidence"],
-        "policy_decision_source": data["policy_decision_source"],
-        "reason_count": len(data["reasons"]),
-        "package_judgement_snapshot": _package_judgement_snapshot(data["package_judgement"]),
-    } == {
+    assert _agent_package_precheck_snapshot(data) == {
+        "top_level_keys": [
+            "confidence",
+            "decision",
+            "non_interactive",
+            "package",
+            "package_judgement",
+            "policy_decision_source",
+            "policy_schema_version",
+            "reasons",
+            "recommendation",
+            "risk_level",
+            "schema_version",
+            "target_type",
+            "version",
+            "warnings",
+        ],
+        "schema_version": "pkgwhy.agent_package_precheck.v1",
+        "policy_schema_version": "pkgwhy.agent_policy.v1",
+        "package": MISSING_PACKAGE,
+        "version": None,
+        "target_type": "package",
+        "non_interactive": True,
+        "decision": "block",
+        "risk_level": "unknown",
+        "confidence": "low",
+        "policy_decision_source": "agent_policy",
+        "reason_count": 2,
+        "package_judgement_snapshot": _package_judgement_snapshot(_json_output(["judge", MISSING_PACKAGE, "--json"])),
+    }
+
+
+def test_agent_judge_json_golden_snapshot_for_missing_package(tmp_path: Path) -> None:
+    env = {"PKGWHY_CONFIG_HOME": str(tmp_path / "config")}
+    data = _json_output(["agent", "judge", MISSING_PACKAGE, "--json"], env=env)
+
+    assert _agent_package_precheck_snapshot(data) == {
         "top_level_keys": [
             "confidence",
             "decision",

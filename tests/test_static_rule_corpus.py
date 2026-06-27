@@ -27,19 +27,22 @@ def test_python_static_corpus_emits_expected_rule_ids_and_locations() -> None:
     analysis = analyze_python_files(paths)
     rules = {(rule.rule_id, rule.file_path, rule.line_number, rule.symbol) for rule in analysis.rule_evidence}
 
-    assert ("PKGWHY-PY-001", "dynamic_execution.py", 5, "eval") in rules
-    assert ("PKGWHY-PY-001", "dynamic_execution.py", 6, "exec") in rules
-    assert ("PKGWHY-PY-001", "dynamic_execution.py", 7, "compile") in rules
-    assert ("PKGWHY-PY-002", "dynamic_execution.py", 8, "__import__") in rules
-    assert ("PKGWHY-PY-002", "dynamic_execution.py", 9, "importlib.import_module") in rules
-    assert ("PKGWHY-PY-003", "deserialisation.py", 6, "pickle.loads") in rules
-    assert ("PKGWHY-PY-003", "deserialisation.py", 7, "marshal.loads") in rules
-    assert ("PKGWHY-PY-004", "encoded_payloads.py", 4, "large encoded-looking string literal") in rules
-    assert ("PKGWHY-PY-004", "encoded_payloads.py", 8, "base64.b64decode") in rules
-    assert ("PKGWHY-PY-004", "encoded_payloads.py", 9, "zlib.decompress") in rules
-    assert ("PKGWHY-PY-005", "process_environment_package_manager.py", 7, "subprocess.run") in rules
-    assert ("PKGWHY-PY-006", "process_environment_package_manager.py", 6, "os.environ") in rules
-    assert ("PKGWHY-PY-007", "process_environment_package_manager.py", 7, "subprocess.run") in rules
+    assert rules == {
+        ("PKGWHY-PY-001", "dynamic_execution.py", 5, "eval"),
+        ("PKGWHY-PY-001", "dynamic_execution.py", 6, "exec"),
+        ("PKGWHY-PY-001", "dynamic_execution.py", 7, "compile"),
+        ("PKGWHY-PY-002", "dynamic_execution.py", 8, "__import__"),
+        ("PKGWHY-PY-002", "dynamic_execution.py", 9, "importlib.import_module"),
+        ("PKGWHY-PY-003", "deserialisation.py", 6, "pickle.loads"),
+        ("PKGWHY-PY-003", "deserialisation.py", 7, "marshal.loads"),
+        ("PKGWHY-PY-004", "encoded_payloads.py", 4, "large encoded-looking string literal"),
+        ("PKGWHY-PY-004", "encoded_payloads.py", 8, "base64.b64decode"),
+        ("PKGWHY-PY-004", "encoded_payloads.py", 9, "zlib.decompress"),
+        ("PKGWHY-PY-005", "process_environment_package_manager.py", 7, "subprocess.run"),
+        ("PKGWHY-PY-006", "process_environment_package_manager.py", 6, "os.environ"),
+        ("PKGWHY-PY-006", "process_environment_package_manager.py", 6, "credential-like string literal"),
+        ("PKGWHY-PY-007", "process_environment_package_manager.py", 7, "subprocess.run"),
+    }
     assert analysis.files_scanned == len(paths)
 
 
@@ -56,8 +59,10 @@ def test_python_text_corpus_masks_credentials_and_sanitizes_urls() -> None:
         + [text for item in analysis.rule_evidence for text in item.evidence]
     )
 
-    assert ("PKGWHY-CRED-001", "url_credential_patterns.py", 1, "SERVICE_API_TOKEN") in rules
-    assert ("PKGWHY-NET-001", "url_credential_patterns.py", 2, "example.invalid") in rules
+    assert rules == {
+        ("PKGWHY-CRED-001", "url_credential_patterns.py", 1, "SERVICE_API_TOKEN"),
+        ("PKGWHY-NET-001", "url_credential_patterns.py", 2, "example.invalid"),
+    }
     assert analysis.url_references == ["https://example.invalid/..."]
     assert analysis.domain_references == ["example.invalid"]
     assert "placeholdertoken123" not in combined_output
@@ -73,11 +78,14 @@ def test_javascript_corpus_emits_rule_ids_and_false_positive_controls() -> None:
     rules = {(rule.rule_id, rule.file_path, rule.line_number, rule.symbol) for rule in analysis.rule_evidence}
     false_positive_rules = [rule for rule in analysis.rule_evidence if rule.file_path == false_positive_file.name]
 
-    assert ("PKGWHY-JS-001", "javascript_signals.min.js", 1, "minified-javascript") in rules
-    assert ("PKGWHY-JS-002", "javascript_signals.min.js", 1, "JavaScript eval call") in rules
-    assert ("PKGWHY-JS-003", "javascript_signals.min.js", 1, "JavaScript base64 decode call") in rules
-    assert ("PKGWHY-JS-004", "javascript_signals.min.js", 1, "javascript-obfuscation") in rules
-    assert ("PKGWHY-JS-005", "javascript_signals.min.js", 1, "sourceMappingURL") in rules
+    assert rules == {
+        ("PKGWHY-JS-001", "javascript_signals.min.js", 1, "minified-javascript"),
+        ("PKGWHY-JS-002", "javascript_signals.min.js", 1, "JavaScript eval call"),
+        ("PKGWHY-JS-003", "javascript_signals.min.js", 1, "JavaScript base64 decode call"),
+        ("PKGWHY-JS-003", "javascript_signals.min.js", 1, "large encoded-looking string"),
+        ("PKGWHY-JS-004", "javascript_signals.min.js", 1, "javascript-obfuscation"),
+        ("PKGWHY-JS-005", "javascript_signals.min.js", 1, "sourceMappingURL"),
+    }
     assert analysis.javascript_files_scanned == 2
     assert not any(rule.rule_id in {"PKGWHY-JS-002", "PKGWHY-JS-003"} for rule in false_positive_rules)
 
@@ -96,15 +104,18 @@ def test_native_shell_and_build_file_corpus_emits_expected_rules() -> None:
     analysis = analyze_file_signals(paths, entry_points=[])
     rules = {(rule.rule_id, rule.file_path, rule.line_number, rule.symbol) for rule in analysis.rule_evidence}
 
-    assert ("PKGWHY-BIN-001", "extension.so", None, ".so") in rules
-    assert ("PKGWHY-BIN-002", "module.wasm", None, ".wasm") in rules
-    assert ("PKGWHY-BIN-003", "helper.exe", None, ".exe") in rules
-    assert ("PKGWHY-BUILD-001", "setup.py", None, "setup.py") in rules
-    assert ("PKGWHY-BUILD-002", "setup.py", 1, "subprocess or shell reference") in rules
-    assert ("PKGWHY-BUILD-003", "setup.py", 2, "network access reference") in rules
-    assert ("PKGWHY-BUILD-004", "setup.py", 7, "dynamic execution reference") in rules
-    assert ("PKGWHY-BUILD-005", "pyproject.toml", 3, "hatchling.build") in rules
-    assert ("PKGWHY-BUILD-006", "setup.cfg", None, "setup.cfg") in rules
+    assert rules == {
+        ("PKGWHY-BIN-001", "extension.so", None, ".so"),
+        ("PKGWHY-BIN-002", "module.wasm", None, ".wasm"),
+        ("PKGWHY-BIN-003", "helper.exe", None, ".exe"),
+        ("PKGWHY-BUILD-001", "setup.py", None, "setup.py"),
+        ("PKGWHY-BUILD-002", "setup.py", 1, "subprocess or shell reference"),
+        ("PKGWHY-BUILD-003", "setup.py", 2, "network access reference"),
+        ("PKGWHY-BUILD-004", "setup.py", 7, "dynamic execution reference"),
+        ("PKGWHY-BUILD-005", "pyproject.toml", 3, "hatchling.build"),
+        ("PKGWHY-BUILD-006", "setup.cfg", None, "setup.cfg"),
+        ("PKGWHY-NET-001", "setup.py", 6, "example.invalid"),
+    }
     assert analysis.native_binaries_detected == 2
     assert analysis.wasm_files_detected == 1
     assert analysis.shell_scripts_detected == 1

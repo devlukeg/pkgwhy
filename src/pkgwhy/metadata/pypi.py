@@ -63,9 +63,15 @@ def provenance_from_pypi_payload(
     else:
         warnings.append("PyPI metadata does not declare a repository URL.")
 
-    if audited_version is not None and audited_release_date and reported_version:
-        evidence.append(f"Observed PyPI upload time for audited version {reported_version}: {audited_release_date}")
-        release_activity_status = f"audited_release_upload:{audited_release_date}"
+    if audited_version is not None and reported_version:
+        if audited_release_date:
+            evidence.append(f"Observed PyPI upload time for audited version {reported_version}: {audited_release_date}")
+            release_activity_status = f"audited_release_upload:{audited_release_date}"
+        else:
+            release_activity_status = "unknown"
+            warnings.append(f"PyPI metadata did not include release files for audited version {reported_version}.")
+            if latest_release_date:
+                evidence.append(f"Latest observed PyPI release upload time: {latest_release_date}")
     elif latest_release_date:
         evidence.append(f"Latest observed PyPI release upload time: {latest_release_date}")
         release_activity_status = f"latest_release_upload:{latest_release_date}"

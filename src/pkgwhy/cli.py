@@ -236,9 +236,7 @@ def audit(
         if osv:
             lookup = query_osv_cached(package_name, package_version, cache_dir=osv_cache_dir)
             audit_warnings.extend(lookup.warnings)
-            if lookup.cache_status == "fresh":
-                audit_warnings.append(f"OSV.dev lookup succeeded for {package_name}; response cached.")
-            elif lookup.cache_status == "stale_cache":
+            if lookup.cache_status == "stale_cache":
                 audit_warnings.append(f"OSV.dev lookup used stale cached data for {package_name}.")
             elif lookup.cache_status == "unavailable":
                 audit_warnings.append(f"OSV.dev lookup unavailable for {package_name}; no vulnerability result was inferred.")

@@ -128,7 +128,7 @@ def _fetch_osv_payload(package_name: str, version: str | None, *, timeout_second
     try:
         with request.urlopen(req, timeout=timeout_seconds) as response:
             return json.loads(response.read().decode("utf-8"))
-    except (OSError, error.HTTPError, json.JSONDecodeError) as exc:
+    except (OSError, error.HTTPError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise OSVClientError(f"OSV.dev query failed for {package_name}: {exc}") from exc
 
 
