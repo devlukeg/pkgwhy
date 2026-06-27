@@ -8,11 +8,12 @@ from pkgwhy.cli import app
 from pkgwhy.core.models import (
     AgentDecision,
     Confidence,
+    PackageIdentity,
     PackageJudgement,
+    PackageMetadata,
     RiskLevel,
     SourceAvailability,
 )
-from pkgwhy.metadata.installed import get_installed_package
 from pkgwhy.reports.audit import AUDIT_SCHEMA_VERSION, render_audit_markdown
 
 runner = CliRunner()
@@ -105,9 +106,15 @@ def test_audit_writes_json_report_to_output_path(tmp_path: Path) -> None:
 
 
 def test_audit_pypi_option_uses_source_attributed_provenance_without_live_network(monkeypatch) -> None:
-    installed = get_installed_package("typer")
-    assert installed is not None
-    audited_version = installed.identity.version or "0"
+    audited_version = "1.2.3"
+    installed = PackageMetadata(
+        identity=PackageIdentity(
+            name="controlled-provenance-package",
+            normalized_name="controlled-provenance-package",
+            version=audited_version,
+        ),
+        metadata_available=True,
+    )
 
     def fake_fetch_pypi_project(package_name: str) -> dict:
         return {
