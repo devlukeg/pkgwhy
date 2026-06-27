@@ -42,7 +42,9 @@ def match_vulnerability(package: str, version: str, record: VulnerabilityRecord)
 
 
 def _version_in_range(version: str, affected_range: VulnerabilityRange) -> bool:
-    if not any((affected_range.introduced, affected_range.fixed, affected_range.last_affected)):
+    if not any(
+        (affected_range.introduced, affected_range.fixed, affected_range.last_affected, affected_range.limit)
+    ):
         return False
     range_type = affected_range.range_type.upper() if affected_range.range_type is not None else None
     if range_type not in {None, "ECOSYSTEM", "PYPI"}:

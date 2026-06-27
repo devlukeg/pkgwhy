@@ -70,6 +70,17 @@ def test_version_matching_treats_osv_limit_as_upper_bound_not_fixed_version() ->
     assert records[0].fixed_versions == []
 
 
+def test_version_matching_supports_limit_only_osv_ranges() -> None:
+    payload = _osv_payload("demo-pkg", [])
+    payload["vulns"][0]["affected"][0]["ranges"][0]["events"] = [
+        {"limit": "2.0.0"},
+    ]
+    records = parse_osv_payload(payload)
+
+    assert match_vulnerabilities("demo-pkg", "1.5.0", records)
+    assert not match_vulnerabilities("demo-pkg", "2.0.0", records)
+
+
 def test_version_matching_deduplicates_and_compares_explicit_versions_semantically() -> None:
     payload = _osv_payload("demo-pkg", ["1.0"])
     records = parse_osv_payload({"vulns": payload["vulns"] + payload["vulns"]})
