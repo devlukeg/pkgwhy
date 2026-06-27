@@ -113,12 +113,14 @@ def test_dynamic_inspect_fails_safely_without_backend(monkeypatch) -> None:
     monkeypatch.setattr("pkgwhy.dynamic.analysis.shutil.which", lambda _: None)
 
     result = runner.invoke(app, ["dynamic", "inspect", "demo-target", "--container"])
+    normalized_output = " ".join(result.output.split())
 
     assert result.exit_code == 1
-    assert "not a production sandbox" in result.output
-    assert "Refusing to run dynamic analysis" in result.output
-    assert "Docker container backend is unavailable" in result.output
-    assert "Target was not executed: demo-target" in result.output
+    assert "not a production sandbox" in normalized_output
+    assert "out of scope for 1.0 production security guarantees" in normalized_output
+    assert "Refusing to run dynamic analysis" in normalized_output
+    assert "Docker container backend is unavailable" in normalized_output
+    assert "Target was not executed: demo-target" in normalized_output
 
 
 def test_dynamic_inspect_rejects_network_enabled_mode() -> None:
@@ -146,6 +148,7 @@ def test_dynamic_inspect_json_uses_schema_and_empty_events(monkeypatch) -> None:
     assert data["process_events"] == []
     assert data["filesystem_events"] == []
     assert data["network_events"] == []
+    assert any("out of scope for 1.0 production security guarantees" in warning for warning in data["warnings"])
     assert any("No dynamic sandbox backend" in limitation for limitation in data["limitations"])
 
 
