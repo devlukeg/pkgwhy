@@ -534,6 +534,8 @@ The current risk engine is deliberately conservative and early. Treat it as deci
 
 Risk rule output includes `risk_model_version` and per-rule `rule_id`, category, severity, confidence, message, evidence, optional file path, optional line number, optional symbol, and false-positive notes. These rule IDs are a pre-alpha stability candidate, not a long-term compatibility guarantee yet.
 
+Detailed rule categories, corpus strategy, and compatibility expectations are documented in [`docs/static-rule-corpus.md`](docs/static-rule-corpus.md).
+
 Current pre-alpha rule IDs:
 
 - `PKGWHY-VULN-001`: known vulnerability advisory match.

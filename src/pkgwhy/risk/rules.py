@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 from pkgwhy.core.models import Confidence, RiskRuleEvidence, RuleCategory, RuleSeverity
 
+RULE_CATALOG_SCHEMA_VERSION = "pkgwhy.static_rule_catalog.v1"
+
 
 @dataclass(frozen=True)
 class RuleDefinition:
@@ -308,6 +310,38 @@ RULES: dict[str, RuleDefinition] = {
         false_positive_note="Executable files can be legitimate helper tools, but should be reviewed before agent or production use.",
     ),
 }
+
+
+def rule_ids() -> tuple[str, ...]:
+    """Return rule IDs in the public catalog order."""
+    return tuple(RULES)
+
+
+def rules_by_category() -> dict[RuleCategory, tuple[RuleDefinition, ...]]:
+    """Group rule definitions by category while preserving catalog order."""
+    grouped: dict[RuleCategory, list[RuleDefinition]] = {}
+    for rule in RULES.values():
+        grouped.setdefault(rule.category, []).append(rule)
+    return {category: tuple(definitions) for category, definitions in grouped.items()}
+
+
+def rule_catalog_snapshot() -> dict[str, object]:
+    """Return a stable, JSON-friendly snapshot of the current rule catalog."""
+    return {
+        "schema_version": RULE_CATALOG_SCHEMA_VERSION,
+        "rule_count": len(RULES),
+        "rules": [
+            {
+                "rule_id": rule.rule_id,
+                "name": rule.name,
+                "category": rule.category.value,
+                "severity": rule.severity.value,
+                "confidence": rule.confidence.value,
+                "false_positive_note": rule.false_positive_note,
+            }
+            for rule in RULES.values()
+        ],
+    }
 
 
 def make_rule_evidence(

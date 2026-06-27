@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.0a0 - Unreleased pre-alpha
+
+- Start static rule corpus/schema hardening with a versioned static rule catalog snapshot.
+- Add stable rule ID ordering helpers and tests to catch accidental rule renames, removals, or reordering.
+- Add static rule corpus documentation covering rule categories, rule families, fixture strategy, and compatibility expectations.
+
 ## 0.7.0a0 - Unreleased pre-alpha
 
 - Harden explicit OSV.dev audit lookups with a local response cache, stale-cache fallback, cache status warnings, and continued offline-by-default behavior.
