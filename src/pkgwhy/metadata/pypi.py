@@ -27,10 +27,16 @@ def fetch_pypi_project(package_name: str, *, timeout_seconds: float = 10.0) -> d
         raise PyPIMetadataError(f"PyPI metadata lookup failed for {package_name}: {exc}") from exc
 
 
-def provenance_from_pypi_payload(package_name: str, payload: dict[str, Any]) -> PackageProvenance:
+def provenance_from_pypi_payload(
+    package_name: str,
+    payload: dict[str, Any],
+    *,
+    audited_version: str | None = None,
+) -> PackageProvenance:
     """Build a conservative provenance summary from a PyPI JSON payload."""
     info = payload.get("info")
     info = info if isinstance(info, dict) else {}
+    reported_version = audited_version or _string_or_none(info.get("version"))
     project_urls = info.get("project_urls")
     project_urls = project_urls if isinstance(project_urls, dict) else {}
     normalized_urls = {
@@ -41,8 +47,10 @@ def provenance_from_pypi_payload(package_name: str, payload: dict[str, Any]) -> 
     repository_url = _find_url(normalized_urls, ("source", "repository", "github", "code"))
     documentation_url = _find_url(normalized_urls, ("doc", "documentation"))
     homepage_url = _string_or_none(info.get("home_page")) or _find_url(normalized_urls, ("homepage", "home-page"))
-    latest_release_date = _latest_release_date(payload.get("releases"))
-    source_distribution_status = _source_distribution_status(payload.get("releases"), _string_or_none(info.get("version")))
+    releases = payload.get("releases")
+    latest_release_date = _latest_release_date(releases)
+    audited_release_date = _release_date(releases, reported_version)
+    source_distribution_status = _source_distribution_status(releases, reported_version)
     evidence = ["Read project metadata from PyPI JSON payload."]
     warnings = [
         "Trusted Publishing status is not inferred from PyPI project JSON.",
@@ -55,7 +63,10 @@ def provenance_from_pypi_payload(package_name: str, payload: dict[str, Any]) -> 
     else:
         warnings.append("PyPI metadata does not declare a repository URL.")
 
-    if latest_release_date:
+    if audited_version is not None and audited_release_date and reported_version:
+        evidence.append(f"Observed PyPI upload time for audited version {reported_version}: {audited_release_date}")
+        release_activity_status = f"audited_release_upload:{audited_release_date}"
+    elif latest_release_date:
         evidence.append(f"Latest observed PyPI release upload time: {latest_release_date}")
         release_activity_status = f"latest_release_upload:{latest_release_date}"
     else:
@@ -71,7 +82,7 @@ def provenance_from_pypi_payload(package_name: str, payload: dict[str, Any]) -> 
 
     return PackageProvenance(
         package=normalize_package_name(package_name),
-        version=_string_or_none(info.get("version")),
+        version=reported_version,
         repository_url=repository_url,
         documentation_url=documentation_url,
         homepage_url=homepage_url,
@@ -111,6 +122,25 @@ def _latest_release_date(releases: Any) -> str | None:
             parsed = _parse_datetime(uploaded_at)
             if parsed is not None and (latest is None or parsed > latest):
                 latest = parsed
+    return latest.date().isoformat() if latest else None
+
+
+def _release_date(releases: Any, version: str | None) -> str | None:
+    if not isinstance(releases, dict) or version is None:
+        return None
+    files = releases.get(version)
+    if not isinstance(files, list):
+        return None
+    latest: datetime | None = None
+    for file_info in files:
+        if not isinstance(file_info, dict):
+            continue
+        uploaded_at = _string_or_none(file_info.get("upload_time_iso_8601")) or _string_or_none(file_info.get("upload_time"))
+        if uploaded_at is None:
+            continue
+        parsed = _parse_datetime(uploaded_at)
+        if parsed is not None and (latest is None or parsed > latest):
+            latest = parsed
     return latest.date().isoformat() if latest else None
 
 

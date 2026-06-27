@@ -4,7 +4,7 @@ from typing import Any, TypedDict
 
 from pkgwhy.core.models import PackageJudgement
 
-AUDIT_SCHEMA_VERSION = "pkgwhy.audit.v1"
+AUDIT_SCHEMA_VERSION = "pkgwhy.audit.v2"
 
 
 class AuditReport(TypedDict):

@@ -138,6 +138,7 @@ def test_query_osv_cached_uses_stale_cache_when_online_lookup_fails(tmp_path, mo
     assert stale.cache_status == "stale_cache"
     assert stale.records[0].id == "TEST-VULN-0001"
     assert any("Cached advisory data may be stale" in warning for warning in stale.warnings)
+    assert all(str(tmp_path) not in warning for warning in stale.warnings)
 
 
 def test_query_osv_cached_reports_unavailable_without_fabricating_records(tmp_path, monkeypatch) -> None:

@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any
 from urllib import error, request
 
@@ -93,7 +94,7 @@ def query_osv_cached(
             cache_path=cache_path,
             warnings=(
                 warning,
-                f"Using cached OSV.dev response from {cache_path}. Cached advisory data may be stale.",
+                "Using cached OSV.dev response. Cached advisory data may be stale.",
             ),
         )
 
@@ -147,11 +148,23 @@ def _write_cached_payload(cache_path: Path, package_name: str, version: str | No
         "fetched_at": datetime.now(UTC).isoformat(),
         "payload": payload,
     }
+    tmp_path: Path | None = None
     try:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
-        cache_path.write_text(json.dumps(document, indent=2, sort_keys=True), encoding="utf-8")
-    except OSError as exc:
-        return [f"Could not write OSV.dev cache at {cache_path}: {exc}"]
+        serialized = json.dumps(document, indent=2, sort_keys=True)
+        with NamedTemporaryFile("w", dir=cache_path.parent, encoding="utf-8", delete=False) as tmp_file:
+            tmp_file.write(serialized)
+            tmp_file.flush()
+            os.fsync(tmp_file.fileno())
+            tmp_path = Path(tmp_file.name)
+        os.replace(tmp_path, cache_path)
+    except OSError:
+        if tmp_path is not None:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        return ["Could not write OSV.dev cache."]
     return []
 
 

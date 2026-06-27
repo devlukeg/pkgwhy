@@ -12,6 +12,7 @@ from pkgwhy.core.models import (
     RiskLevel,
     SourceAvailability,
 )
+from pkgwhy.metadata.installed import get_installed_package
 from pkgwhy.reports.audit import AUDIT_SCHEMA_VERSION, render_audit_markdown
 
 runner = CliRunner()
@@ -104,6 +105,10 @@ def test_audit_writes_json_report_to_output_path(tmp_path: Path) -> None:
 
 
 def test_audit_pypi_option_uses_source_attributed_provenance_without_live_network(monkeypatch) -> None:
+    installed = get_installed_package("typer")
+    assert installed is not None
+    audited_version = installed.identity.version or "0"
+
     def fake_fetch_pypi_project(package_name: str) -> dict:
         return {
             "info": {
@@ -111,9 +116,9 @@ def test_audit_pypi_option_uses_source_attributed_provenance_without_live_networ
                 "project_urls": {"Source": f"https://example.test/{package_name}/source"},
             },
             "releases": {
-                "9.9.9": [
+                audited_version: [
                     {
-                        "filename": f"{package_name}-9.9.9.tar.gz",
+                        "filename": f"{package_name}-{audited_version}.tar.gz",
                         "packagetype": "sdist",
                         "upload_time_iso_8601": "2026-01-02T03:04:05Z",
                     }
@@ -122,6 +127,7 @@ def test_audit_pypi_option_uses_source_attributed_provenance_without_live_networ
         }
 
     monkeypatch.setattr("pkgwhy.cli.fetch_pypi_project", fake_fetch_pypi_project)
+    monkeypatch.setattr("pkgwhy.cli.list_installed_packages", lambda: [installed])
 
     result = runner.invoke(app, ["audit", "--limit", "1", "--json", "--pypi"])
 
@@ -130,6 +136,7 @@ def test_audit_pypi_option_uses_source_attributed_provenance_without_live_networ
     assert data["provenance_sources"] == ["pypi_json"]
     provenance = data["packages"][0]["provenance"]
     assert provenance["metadata_source"] == "pypi_json"
+    assert provenance["version"] == audited_version
     assert provenance["source_distribution_status"] == "present"
     assert provenance["trusted_publishing_status"] == "unknown"
     assert provenance["attestation_status"] == "not_implemented"

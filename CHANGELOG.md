@@ -5,6 +5,7 @@
 - Harden explicit OSV.dev audit lookups with a local response cache, stale-cache fallback, cache status warnings, and continued offline-by-default behavior.
 - Keep vulnerability matching conservative by treating OSV `limit` events as upper bounds, not fixed-version recommendations.
 - Add advisory source URL evidence to known-vulnerability matches and audit-level vulnerability/provenance source summaries.
+- Bump audit JSON output to `pkgwhy.audit.v2` for the expanded source summary fields.
 - Add optional `pkgwhy audit --pypi` provenance lookup from PyPI JSON without inferring Trusted Publishing or attestation status.
 - Report PyPI source distribution presence only when PyPI file metadata actually lists a source archive.
 - Add tests for OSV parsing, matching, caching, source attribution, PyPI provenance, and audit integration.

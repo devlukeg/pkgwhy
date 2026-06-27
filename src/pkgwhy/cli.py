@@ -237,7 +237,7 @@ def audit(
             lookup = query_osv_cached(package_name, package_version, cache_dir=osv_cache_dir)
             audit_warnings.extend(lookup.warnings)
             if lookup.cache_status == "fresh":
-                audit_warnings.append(f"OSV.dev lookup succeeded for {package_name}; response cached at {lookup.cache_path}.")
+                audit_warnings.append(f"OSV.dev lookup succeeded for {package_name}; response cached.")
             elif lookup.cache_status == "stale_cache":
                 audit_warnings.append(f"OSV.dev lookup used stale cached data for {package_name}.")
             elif lookup.cache_status == "unavailable":
@@ -247,7 +247,11 @@ def audit(
         provenance = None
         if pypi:
             try:
-                provenance = provenance_from_pypi_payload(package_name, fetch_pypi_project(package_name))
+                provenance = provenance_from_pypi_payload(
+                    package_name,
+                    fetch_pypi_project(package_name),
+                    audited_version=package_version,
+                )
             except PyPIMetadataError as exc:
                 audit_warnings.append(
                     f"PyPI provenance lookup unavailable for {package_name}: {exc}. "
