@@ -625,6 +625,14 @@ python -m venv .venv
 .venv/bin/python -m twine check dist/*
 ```
 
+Release and process references:
+
+- [Release Checklist](docs/release-checklist.md)
+- [Versioning Policy](docs/versioning-policy.md)
+- [JSON Schema Compatibility](docs/json-schema-compatibility.md)
+- [Threat Model](docs/threat-model.md)
+- [Production Readiness Blockers](docs/production-readiness.md)
+
 ## Roadmap
 
 1. Complete public release review and packaging for the current package-intelligence, agent-policy, registry, tool-judgement, dynamic-skeleton, and runner MVP.

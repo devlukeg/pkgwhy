@@ -38,6 +38,8 @@ git diff --check
 .venv/bin/python -m twine check dist/*
 ```
 
+For release-candidate work, also follow [docs/release-checklist.md](docs/release-checklist.md), [docs/versioning-policy.md](docs/versioning-policy.md), and [docs/production-readiness.md](docs/production-readiness.md).
+
 Publishing automation, external services, payment processing, secrets, and cloud backends are out of scope for this preview.
 
 Repository: <https://github.com/devlukeg/pkgwhy>

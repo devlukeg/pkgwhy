@@ -12,6 +12,8 @@ For non-sensitive security bugs or documentation issues, use GitHub Issues:
 
 For sensitive security reports, use the private channel where you received access to the project until a dedicated security contact is configured.
 
+If GitHub private vulnerability reporting is enabled for the public repository, use that channel for sensitive reports. If it is not enabled, do not disclose sensitive details publicly; use a private maintainer contact channel and include only non-sensitive coordination details in public issues.
+
 Do not include secrets, private package contents, or credentials in public issues.
 
 ## Security Model
@@ -65,3 +67,5 @@ Dynamic analysis is a separate experimental roadmap area and is out of scope for
 ## Publishing And Secrets
 
 This repository should not contain PyPI tokens, cloud credentials, registry signing keys, or payment-provider secrets.
+
+See also [Threat Model](docs/threat-model.md), [Release Checklist](docs/release-checklist.md), and [Production Readiness Blockers](docs/production-readiness.md).
