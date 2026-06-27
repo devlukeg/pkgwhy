@@ -41,7 +41,7 @@ def _package_judgement_snapshot(data: dict) -> dict:
         "source_availability": data["source_availability"],
         "known_vulnerability_count": len(data["known_vulnerabilities"]),
         "risk_rule_ids": [rule["rule_id"] for rule in data["risk_rules"]],
-        "risk_rule_keys": sorted(data["risk_rules"][0]),
+        "risk_rule_keys": sorted(data["risk_rules"][0]) if data["risk_rules"] else [],
         "provenance_keys": sorted(provenance),
         "provenance_statuses": {
             "metadata_source": provenance["metadata_source"],
@@ -72,8 +72,9 @@ def _agent_package_precheck_snapshot(data: dict) -> dict:
     }
 
 
-def test_judge_json_golden_snapshot_for_missing_package() -> None:
-    data = _json_output(["judge", MISSING_PACKAGE, "--json"])
+def test_judge_json_golden_snapshot_for_missing_package(tmp_path: Path) -> None:
+    env = {"PKGWHY_CONFIG_HOME": str(tmp_path / "config")}
+    data = _json_output(["judge", MISSING_PACKAGE, "--json"], env=env)
 
     assert _package_judgement_snapshot(data) == {
         "top_level_keys": [
@@ -184,7 +185,7 @@ def test_audit_json_golden_snapshot_for_controlled_package(monkeypatch, tmp_path
         "vulnerability_sources": [],
         "provenance_sources": ["installed_distribution_metadata"],
         "warnings": [],
-        "package_snapshot": _package_judgement_snapshot(_json_output(["judge", MISSING_PACKAGE, "--json"])),
+        "package_snapshot": _package_judgement_snapshot(_json_output(["judge", MISSING_PACKAGE, "--json"], env=env)),
     }
 
 
@@ -220,7 +221,9 @@ def test_agent_precheck_json_golden_snapshot_for_missing_package(tmp_path: Path)
         "confidence": "low",
         "policy_decision_source": "agent_policy",
         "reason_count": 2,
-        "package_judgement_snapshot": _package_judgement_snapshot(_json_output(["judge", MISSING_PACKAGE, "--json"])),
+        "package_judgement_snapshot": _package_judgement_snapshot(
+            _json_output(["judge", MISSING_PACKAGE, "--json"], env=env)
+        ),
     }
 
 
@@ -256,7 +259,9 @@ def test_agent_judge_json_golden_snapshot_for_missing_package(tmp_path: Path) ->
         "confidence": "low",
         "policy_decision_source": "agent_policy",
         "reason_count": 2,
-        "package_judgement_snapshot": _package_judgement_snapshot(_json_output(["judge", MISSING_PACKAGE, "--json"])),
+        "package_judgement_snapshot": _package_judgement_snapshot(
+            _json_output(["judge", MISSING_PACKAGE, "--json"], env=env)
+        ),
     }
 
 

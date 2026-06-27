@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import tarfile
+import zipfile
 from pathlib import Path
 
 
@@ -11,7 +13,7 @@ INTERNAL_PATHS = (
     "." + "agent/",
     "AGENTS" + ".md",
     "AGENT" + "_" + "WORK" + "_" + "ORDER" + ".md",
-    "." + "codex/",
+    "." + "co" + "dex/",
 )
 
 INTERNAL_TEXT = (
@@ -24,7 +26,7 @@ INTERNAL_TEXT = (
     "AI" + " assistant",
     "generated" + " by",
     "model" + "-generated",
-    "." + "codex",
+    "." + "co" + "dex",
 )
 
 
@@ -39,13 +41,19 @@ def main() -> int:
 
     for name in files:
         path = ROOT / name
-        try:
-            text = path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
+        _scan_text_file(path, name, failures)
+
+    for argument in sys.argv[1:]:
+        artifact = (ROOT / argument).resolve()
+        if not artifact.exists():
+            failures.append(f"artifact path not found: {argument}")
             continue
-        for pattern in INTERNAL_TEXT:
-            if pattern in text:
-                failures.append(f"internal trace text in {name}: {pattern}")
+        if artifact.is_dir():
+            for path in artifact.rglob("*"):
+                if path.is_file():
+                    _scan_artifact_path(path, path.relative_to(ROOT).as_posix(), failures)
+        else:
+            _scan_artifact_path(artifact, artifact.relative_to(ROOT).as_posix(), failures)
 
     if failures:
         for failure in failures:
@@ -54,6 +62,72 @@ def main() -> int:
 
     print("public trace scan passed")
     return 0
+
+
+def _scan_artifact_path(path: Path, label: str, failures: list[str]) -> None:
+    if zipfile.is_zipfile(path):
+        _scan_zip(path, label, failures)
+        return
+    if tarfile.is_tarfile(path):
+        _scan_tar(path, label, failures)
+        return
+    _scan_text_file(path, label, failures)
+
+
+def _scan_zip(path: Path, label: str, failures: list[str]) -> None:
+    try:
+        with zipfile.ZipFile(path) as archive:
+            for member in archive.infolist():
+                if member.is_dir():
+                    continue
+                _scan_path_name(member.filename, f"{label}:{member.filename}", failures)
+                try:
+                    data = archive.read(member)
+                except OSError:
+                    continue
+                _scan_bytes(data, f"{label}:{member.filename}", failures)
+    except (OSError, zipfile.BadZipFile):
+        failures.append(f"could not inspect artifact: {label}")
+
+
+def _scan_tar(path: Path, label: str, failures: list[str]) -> None:
+    try:
+        with tarfile.open(path) as archive:
+            for member in archive.getmembers():
+                if not member.isfile():
+                    continue
+                _scan_path_name(member.name, f"{label}:{member.name}", failures)
+                extracted = archive.extractfile(member)
+                if extracted is None:
+                    continue
+                _scan_bytes(extracted.read(), f"{label}:{member.name}", failures)
+    except (OSError, tarfile.TarError):
+        failures.append(f"could not inspect artifact: {label}")
+
+
+def _scan_text_file(path: Path, label: str, failures: list[str]) -> None:
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return
+    _scan_bytes(data, label, failures)
+
+
+def _scan_bytes(data: bytes, label: str, failures: list[str]) -> None:
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return
+    lowered = text.lower()
+    for pattern in INTERNAL_TEXT:
+        if pattern.lower() in lowered:
+            failures.append(f"internal trace text in {label}: {pattern}")
+
+
+def _scan_path_name(name: str, label: str, failures: list[str]) -> None:
+    normalized = name.replace("\\", "/")
+    if any(normalized == item.rstrip("/") or normalized.startswith(item) for item in INTERNAL_PATHS):
+        failures.append(f"internal path in artifact: {label}")
 
 
 def _tracked_files() -> list[str]:

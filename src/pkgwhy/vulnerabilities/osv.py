@@ -80,7 +80,7 @@ def query_osv_cached(
     try:
         payload = _fetch_osv_payload(package_name, version, timeout_seconds=timeout_seconds)
     except OSVClientError as exc:
-        cached = _read_cached_payload(cache_path)
+        cached = _read_cached_payload(cache_path, package_name, version)
         warning = (
             f"OSV.dev lookup unavailable for {package_name} {version or 'unknown-version'}: {exc}. "
             "Missing vulnerability matches are not proof of safety."
@@ -168,12 +168,23 @@ def _write_cached_payload(cache_path: Path, package_name: str, version: str | No
     return []
 
 
-def _read_cached_payload(cache_path: Path) -> dict[str, Any] | None:
+def _read_cached_payload(cache_path: Path, package_name: str, version: str | None) -> dict[str, Any] | None:
     try:
         document = json.loads(cache_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
     if not isinstance(document, dict):
+        return None
+    if document.get("schema_version") != "pkgwhy.osv_cache.v1":
+        return None
+    if document.get("source") != OSV_SOURCE:
+        return None
+    cached_package = document.get("package")
+    if not isinstance(cached_package, str):
+        return None
+    if normalize_package_name(cached_package) != normalize_package_name(package_name):
+        return None
+    if document.get("version") != version:
         return None
     payload = document.get("payload")
     return payload if isinstance(payload, dict) else None

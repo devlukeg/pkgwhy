@@ -187,3 +187,22 @@ def test_audit_markdown_escapes_newlines_and_backslashes() -> None:
     assert r"1\\2" in rendered
     assert "demo\npackage" not in rendered
     assert len([line for line in rendered.splitlines() if line.startswith("| ")]) == 3
+
+
+def test_audit_markdown_includes_audit_warnings() -> None:
+    judgement = PackageJudgement(
+        package="demo",
+        version="1.0",
+        decision=AgentDecision.ALLOW,
+        risk_level=RiskLevel.LOW,
+        confidence=Confidence.HIGH,
+        summary="demo",
+        source_availability=SourceAvailability.INSTALLED_SOURCE_PRESENT,
+        installed_size_bytes=1,
+        recommendation="ok",
+    )
+
+    rendered = render_audit_markdown([judgement], warnings=["OSV unavailable\nno result inferred"])
+
+    assert "## Warnings" in rendered
+    assert "- OSV unavailable no result inferred" in rendered

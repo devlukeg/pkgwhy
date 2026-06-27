@@ -57,6 +57,12 @@ python scripts/check_public_traces.py
 
 Expected result: `public trace scan passed`.
 
+After building artifacts, also run:
+
+```bash
+python scripts/check_public_traces.py dist/*
+```
+
 Product-facing `pkgwhy agent` references are allowed.
 
 ## Review Gate

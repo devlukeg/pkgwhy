@@ -45,7 +45,7 @@ EXPECTED_RULE_IDS = (
 
 
 def test_rule_catalog_defines_current_rule_metadata() -> None:
-    assert set(EXPECTED_RULE_IDS) <= set(RULES)
+    assert set(EXPECTED_RULE_IDS) == set(RULES)
     assert RULES["PKGWHY-VULN-001"].category == RuleCategory.VULNERABILITY
     assert RULES["PKGWHY-RISK-005"].category == RuleCategory.STATIC_ANALYSIS
     assert all(rule.false_positive_note for rule in RULES.values())

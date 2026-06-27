@@ -141,6 +141,27 @@ def test_query_osv_cached_uses_stale_cache_when_online_lookup_fails(tmp_path, mo
     assert all(str(tmp_path) not in warning for warning in stale.warnings)
 
 
+def test_query_osv_cached_rejects_mismatched_cache_document(tmp_path, monkeypatch) -> None:
+    payload = _osv_payload("demo-pkg", ["1.2.3"])
+    monkeypatch.setattr("pkgwhy.vulnerabilities.osv._fetch_osv_payload", lambda *_, **__: payload)
+    fresh = query_osv_cached("demo-pkg", "1.2.3", cache_dir=tmp_path)
+    assert fresh.cache_path is not None
+    cache_path = fresh.cache_path
+    cached = json.loads(cache_path.read_text(encoding="utf-8"))
+    cached["package"] = "other-pkg"
+    cache_path.write_text(json.dumps(cached), encoding="utf-8")
+
+    def fail_fetch(*_: object, **__: object) -> dict:
+        raise OSVClientError("network unavailable")
+
+    monkeypatch.setattr("pkgwhy.vulnerabilities.osv._fetch_osv_payload", fail_fetch)
+
+    result = query_osv_cached("demo-pkg", "1.2.3", cache_dir=tmp_path)
+
+    assert result.cache_status == "unavailable"
+    assert result.records == []
+
+
 def test_query_osv_cached_reports_unavailable_without_fabricating_records(tmp_path, monkeypatch) -> None:
     def fail_fetch(*_: object, **__: object) -> dict:
         raise OSVClientError("network unavailable")

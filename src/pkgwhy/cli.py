@@ -269,7 +269,7 @@ def audit(
         _emit_or_write(rendered, output)
         return
     if markdown:
-        rendered = render_audit_markdown(judgements)
+        rendered = render_audit_markdown(judgements, warnings=audit_warnings)
         _emit_or_write(rendered, output)
         return
 

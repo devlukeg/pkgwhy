@@ -42,7 +42,7 @@ def build_audit_report(judgements: list[PackageJudgement], warnings: list[str] |
     }
 
 
-def render_audit_markdown(judgements: list[PackageJudgement]) -> str:
+def render_audit_markdown(judgements: list[PackageJudgement], warnings: list[str] | None = None) -> str:
     lines = [
         "# pkgwhy Audit Report",
         "",
@@ -64,8 +64,16 @@ def render_audit_markdown(judgements: list[PackageJudgement]) -> str:
             f"{len(judgement.known_vulnerabilities)} | "
             f"{warning_count} |"
         )
+    if warnings:
+        lines.extend(["", "## Warnings", ""])
+        for warning in warnings:
+            lines.append(f"- {_escape_markdown_list_item(warning)}")
     return "\n".join(lines) + "\n"
 
 
 def _escape_markdown_table_cell(value: str) -> str:
     return value.replace("\\", r"\\").replace("\r", " ").replace("\n", " ").replace("|", r"\|")
+
+
+def _escape_markdown_list_item(value: str) -> str:
+    return value.replace("\\", r"\\").replace("\r", " ").replace("\n", " ")
