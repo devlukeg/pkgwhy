@@ -2,7 +2,7 @@
 
 ## Supported Status
 
-`pkgwhy` is a pre-alpha project. The current local candidate is `0.6.0a0`, including static evidence hardening, a safe-fail dynamic command skeleton, agent policy foundations, and local registry/runner hardening. It is not a production security scanner and should not be treated as a definitive malware detector or full sandbox.
+`pkgwhy` is in local release-candidate readiness review for `1.0.0rc1`. The current candidate includes static evidence hardening, vulnerability/provenance hardening, static rule corpus/schema hardening, an explicit dynamic-analysis out-of-scope decision for `1.0.0`, release/process hardening, a safe-fail dynamic command skeleton, agent policy foundations, and local registry/runner hardening. It is not a production security scanner and should not be treated as a definitive malware detector or full sandbox.
 
 ## Reporting Security Issues
 
@@ -11,6 +11,8 @@ For non-sensitive security bugs or documentation issues, use GitHub Issues:
 <https://github.com/devlukeg/pkgwhy/issues>
 
 For sensitive security reports, use the private channel where you received access to the project until a dedicated security contact is configured.
+
+If GitHub private vulnerability reporting is enabled for the public repository, use that channel for sensitive reports. If it is not enabled, do not disclose sensitive details publicly; use a private maintainer contact channel and include only non-sensitive coordination details in public issues.
 
 Do not include secrets, private package contents, or credentials in public issues.
 
@@ -24,9 +26,9 @@ Static rule evidence can include rule IDs, severity, confidence, file paths, lin
 
 Credential-pattern reporting masks suspicious assignment values before output. Do not rely on `pkgwhy` as a secret scanner; use dedicated secret-scanning tools for repository and release gates.
 
-Known-vulnerability analysis is source-attributed decision support. Local OSV-like files and explicit OSV.dev queries can be incomplete, stale, unavailable, or missing ecosystem-specific details. A missing vulnerability match does not prove that a package has no vulnerabilities.
+Known-vulnerability analysis is source-attributed decision support. Local OSV-like files, explicit OSV.dev queries, and cached OSV responses can be incomplete, stale, unavailable, or missing ecosystem-specific details. A missing vulnerability match does not prove that a package has no vulnerabilities.
 
-Provenance analysis is currently metadata-derived. Repository, documentation, homepage, and release-activity fields are reported only when available from installed metadata or optional metadata payloads. Trusted Publishing, attestation verification, and source distribution versus wheel comparison are not implemented and must be treated as unknown or not implemented.
+Provenance analysis is currently metadata-derived. Repository, documentation, homepage, release-activity, and source-distribution fields are reported only when available from installed metadata or optional PyPI JSON payloads. Trusted Publishing and attestation verification are not implemented and must be treated as unknown or not implemented.
 
 `pkgwhy run` is a separate local private-tool execution feature. It intentionally executes local private tool code only after resolving a valid local registry entry, verifying the stored bundle hash, and applying policy checks. This execution path is separate from package inspection and must not be treated as evidence that package inspection imports or executes inspected package code.
 
@@ -42,14 +44,14 @@ Runner warning:
 This run uses a Python virtual environment for dependency isolation. It does not fully sandbox operating-system permissions.
 ```
 
-Dynamic analysis is a separate experimental roadmap area. Dynamic analysis intentionally executes code and must not run unknown package code on the host. The current `pkgwhy dynamic inspect` command is a safe-fail skeleton: it reports that no sandbox backend is available and refuses to execute the target. Future dynamic analysis must be opt-in, use a disposable sandbox boundary, disable network access by default, use temporary scratch filesystem access by default, avoid host secrets, and fail safely if the requested sandbox backend is unavailable. Empty process, filesystem, or network event lists must not be treated as proof that no behavior occurred.
+Dynamic analysis is a separate experimental roadmap area and is out of scope for `1.0.0` production security guarantees. Dynamic analysis intentionally executes code and must not run unknown package code on the host. The current `pkgwhy dynamic inspect` command is a safe-fail skeleton: it reports that no sandbox backend is available or that execution is blocked, and refuses to execute the target. Future dynamic analysis must be opt-in, use a disposable sandbox boundary, disable network access by default, use temporary scratch filesystem access by default, avoid host secrets, and fail safely if the requested sandbox backend is unavailable. Empty process, filesystem, or network event lists must not be treated as proof that no behavior occurred.
 
 ## Current Limitations
 
 - No complete vulnerability database coverage, guaranteed advisory freshness, or transitive vulnerability analysis yet.
-- OSV.dev lookup is optional and must be explicitly requested.
+- OSV.dev lookup is optional and must be explicitly requested. Cached OSV responses are stale fallback data, not freshness guarantees.
 - Trusted Publishing and attestation verification are not implemented yet.
-- Source distribution versus wheel comparison is not implemented yet.
+- Full source distribution versus wheel comparison is not implemented yet.
 - No runner dependency installation yet.
 - No tool bundle signing or signature verification yet.
 - No tamper-proof audit log, remote attestation, or signed decision record yet.
@@ -58,10 +60,12 @@ Dynamic analysis is a separate experimental roadmap area. Dynamic analysis inten
 - Typosquatting detection is heuristic and conservative. It can miss risky names and can surface false positives.
 - Static URL/domain and credential-pattern extraction is heuristic. It can miss references and can surface documentation, examples, tests, or placeholders.
 - JavaScript minification and native/WASM files are not automatically malicious, and static analysis cannot fully explain compiled or generated artifacts.
-- No OS-level sandboxing or production dynamic sandbox yet.
-- No cloud review or remote evidence lookup in the preview.
+- No OS-level sandboxing or production dynamic sandbox in the `1.0.0` readiness line.
+- No cloud review or remote evidence lookup in the current candidate.
 - No guarantee that every risky behavior can be detected statically.
 
 ## Publishing And Secrets
 
 This repository should not contain PyPI tokens, cloud credentials, registry signing keys, or payment-provider secrets.
+
+See also [Threat Model](docs/threat-model.md), [Release Checklist](docs/release-checklist.md), and [Production Readiness Blockers](docs/production-readiness.md).

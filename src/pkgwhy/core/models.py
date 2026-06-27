@@ -175,6 +175,7 @@ class VulnerabilityRange(BaseModel):
     introduced: str | None = None
     fixed: str | None = None
     last_affected: str | None = None
+    limit: str | None = None
     range_type: str | None = None
 
 

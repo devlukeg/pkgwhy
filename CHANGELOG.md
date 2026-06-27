@@ -1,5 +1,51 @@
 # Changelog
 
+## 1.0.0rc1 - Unreleased release candidate
+
+- Freeze the local release-candidate feature surface for package intelligence, static rule evidence, vulnerability/provenance decision support, agent policy JSON, local registry/runner safety, and release-process documentation.
+- Keep dynamic analysis explicitly experimental and out of scope for `1.0.0` production security guarantees.
+- Align README, SECURITY, package metadata, and version metadata for local `1.0.0rc1` validation.
+- Harden release-candidate validation with artifact trace scanning, cache metadata validation, Markdown audit warnings, hermetic JSON snapshots, and exact rule catalog membership tests.
+- Align release-candidate wording and package classifier for final local rc1 hardening.
+- Harden final review checks for offline-first documentation, trace path matching, dynamic boundary wording, Markdown escaping, static corpus import traps, and rule-category ordering.
+
+## 0.9.5a0 - Unreleased pre-alpha
+
+- Add release checklist, versioning policy, threat model, and production-readiness blocker documentation.
+- Improve public responsible disclosure guidance without configuring external services or secrets.
+- Link release/process documentation from README, SECURITY, and CONTRIBUTING.
+- Add CI CLI smoke checks and public trace hygiene scanning without publishing secrets or deployment steps.
+- Align local package metadata for the `0.9.5a0` release/process hardening candidate.
+
+## 0.9.0a0 - Unreleased pre-alpha
+
+- Choose dynamic analysis Option B for the `1.0.0` readiness line: dynamic analysis remains experimental and out of scope for production security guarantees.
+- Keep `pkgwhy dynamic inspect` as a safe-fail CLI skeleton that refuses host execution of unknown package code and does not invoke Docker or run containers.
+- Add tests that assert the dynamic result warnings and limitations carry the explicit Option B boundary.
+- Align README, SECURITY, CLI help, and local package metadata for the `0.9.0a0` dynamic-analysis boundary.
+
+## 0.8.0a0 - Unreleased pre-alpha
+
+- Start static rule corpus/schema hardening with a versioned static rule catalog snapshot.
+- Add stable rule ID ordering helpers and tests to catch accidental rule renames, removals, or reordering.
+- Add static rule corpus documentation covering rule categories, rule families, fixture strategy, and compatibility expectations.
+- Add controlled Python static-signal corpus fixtures for dynamic execution, dynamic imports, deserialisation, encoded payloads, subprocess/package-manager use, environment access, URL/domain extraction, and credential masking.
+- Add controlled JavaScript, native, WASM, shell, and build-file corpus fixtures with false-positive coverage for JavaScript call-like substrings.
+- Add normalized golden JSON snapshot tests and schema compatibility policy documentation for agent-facing package, audit, precheck, and tool judgement output.
+- Document static rule ID lifecycle, evidence location expectations, corpus fixture coverage, and false-positive/false-negative limitations.
+- Harden OSV response decoding, audited-version PyPI provenance status, rule catalog snapshots, and JSON/static corpus regression tests.
+
+## 0.7.0a0 - Unreleased pre-alpha
+
+- Harden explicit OSV.dev audit lookups with a local response cache, stale-cache fallback, cache status warnings, and continued offline-by-default behavior.
+- Keep vulnerability matching conservative by treating OSV `limit` events as upper bounds, not fixed-version recommendations.
+- Add advisory source URL evidence to known-vulnerability matches and audit-level vulnerability/provenance source summaries.
+- Bump audit JSON output to `pkgwhy.audit.v2` for the expanded source summary fields.
+- Add optional `pkgwhy audit --pypi` provenance lookup from PyPI JSON without inferring Trusted Publishing or attestation status.
+- Report PyPI source distribution presence only when PyPI file metadata actually lists a source archive.
+- Add tests for OSV parsing, matching, caching, source attribution, PyPI provenance, and audit integration.
+- Document that cached advisory data can be stale and that missing vulnerability matches are not proof of safety.
+
 ## 0.6.0a0 - Unreleased pre-alpha
 
 - Add schema-versioned agent policy defaults with conservative non-interactive decisions for package use.

@@ -1,6 +1,6 @@
 # Contributing
 
-`pkgwhy` is still pre-alpha. Small, focused issues and pull requests are easiest to review right now.
+`pkgwhy` is in release-candidate review for `1.0.0rc1`. Small, focused issues and pull requests are easiest to review right now.
 
 ## Development Setup
 
@@ -38,7 +38,9 @@ git diff --check
 .venv/bin/python -m twine check dist/*
 ```
 
-Publishing automation, external services, payment processing, secrets, and cloud backends are out of scope for this preview.
+For release-candidate work, also follow [docs/release-checklist.md](docs/release-checklist.md), [docs/versioning-policy.md](docs/versioning-policy.md), and [docs/production-readiness.md](docs/production-readiness.md).
+
+Publishing automation, external services, payment processing, secrets, and cloud backends are out of scope for this candidate.
 
 Repository: <https://github.com/devlukeg/pkgwhy>
 

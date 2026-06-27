@@ -1,3 +1,3 @@
 """pkgwhy package intelligence CLI."""
 
-__version__ = "0.6.0a0"
+__version__ = "1.0.0rc1"

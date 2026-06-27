@@ -28,8 +28,28 @@ jobs:
       - name: Run tests
         run: python -m pytest
 
+      - name: Run CLI smoke checks
+        run: |
+          python -m pkgwhy --help
+          python -m pkgwhy scan
+          python -m pkgwhy explain typer
+          python -m pkgwhy inspect typer
+          python -m pkgwhy judge typer --json
+          python -m pkgwhy risk typer
+          python -m pkgwhy audit --limit 2 --json
+          python -m pkgwhy typos requests pandas-stubs
+          python -m pkgwhy agent --help
+          python -m pkgwhy agent precheck typer --json
+          python -m pkgwhy dynamic --help
+          python -m pkgwhy dynamic inspect --help
+
       - name: Build distribution
         run: python -m build
 
       - name: Check distribution metadata
         run: python -m twine check dist/*
+
+      - name: Check public trace hygiene
+        run: |
+          python scripts/check_public_traces.py
+          python scripts/check_public_traces.py dist/*

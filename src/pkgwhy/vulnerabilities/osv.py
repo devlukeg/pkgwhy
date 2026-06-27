@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import UTC, datetime
+import hashlib
 import json
+import os
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any
 from urllib import error, request
 
@@ -10,6 +15,17 @@ from pkgwhy.metadata.installed import normalize_package_name
 
 OSV_QUERY_URL = "https://api.osv.dev/v1/query"
 OSV_SOURCE = "OSV.dev"
+OSV_CACHE_ENV = "PKGWHY_CACHE_HOME"
+
+
+@dataclass(frozen=True)
+class OSVLookupResult:
+    """Cache-aware OSV lookup result with explicit freshness status."""
+
+    records: list[VulnerabilityRecord]
+    cache_status: str
+    cache_path: Path | None = None
+    warnings: tuple[str, ...] = ()
 
 
 class OSVClientError(RuntimeError):
@@ -47,6 +63,58 @@ def parse_osv_payload(payload: dict[str, Any] | list[Any], package_name: str | N
 
 def query_osv(package_name: str, version: str | None, *, timeout_seconds: float = 10.0) -> list[VulnerabilityRecord]:
     """Query OSV.dev explicitly; callers decide when network access is allowed."""
+    payload = _fetch_osv_payload(package_name, version, timeout_seconds=timeout_seconds)
+    return parse_osv_payload(payload, package_name=package_name)
+
+
+def query_osv_cached(
+    package_name: str,
+    version: str | None,
+    *,
+    timeout_seconds: float = 10.0,
+    cache_dir: Path | None = None,
+) -> OSVLookupResult:
+    """Query OSV.dev with a stale-cache fallback for explicitly online callers."""
+    resolved_cache_dir = cache_dir or default_osv_cache_dir()
+    cache_path = _cache_path(resolved_cache_dir, package_name, version)
+    try:
+        payload = _fetch_osv_payload(package_name, version, timeout_seconds=timeout_seconds)
+    except OSVClientError as exc:
+        cached = _read_cached_payload(cache_path, package_name, version)
+        warning = (
+            f"OSV.dev lookup unavailable for {package_name} {version or 'unknown-version'}: {exc}. "
+            "Missing vulnerability matches are not proof of safety."
+        )
+        if cached is None:
+            return OSVLookupResult(records=[], cache_status="unavailable", cache_path=cache_path, warnings=(warning,))
+        records = parse_osv_payload(cached, package_name=package_name)
+        return OSVLookupResult(
+            records=records,
+            cache_status="stale_cache",
+            cache_path=cache_path,
+            warnings=(
+                warning,
+                "Using cached OSV.dev response. Cached advisory data may be stale.",
+            ),
+        )
+
+    warnings = _write_cached_payload(cache_path, package_name, version, payload)
+    return OSVLookupResult(
+        records=parse_osv_payload(payload, package_name=package_name),
+        cache_status="fresh",
+        cache_path=cache_path,
+        warnings=tuple(warnings),
+    )
+
+
+def default_osv_cache_dir() -> Path:
+    """Return the default OSV cache directory without creating it."""
+    configured = os.environ.get(OSV_CACHE_ENV)
+    root = Path(configured).expanduser() if configured else Path.home() / ".cache" / "pkgwhy"
+    return root / "vulnerabilities" / "osv"
+
+
+def _fetch_osv_payload(package_name: str, version: str | None, *, timeout_seconds: float) -> dict[str, Any]:
     query: dict[str, Any] = {"package": {"name": package_name, "ecosystem": "PyPI"}}
     if version is not None:
         query["version"] = version
@@ -59,10 +127,67 @@ def query_osv(package_name: str, version: str | None, *, timeout_seconds: float 
     )
     try:
         with request.urlopen(req, timeout=timeout_seconds) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except (OSError, error.HTTPError, json.JSONDecodeError) as exc:
+            return json.loads(response.read().decode("utf-8"))
+    except (OSError, error.HTTPError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise OSVClientError(f"OSV.dev query failed for {package_name}: {exc}") from exc
-    return parse_osv_payload(payload, package_name=package_name)
+
+
+def _cache_path(cache_dir: Path, package_name: str, version: str | None) -> Path:
+    normalized = normalize_package_name(package_name)
+    version_part = version or "no-version"
+    digest = hashlib.sha256(f"{normalized}\0{version_part}".encode("utf-8")).hexdigest()[:16]
+    return cache_dir / f"{normalized}-{digest}.json"
+
+
+def _write_cached_payload(cache_path: Path, package_name: str, version: str | None, payload: dict[str, Any]) -> list[str]:
+    document = {
+        "schema_version": "pkgwhy.osv_cache.v1",
+        "source": OSV_SOURCE,
+        "package": package_name,
+        "version": version,
+        "fetched_at": datetime.now(UTC).isoformat(),
+        "payload": payload,
+    }
+    tmp_path: Path | None = None
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        serialized = json.dumps(document, indent=2, sort_keys=True)
+        with NamedTemporaryFile("w", dir=cache_path.parent, encoding="utf-8", delete=False) as tmp_file:
+            tmp_file.write(serialized)
+            tmp_file.flush()
+            os.fsync(tmp_file.fileno())
+            tmp_path = Path(tmp_file.name)
+        os.replace(tmp_path, cache_path)
+    except OSError:
+        if tmp_path is not None:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        return ["Could not write OSV.dev cache."]
+    return []
+
+
+def _read_cached_payload(cache_path: Path, package_name: str, version: str | None) -> dict[str, Any] | None:
+    try:
+        document = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(document, dict):
+        return None
+    if document.get("schema_version") != "pkgwhy.osv_cache.v1":
+        return None
+    if document.get("source") != OSV_SOURCE:
+        return None
+    cached_package = document.get("package")
+    if not isinstance(cached_package, str):
+        return None
+    if normalize_package_name(cached_package) != normalize_package_name(package_name):
+        return None
+    if document.get("version") != version:
+        return None
+    payload = document.get("payload")
+    return payload if isinstance(payload, dict) else None
 
 
 def _records_from_vulnerability(item: dict[str, Any], package_name: str | None) -> list[VulnerabilityRecord]:
@@ -138,6 +263,15 @@ def _parse_ranges(value: Any) -> list[VulnerabilityRange]:
                     VulnerabilityRange(
                         introduced=introduced,
                         last_affected=_string_or_none(event.get("last_affected")),
+                        range_type=_string_or_none(item.get("type")),
+                    )
+                )
+                introduced = None
+            if "limit" in event:
+                ranges.append(
+                    VulnerabilityRange(
+                        introduced=introduced,
+                        limit=_string_or_none(event.get("limit")),
                         range_type=_string_or_none(item.get("type")),
                     )
                 )

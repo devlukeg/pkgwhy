@@ -1,14 +1,16 @@
 # Dynamic Sandbox Design
 
-Status: experimental design for the `0.5.0` roadmap.
+Status: experimental and out of scope for `1.0.0` production security guarantees.
 
 `pkgwhy` is static and metadata-first by default. Dynamic analysis is different: it intentionally executes code, so it changes the trust and safety boundary. This document defines the safety constraints for any future dynamic analysis work.
 
 ## Current State
 
-Dynamic package analysis is not implemented yet.
+Dynamic package analysis is not implemented for arbitrary packages.
 
 There is no production malware sandbox, no arbitrary package execution, no dynamic package installation, and no claim of full operating-system sandboxing. Static inspection remains the default package review path.
+
+For the `1.0.0` readiness line, `pkgwhy` has chosen Option B: dynamic analysis remains experimental and out of scope for production security guarantees. The CLI skeleton remains available to expose the intended JSON shape and safety boundary, but it must fail closed rather than run unknown code.
 
 The current CLI surface is a safe-fail skeleton:
 
@@ -18,7 +20,7 @@ pkgwhy dynamic inspect --help
 pkgwhy dynamic inspect <target> --container --network off
 ```
 
-Until a sandbox backend exists, `pkgwhy dynamic inspect` refuses to execute the target and reports that the backend is unavailable. It must not fall back to host execution.
+Until a sandbox backend exists, `pkgwhy dynamic inspect` refuses to execute the target and reports that the backend is unavailable or blocked. It must not fall back to host execution.
 
 `pkgwhy run` is a separate local private-tool execution path. It resolves tools from a configured local registry and verifies bundle hashes before running them in a Python virtual environment. A virtual environment is dependency isolation only; it is not an operating-system sandbox.
 
@@ -62,9 +64,9 @@ Dynamic analysis must be:
 
 If a required sandbox backend is unavailable, the command must fail safely with a clear result. It must not silently fall back to host execution.
 
-## Intended Container Boundary
+## Future Container Boundary
 
-The preferred future backend is a disposable container or equivalent isolated environment with:
+If dynamic analysis is revisited after `1.0.0`, the preferred backend is a disposable container or equivalent isolated environment with:
 
 - a fresh filesystem per run;
 - no mounted home directory by default;

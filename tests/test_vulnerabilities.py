@@ -8,7 +8,7 @@ from pkgwhy.cli import _dedupe_vulnerability_matches, app
 from pkgwhy.core.models import PackageMetadata, VulnerabilityMatch
 from pkgwhy.metadata.installed import list_installed_packages
 from pkgwhy.vulnerabilities.matching import match_vulnerabilities
-from pkgwhy.vulnerabilities.osv import parse_osv_payload
+from pkgwhy.vulnerabilities.osv import OSVClientError, parse_osv_payload, query_osv_cached
 
 runner = CliRunner()
 
@@ -57,6 +57,30 @@ def test_version_matching_ignores_semver_ranges_without_pep440_claims() -> None:
     assert not match_vulnerabilities("demo-pkg", "1.5.0", records)
 
 
+def test_version_matching_treats_osv_limit_as_upper_bound_not_fixed_version() -> None:
+    payload = _osv_payload("demo-pkg", [])
+    payload["vulns"][0]["affected"][0]["ranges"][0]["events"] = [
+        {"introduced": "1.0.0"},
+        {"limit": "2.0.0"},
+    ]
+    records = parse_osv_payload(payload)
+
+    assert match_vulnerabilities("demo-pkg", "1.5.0", records)
+    assert not match_vulnerabilities("demo-pkg", "2.0.0", records)
+    assert records[0].fixed_versions == []
+
+
+def test_version_matching_supports_limit_only_osv_ranges() -> None:
+    payload = _osv_payload("demo-pkg", [])
+    payload["vulns"][0]["affected"][0]["ranges"][0]["events"] = [
+        {"limit": "2.0.0"},
+    ]
+    records = parse_osv_payload(payload)
+
+    assert match_vulnerabilities("demo-pkg", "1.5.0", records)
+    assert not match_vulnerabilities("demo-pkg", "2.0.0", records)
+
+
 def test_version_matching_deduplicates_and_compares_explicit_versions_semantically() -> None:
     payload = _osv_payload("demo-pkg", ["1.0"])
     records = parse_osv_payload({"vulns": payload["vulns"] + payload["vulns"]})
@@ -93,6 +117,64 @@ def test_cli_vulnerability_dedupe_keeps_stronger_match() -> None:
     assert matches == [strong]
 
 
+def test_query_osv_cached_uses_stale_cache_when_online_lookup_fails(tmp_path, monkeypatch) -> None:
+    payload = _osv_payload("demo-pkg", ["1.2.3"])
+    monkeypatch.setattr("pkgwhy.vulnerabilities.osv._fetch_osv_payload", lambda *_, **__: payload)
+
+    fresh = query_osv_cached("demo-pkg", "1.2.3", cache_dir=tmp_path)
+
+    assert fresh.cache_status == "fresh"
+    assert fresh.cache_path is not None
+    assert fresh.cache_path.exists()
+    assert fresh.records[0].source == "OSV.dev"
+
+    def fail_fetch(*_: object, **__: object) -> dict:
+        raise OSVClientError("network unavailable")
+
+    monkeypatch.setattr("pkgwhy.vulnerabilities.osv._fetch_osv_payload", fail_fetch)
+
+    stale = query_osv_cached("demo-pkg", "1.2.3", cache_dir=tmp_path)
+
+    assert stale.cache_status == "stale_cache"
+    assert stale.records[0].id == "TEST-VULN-0001"
+    assert any("Cached advisory data may be stale" in warning for warning in stale.warnings)
+    assert all(str(tmp_path) not in warning for warning in stale.warnings)
+
+
+def test_query_osv_cached_rejects_mismatched_cache_document(tmp_path, monkeypatch) -> None:
+    payload = _osv_payload("demo-pkg", ["1.2.3"])
+    monkeypatch.setattr("pkgwhy.vulnerabilities.osv._fetch_osv_payload", lambda *_, **__: payload)
+    fresh = query_osv_cached("demo-pkg", "1.2.3", cache_dir=tmp_path)
+    assert fresh.cache_path is not None
+    cache_path = fresh.cache_path
+    cached = json.loads(cache_path.read_text(encoding="utf-8"))
+    cached["package"] = "other-pkg"
+    cache_path.write_text(json.dumps(cached), encoding="utf-8")
+
+    def fail_fetch(*_: object, **__: object) -> dict:
+        raise OSVClientError("network unavailable")
+
+    monkeypatch.setattr("pkgwhy.vulnerabilities.osv._fetch_osv_payload", fail_fetch)
+
+    result = query_osv_cached("demo-pkg", "1.2.3", cache_dir=tmp_path)
+
+    assert result.cache_status == "unavailable"
+    assert result.records == []
+
+
+def test_query_osv_cached_reports_unavailable_without_fabricating_records(tmp_path, monkeypatch) -> None:
+    def fail_fetch(*_: object, **__: object) -> dict:
+        raise OSVClientError("network unavailable")
+
+    monkeypatch.setattr("pkgwhy.vulnerabilities.osv._fetch_osv_payload", fail_fetch)
+
+    result = query_osv_cached("demo-pkg", "1.2.3", cache_dir=tmp_path)
+
+    assert result.cache_status == "unavailable"
+    assert result.records == []
+    assert any("Missing vulnerability matches are not proof of safety" in warning for warning in result.warnings)
+
+
 def test_judgement_includes_known_vulnerability_rule_evidence() -> None:
     package = _first_installed_package()
     records = parse_osv_payload(_osv_payload(package.identity.name, [package.identity.version or "0"]))
@@ -119,6 +201,7 @@ def test_audit_json_includes_fixture_vulnerability_matches(tmp_path) -> None:
     assert result.exit_code == 0
     data = json.loads(result.output)
     assert data["vulnerability_match_count"] == 1
+    assert data["vulnerability_sources"] == ["OSV.dev"]
     assert data["packages"][0]["known_vulnerabilities"][0]["vulnerability_id"] == "TEST-VULN-0001"
     assert data["packages"][0]["risk_model_version"] == "pkgwhy.risk_model.v1"
 
