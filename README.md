@@ -280,6 +280,8 @@ pkgwhy run local/my_tool --non-interactive
 
 ## Agent JSON Contracts
 
+Compatibility policy: [docs/json-schema-compatibility.md](docs/json-schema-compatibility.md).
+
 Package judgement schema version: `pkgwhy.package_judgement.v1`.
 
 Field shape for `pkgwhy judge <package> --json`:

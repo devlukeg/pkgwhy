@@ -57,6 +57,8 @@ Corpus fixtures should cover:
 - Vulnerability/provenance examples using controlled local OSV-like and PyPI-like payloads.
 - Golden JSON snapshots for stable agent-facing output.
 
+See [JSON Schema Compatibility](json-schema-compatibility.md) for the snapshot and schema-versioning policy.
+
 ## Compatibility
 
 Rule IDs are pre-alpha stability candidates. A rule ID should not be renamed, reused for a different meaning, or removed silently. If a rule changes shape or semantics in a way that affects agent-facing JSON consumers, update the relevant schema or catalog version and document the change in `CHANGELOG.md`.
