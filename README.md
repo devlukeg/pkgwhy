@@ -14,7 +14,7 @@ Current packaged version candidate: `1.0.0rc1`.
 
 ## What Works Now
 
-The current preview includes installed package intelligence:
+The current candidate includes installed package intelligence:
 
 ```bash
 pkgwhy scan
@@ -126,7 +126,7 @@ Install directly from GitHub after the repository is public, or from an authoriz
 python -m pip install "pkgwhy @ git+https://github.com/devlukeg/pkgwhy.git"
 ```
 
-Future PyPI pre-alpha install command, once a release is published:
+Future PyPI install command, once a release is published:
 
 ```bash
 python -m pip install pkgwhy
@@ -536,11 +536,11 @@ Agent decisions:
 
 The current risk engine is deliberately conservative and early. Treat it as decision support for humans and agents, not a final verdict.
 
-Risk rule output includes `risk_model_version` and per-rule `rule_id`, category, severity, confidence, message, evidence, optional file path, optional line number, optional symbol, and false-positive notes. These rule IDs are a pre-alpha stability candidate, not a long-term compatibility guarantee yet.
+Risk rule output includes `risk_model_version` and per-rule `rule_id`, category, severity, confidence, message, evidence, optional file path, optional line number, optional symbol, and false-positive notes. These rule IDs are a release-candidate stability surface; incompatible changes require changelog coverage and may require a schema or catalog version bump.
 
 Detailed rule categories, corpus strategy, compatibility expectations, and false-positive/false-negative limitations are documented in [`docs/static-rule-corpus.md`](docs/static-rule-corpus.md).
 
-Current pre-alpha rule IDs:
+Current release-candidate rule IDs:
 
 - `PKGWHY-VULN-001`: known vulnerability advisory match.
 - `PKGWHY-RISK-001`: possible typosquatting similarity.
@@ -591,7 +591,7 @@ pkgwhy tool judge local/my_tool --json
 pkgwhy run local/my_tool
 ```
 
-The runner executes only tools resolved from the configured local registry. It does not run arbitrary public package code, does not install tool dependencies in the MVP, and blocks execution if the stored bundle hash does not verify. Local registry entries are file-backed records under the configured registry path; no cloud registry, account, upload, pull, or remote sync is implemented in this preview.
+The runner executes only tools resolved from the configured local registry. It does not run arbitrary public package code, does not install tool dependencies in the MVP, and blocks execution if the stored bundle hash does not verify. Local registry entries are file-backed records under the configured registry path; no cloud registry, account, upload, pull, or remote sync is implemented in this candidate.
 
 The `1.0.0rc1` candidate includes policy-as-code foundations for agents:
 
@@ -613,7 +613,7 @@ Signing is also not implemented yet, so JSON judgement reports `signature_status
 
 The local/free product will remain offline-first: metadata inspection, AST scanning, capability signals, local risk rules, and local JSON judgement.
 
-A future paid cloud/model-backed review layer may add deeper review over retrieved package evidence, review IDs, cached results, richer policy decisions, usage logs, privacy controls, and enterprise/private deployment options. Billing and cloud review are not implemented in this preview.
+A future paid cloud/model-backed review layer may add deeper review over retrieved package evidence, review IDs, cached results, richer policy decisions, usage logs, privacy controls, and enterprise/private deployment options. Billing and cloud review are not implemented in this candidate.
 
 ## Development
 

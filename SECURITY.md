@@ -61,7 +61,7 @@ Dynamic analysis is a separate experimental roadmap area and is out of scope for
 - Static URL/domain and credential-pattern extraction is heuristic. It can miss references and can surface documentation, examples, tests, or placeholders.
 - JavaScript minification and native/WASM files are not automatically malicious, and static analysis cannot fully explain compiled or generated artifacts.
 - No OS-level sandboxing or production dynamic sandbox in the `1.0.0` readiness line.
-- No cloud review or remote evidence lookup in the preview.
+- No cloud review or remote evidence lookup in the current candidate.
 - No guarantee that every risky behavior can be detected statically.
 
 ## Publishing And Secrets

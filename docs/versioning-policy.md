@@ -1,6 +1,6 @@
 # Versioning Policy
 
-`pkgwhy` is still pre-`1.0.0`. Public JSON schemas and rule IDs are stability candidates, but breaking changes are still possible before the final `1.0.0` release.
+`pkgwhy` is in local `1.0.0rc1` review. Public JSON schemas and rule IDs are release-candidate stability surfaces; incompatible changes require changelog coverage and may require a schema or catalog version bump.
 
 ## Package Versions
 

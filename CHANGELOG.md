@@ -6,6 +6,7 @@
 - Keep dynamic analysis explicitly experimental and out of scope for `1.0.0` production security guarantees.
 - Align README, SECURITY, package metadata, and version metadata for local `1.0.0rc1` validation.
 - Harden release-candidate validation with artifact trace scanning, cache metadata validation, Markdown audit warnings, hermetic JSON snapshots, and exact rule catalog membership tests.
+- Align release-candidate wording and package classifier for final local rc1 hardening.
 
 ## 0.9.5a0 - Unreleased pre-alpha
 

@@ -15,14 +15,12 @@ This document tracks remaining work before `pkgwhy` can be described as producti
 - Local registry and runner hardening for corrupt indexes, duplicate publishes, symlinks, bounded registry paths, missing bundles, hash mismatch, unsupported entrypoints, and explicit non-sandboxing warnings.
 - Dynamic analysis Option B: experimental and out of scope for `1.0.0` production security guarantees.
 
-## Remaining Before `1.0.0`
+## Remaining Before Final `1.0.0`
 
+- Luke review and explicit approval for any push, PR, tag, or publish action.
 - Remote CI status after an approved push/PR flow.
-- Final public docs alignment for the selected release candidate.
 - Final security posture review after external review and local checks.
 - Confirmation that public responsible disclosure guidance is acceptable for the public repository.
-- Decision on whether source distribution versus wheel comparison remains out of scope or needs implementation.
-- Decision on whether signing and attestation remain `not_implemented` for `1.0.0` or need a scoped implementation.
 - Final release-candidate validation from a clean checkout or fresh environment.
 
 ## Explicit Non-Goals For `1.0.0`
