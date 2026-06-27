@@ -6,11 +6,11 @@ Know why a package exists before you or your agent trusts it.
 
 ## Status
 
-`pkgwhy` is in pre-alpha readiness review for the `0.9.5a0` candidate. It is useful for local package inspection experiments, conservative static package review, agent decision-support prototypes, and feedback on the CLI, policy, vulnerability, provenance, dynamic-analysis boundary, release process, and local private-registry shape.
+`pkgwhy` is in local release-candidate readiness review for the `1.0.0rc1` candidate. It is useful for local package inspection, conservative static package review, agent decision-support prototypes, and feedback on the CLI, policy, vulnerability, provenance, dynamic-analysis boundary, release process, and local private-registry shape.
 
 It is not a production security scanner, not malware-detection certainty, and not a full sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
 
-Current packaged version candidate: `0.9.5a0`.
+Current packaged version candidate: `1.0.0rc1`.
 
 ## What Works Now
 
@@ -593,7 +593,7 @@ pkgwhy run local/my_tool
 
 The runner executes only tools resolved from the configured local registry. It does not run arbitrary public package code, does not install tool dependencies in the MVP, and blocks execution if the stored bundle hash does not verify. Local registry entries are file-backed records under the configured registry path; no cloud registry, account, upload, pull, or remote sync is implemented in this preview.
 
-The `0.9.5a0` pre-alpha includes policy-as-code foundations for agents:
+The `1.0.0rc1` candidate includes policy-as-code foundations for agents:
 
 - `pkgwhy agent policy` shows conservative default policy.
 - `pkgwhy agent precheck <package> --json` applies policy to package judgement JSON.
@@ -630,6 +630,7 @@ Release and process references:
 - [Release Checklist](docs/release-checklist.md)
 - [Versioning Policy](docs/versioning-policy.md)
 - [JSON Schema Compatibility](docs/json-schema-compatibility.md)
+- [Release Candidate Feature Surface](docs/release-candidate-surface.md)
 - [Threat Model](docs/threat-model.md)
 - [Production Readiness Blockers](docs/production-readiness.md)
 

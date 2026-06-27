@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0rc1 - Unreleased release candidate
+
+- Freeze the local release-candidate feature surface for package intelligence, static rule evidence, vulnerability/provenance decision support, agent policy JSON, local registry/runner safety, and release-process documentation.
+- Keep dynamic analysis explicitly experimental and out of scope for `1.0.0` production security guarantees.
+- Align README, SECURITY, package metadata, and version metadata for local `1.0.0rc1` validation.
+
 ## 0.9.5a0 - Unreleased pre-alpha
 
 - Add release checklist, versioning policy, threat model, and production-readiness blocker documentation.
