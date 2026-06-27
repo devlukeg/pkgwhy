@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pkgwhy"
-version = "0.9.0a0"
+version = "0.9.5a0"
 description = "Offline-first Python package intelligence, agent policy, and local private-tool decision support."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -69,6 +69,7 @@ include = [
   "README.md",
   "SECURITY.md",
   "pyproject.toml",
+  "scripts/**",
   "src/**",
   "tests/**",
 ]

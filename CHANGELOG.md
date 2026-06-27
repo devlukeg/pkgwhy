@@ -5,6 +5,8 @@
 - Add release checklist, versioning policy, threat model, and production-readiness blocker documentation.
 - Improve public responsible disclosure guidance without configuring external services or secrets.
 - Link release/process documentation from README, SECURITY, and CONTRIBUTING.
+- Add CI CLI smoke checks and public trace hygiene scanning without publishing secrets or deployment steps.
+- Align local package metadata for the `0.9.5a0` release/process hardening candidate.
 
 ## 0.9.0a0 - Unreleased pre-alpha
 
