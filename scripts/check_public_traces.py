@@ -16,6 +16,8 @@ INTERNAL_PATHS = (
     "." + "co" + "dex/",
 )
 NORMALIZED_INTERNAL_PATHS = tuple(item.replace("\\", "/").lower() for item in INTERNAL_PATHS)
+INTERNAL_DIR_NAMES = {item.strip("/") for item in NORMALIZED_INTERNAL_PATHS if item.endswith("/")}
+INTERNAL_FILE_NAMES = {item.strip("/") for item in NORMALIZED_INTERNAL_PATHS if not item.endswith("/")}
 
 INTERNAL_TEXT = (
     "Open" + "AI",
@@ -130,8 +132,11 @@ def _scan_path_name(name: str, label: str, failures: list[str]) -> None:
 
 
 def _is_internal_path(name: str) -> bool:
-    normalized = name.replace("\\", "/").lower()
-    return any(normalized == item.rstrip("/") or normalized.startswith(item) for item in NORMALIZED_INTERNAL_PATHS)
+    normalized = name.replace("\\", "/").lower().strip("/")
+    parts = [part for part in normalized.split("/") if part and part != "."]
+    if not parts:
+        return False
+    return parts[-1] in INTERNAL_FILE_NAMES or any(part in INTERNAL_DIR_NAMES for part in parts)
 
 
 def _tracked_files() -> list[str]:

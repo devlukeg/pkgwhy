@@ -6,6 +6,8 @@ from typing import Any
 from urllib import error, request
 from urllib.parse import quote
 
+from packaging.version import InvalidVersion, Version
+
 from pkgwhy.core.models import Confidence, PackageProvenance
 from pkgwhy.metadata.installed import normalize_package_name
 
@@ -132,10 +134,8 @@ def _latest_release_date(releases: Any) -> str | None:
 
 
 def _release_date(releases: Any, version: str | None) -> str | None:
-    if not isinstance(releases, dict) or version is None:
-        return None
-    files = releases.get(version)
-    if not isinstance(files, list):
+    files = _release_files(releases, version)
+    if files is None:
         return None
     latest: datetime | None = None
     for file_info in files:
@@ -151,10 +151,8 @@ def _release_date(releases: Any, version: str | None) -> str | None:
 
 
 def _source_distribution_status(releases: Any, version: str | None) -> str:
-    if not isinstance(releases, dict) or version is None:
-        return "unknown"
-    files = releases.get(version)
-    if not isinstance(files, list):
+    files = _release_files(releases, version)
+    if files is None:
         return "unknown"
     for file_info in files:
         if not isinstance(file_info, dict):
@@ -164,6 +162,27 @@ def _source_distribution_status(releases: Any, version: str | None) -> str:
         if package_type == "sdist" or (filename is not None and filename.endswith((".tar.gz", ".zip"))):
             return "present"
     return "not_found"
+
+
+def _release_files(releases: Any, version: str | None) -> list[Any] | None:
+    if not isinstance(releases, dict) or version is None:
+        return None
+    files = releases.get(version)
+    if isinstance(files, list):
+        return files
+    try:
+        target = Version(version)
+    except InvalidVersion:
+        return None
+    for release_version, release_files in releases.items():
+        if not isinstance(release_version, str) or not isinstance(release_files, list):
+            continue
+        try:
+            if Version(release_version) == target:
+                return release_files
+        except InvalidVersion:
+            continue
+    return None
 
 
 def _parse_datetime(value: str) -> datetime | None:

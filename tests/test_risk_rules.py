@@ -1,3 +1,5 @@
+import json
+
 from pkgwhy.core.models import Confidence, RuleCategory, RuleSeverity
 from pkgwhy.risk.rules import (
     RULE_CATALOG_SCHEMA_VERSION,
@@ -83,6 +85,7 @@ def test_rule_catalog_order_and_ids_are_stable() -> None:
 def test_rule_catalog_snapshot_is_json_friendly_and_versioned() -> None:
     snapshot = rule_catalog_snapshot()
 
+    json.dumps(snapshot)
     assert snapshot["schema_version"] == RULE_CATALOG_SCHEMA_VERSION
     assert snapshot["rule_count"] == len(EXPECTED_RULE_IDS)
     rules = snapshot["rules"]
