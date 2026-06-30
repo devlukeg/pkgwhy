@@ -47,6 +47,10 @@ from pkgwhy.typosquat.detector import detect_typosquat
 from pkgwhy.vulnerabilities.matching import match_vulnerabilities
 from pkgwhy.vulnerabilities.osv import load_osv_records, query_osv_cached
 
+MAX_ARTIFACT_DOWNLOAD_BYTES = 100 * 1024 * 1024
+MAX_ARTIFACT_EXTRACTED_BYTES = 250 * 1024 * 1024
+MAX_ARTIFACT_FILE_COUNT = 10000
+
 
 @dataclass(frozen=True)
 class ParsedPrecheckTarget:
@@ -63,6 +67,12 @@ class PrecheckTargetError(ValueError):
 
 class PrecheckFileError(ValueError):
     """Raised when a dependency declaration file cannot be prechecked."""
+
+
+@dataclass(frozen=True)
+class DependencyDeclarations:
+    requirements: list[str]
+    warnings: list[str]
 
 
 def build_package_precheck(
@@ -93,7 +103,7 @@ def build_package_precheck(
             vulnerability_records.extend(load_osv_records(vulnerability_file, package_name=parsed.package))
             vulnerability_sources.append(str(vulnerability_file))
         except ValueError as exc:
-            warnings.append(str(exc))
+            raise PrecheckFileError(f"could not load vulnerability file {vulnerability_file}: {exc}") from exc
 
     installed_metadata = get_installed_package(parsed.package)
     installed_inspection = inspect_installed_package(parsed.package)
@@ -118,7 +128,20 @@ def build_package_precheck(
             )
             lookup_status = "online_metadata_unavailable"
 
-    if pypi_payload is not None:
+    if pypi_payload is not None and parsed.exact_version and not _release_exists(pypi_payload, parsed.exact_version):
+        inspection = _unavailable_inspection(parsed)
+        provenance = PackageProvenance(
+            package=parsed.normalized_package,
+            version=parsed.exact_version,
+            metadata_source="pypi_json",
+            confidence=Confidence.LOW,
+            warnings=[f"PyPI metadata did not list requested release version {parsed.exact_version}."],
+            evidence=["Read PyPI project JSON but did not find the requested release version."],
+        )
+        lookup_status = "requested_release_unavailable"
+        warnings.append(f"PyPI metadata did not list requested release version {parsed.exact_version}.")
+        evidence.append("Read PyPI project JSON but did not reuse latest-release metadata for a missing exact version.")
+    elif pypi_payload is not None:
         inspection = _inspection_from_pypi_payload(parsed, pypi_payload)
         provenance = provenance_from_pypi_payload(
             parsed.package,
@@ -237,11 +260,12 @@ def build_requirements_precheck(
 ) -> PrecheckBatchResult:
     """Build precheck results for a requirements file without installing dependencies."""
 
-    requirements = _requirements_from_file(path)
+    declarations = _requirements_from_file(path)
     return _build_batch_precheck(
         target_type="requirements",
         source=str(path),
-        requirements=requirements,
+        requirements=declarations.requirements,
+        input_warnings=declarations.warnings,
         pypi=pypi,
         osv=osv,
         osv_cache_dir=osv_cache_dir,
@@ -265,11 +289,12 @@ def build_pyproject_precheck(
 ) -> PrecheckBatchResult:
     """Build precheck results for PEP 621 pyproject dependencies."""
 
-    requirements = _requirements_from_pyproject(path)
+    declarations = _requirements_from_pyproject(path)
     return _build_batch_precheck(
         target_type="pyproject",
         source=str(path),
-        requirements=requirements,
+        requirements=declarations.requirements,
+        input_warnings=declarations.warnings,
         pypi=pypi,
         osv=osv,
         osv_cache_dir=osv_cache_dir,
@@ -304,6 +329,7 @@ def _build_batch_precheck(
     target_type: str,
     source: str,
     requirements: list[str],
+    input_warnings: list[str] | None,
     pypi: bool,
     osv: bool,
     osv_cache_dir: Path | None,
@@ -326,6 +352,7 @@ def _build_batch_precheck(
         for requirement in requirements
     ]
     warnings: list[str] = []
+    warnings.extend(input_warnings or [])
     if not requirements:
         warnings.append(f"No supported package requirements found in {source}.")
     warnings.extend(warning for result in results for warning in result.warnings)
@@ -342,7 +369,7 @@ def _build_batch_precheck(
     )
 
 
-def _requirements_from_file(path: Path) -> list[str]:
+def _requirements_from_file(path: Path) -> DependencyDeclarations:
     if not path.exists():
         raise PrecheckFileError(f"requirements file not found: {path}")
     try:
@@ -350,19 +377,33 @@ def _requirements_from_file(path: Path) -> list[str]:
     except OSError as exc:
         raise PrecheckFileError(f"could not read requirements file {path}: {exc}") from exc
     requirements: list[str] = []
-    for line in lines:
+    warnings: list[str] = []
+    for line_number, line in enumerate(lines, start=1):
         cleaned = line.split("#", 1)[0].strip()
-        if not cleaned or cleaned.startswith(("-", "http:", "https:", "git+", "svn+", "hg+", "bzr+", "file://")):
+        if not cleaned:
+            continue
+        if cleaned.startswith(("-r", "--requirement")):
+            warnings.append(f"Skipped requirements line {line_number}: recursive include is not evaluated by precheck.")
+            continue
+        if cleaned.startswith(("-e", "--editable")):
+            warnings.append(f"Skipped requirements line {line_number}: editable requirement is not evaluated by precheck.")
+            continue
+        if cleaned.startswith(("http:", "https:", "git+", "svn+", "hg+", "bzr+", "file://")):
+            warnings.append(f"Skipped requirements line {line_number}: URL, VCS, or file requirement is not evaluated by precheck.")
+            continue
+        if cleaned.startswith("-"):
+            warnings.append(f"Skipped requirements line {line_number}: requirements option is not evaluated by precheck.")
             continue
         try:
             Requirement(cleaned)
         except InvalidRequirement:
+            warnings.append(f"Skipped requirements line {line_number}: malformed package requirement.")
             continue
         requirements.append(cleaned)
-    return requirements
+    return DependencyDeclarations(requirements=requirements, warnings=warnings)
 
 
-def _requirements_from_pyproject(path: Path) -> list[str]:
+def _requirements_from_pyproject(path: Path) -> DependencyDeclarations:
     if not path.exists():
         raise PrecheckFileError(f"pyproject file not found: {path}")
     try:
@@ -372,18 +413,36 @@ def _requirements_from_pyproject(path: Path) -> list[str]:
     project = data.get("project")
     project = project if isinstance(project, dict) else {}
     requirements: list[str] = []
-    for dependency in project.get("dependencies", []):
-        if isinstance(dependency, str) and _is_valid_requirement(dependency):
+    warnings: list[str] = []
+    dependencies = project.get("dependencies", [])
+    if dependencies is not None and not isinstance(dependencies, list):
+        warnings.append("Skipped project.dependencies: value is not a list.")
+        dependencies = []
+    for index, dependency in enumerate(dependencies, start=1):
+        if not isinstance(dependency, str):
+            warnings.append(f"Skipped project.dependencies entry {index}: dependency is not a string.")
+        elif _is_valid_requirement(dependency):
             requirements.append(dependency)
+        else:
+            warnings.append(f"Skipped project.dependencies entry {index}: malformed package requirement.")
     optional = project.get("optional-dependencies")
     if isinstance(optional, dict):
-        for dependencies in optional.values():
+        for group, dependencies in optional.items():
             if not isinstance(dependencies, list):
+                warnings.append(f"Skipped project.optional-dependencies.{group}: value is not a list.")
                 continue
-            for dependency in dependencies:
-                if isinstance(dependency, str) and _is_valid_requirement(dependency):
+            for index, dependency in enumerate(dependencies, start=1):
+                if not isinstance(dependency, str):
+                    warnings.append(
+                        f"Skipped project.optional-dependencies.{group} entry {index}: dependency is not a string."
+                    )
+                elif _is_valid_requirement(dependency):
                     requirements.append(dependency)
-    return requirements
+                else:
+                    warnings.append(
+                        f"Skipped project.optional-dependencies.{group} entry {index}: malformed package requirement."
+                    )
+    return DependencyDeclarations(requirements=requirements, warnings=warnings)
 
 
 def _is_valid_requirement(value: str) -> bool:
@@ -408,7 +467,7 @@ def _strictest_decision(decisions: list[AgentDecision]) -> AgentDecision:
 
 
 def _exit_code_for_precheck(decision: AgentDecision, lookup_status: str, artifact_status: str) -> int:
-    if lookup_status == "online_metadata_unavailable" or artifact_status == "failed":
+    if lookup_status == "online_metadata_unavailable" or artifact_status in {"failed", "unavailable"}:
         return 4
     if decision in {AgentDecision.BLOCK, AgentDecision.SANDBOX_ONLY}:
         return 2
@@ -436,6 +495,11 @@ def _lowest_confidence(confidences: list[Confidence]) -> Confidence:
         return Confidence.LOW
     order = {"low": 0, "medium": 1, "high": 2}
     return min(confidences, key=lambda confidence: order[confidence.value])
+
+
+def _release_exists(payload: dict[str, Any], version: str) -> bool:
+    releases = payload.get("releases")
+    return isinstance(releases, dict) and isinstance(releases.get(version), list)
 
 
 def _inspection_from_pypi_payload(parsed: ParsedPrecheckTarget, payload: dict[str, Any]) -> PackageInspection:
@@ -525,11 +589,25 @@ def _inspect_downloaded_artifact(
         warnings = []
         if sha256_status == "mismatch":
             warnings.append("Downloaded artifact SHA-256 did not match PyPI metadata.")
+        excluded_filenames = artifact.get("excluded_filenames")
+        excluded_count = len(excluded_filenames) if isinstance(excluded_filenames, list) else 0
+        if excluded_count:
+            preview = ", ".join(str(name) for name in excluded_filenames[:5])
+            if excluded_count > 5:
+                preview = f"{preview}, ..."
+            warnings.append(
+                f"Artifact precheck inspected one selected release artifact; "
+                f"{excluded_count} additional artifact(s) were not inspected: {preview}."
+            )
         evidence = [
             f"Downloaded PyPI artifact {artifact['filename']} for static inspection.",
             f"SHA-256 status: {sha256_status}.",
             f"Extracted {len(extracted_paths)} files without installing or executing package code.",
         ]
+        if excluded_count:
+            evidence.append(
+                f"Selected one artifact from {artifact.get('candidate_count', excluded_count + 1)} candidate release artifacts."
+            )
         if not keep_artifacts:
             evidence.append("Temporary artifact review directory was deleted after inspection.")
         return ArtifactReview(
@@ -567,16 +645,36 @@ class ArtifactDownloadError(RuntimeError):
     """Raised when an explicit artifact download request cannot retrieve bytes."""
 
 
-def _download_url(url: str, *, timeout_seconds: float = 15.0) -> bytes:
+def _download_url(url: str, *, timeout_seconds: float = 15.0, max_bytes: int = MAX_ARTIFACT_DOWNLOAD_BYTES) -> bytes:
     req = request.Request(url, headers={"Accept": "application/octet-stream"}, method="GET")
     try:
         with request.urlopen(req, timeout=timeout_seconds) as response:
-            return response.read()
+            content_length = response.headers.get("Content-Length")
+            if content_length is not None:
+                try:
+                    declared_size = int(content_length)
+                except ValueError:
+                    declared_size = None
+                if declared_size is not None and declared_size > max_bytes:
+                    raise ArtifactDownloadError(
+                        f"artifact download exceeds {max_bytes} byte limit before reading response"
+                    )
+            chunks: list[bytes] = []
+            total = 0
+            while True:
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > max_bytes:
+                    raise ArtifactDownloadError(f"artifact download exceeds {max_bytes} byte limit")
+                chunks.append(chunk)
+            return b"".join(chunks)
     except (OSError, error.HTTPError) as exc:
         raise ArtifactDownloadError(f"artifact download failed for {url}: {exc}") from exc
 
 
-def _select_artifact(payload: dict[str, Any], version: str | None) -> dict[str, str] | None:
+def _select_artifact(payload: dict[str, Any], version: str | None) -> dict[str, Any] | None:
     info = payload.get("info")
     info = info if isinstance(info, dict) else {}
     release_version = version or _string_or_none(info.get("version"))
@@ -586,7 +684,7 @@ def _select_artifact(payload: dict[str, Any], version: str | None) -> dict[str, 
     files = releases.get(release_version)
     if not isinstance(files, list):
         return None
-    candidates: list[dict[str, str]] = []
+    candidates: list[dict[str, Any]] = []
     for file_info in files:
         if not isinstance(file_info, dict):
             continue
@@ -609,7 +707,11 @@ def _select_artifact(payload: dict[str, Any], version: str | None) -> dict[str, 
         )
     if not candidates:
         return None
-    return sorted(candidates, key=lambda item: (0 if item["packagetype"] == "bdist_wheel" else 1, item["filename"]))[0]
+    sorted_candidates = sorted(candidates, key=lambda item: (0 if item["packagetype"] == "bdist_wheel" else 1, item["filename"]))
+    selected = dict(sorted_candidates[0])
+    selected["candidate_count"] = len(sorted_candidates)
+    selected["excluded_filenames"] = [item["filename"] for item in sorted_candidates[1:]]
+    return selected
 
 
 def _sha256_status(data: bytes, expected: str | None) -> str:
@@ -630,9 +732,11 @@ def _extract_artifact(artifact_path: Path, extract_root: Path) -> list[Path]:
 def _extract_zip(artifact_path: Path, extract_root: Path) -> list[Path]:
     with zipfile.ZipFile(artifact_path) as archive:
         members = []
+        total_size = 0
         for member in archive.infolist():
             if member.is_dir():
                 continue
+            total_size = _check_extract_limits(len(members) + 1, total_size, member.file_size, member.filename)
             target = (extract_root / member.filename).resolve()
             if not target.is_relative_to(extract_root.resolve()):
                 raise ValueError(f"unsafe archive path: {member.filename}")
@@ -644,15 +748,28 @@ def _extract_zip(artifact_path: Path, extract_root: Path) -> list[Path]:
 def _extract_tar(artifact_path: Path, extract_root: Path) -> list[Path]:
     with tarfile.open(artifact_path) as archive:
         members = []
+        total_size = 0
         for member in archive.getmembers():
             if not member.isfile():
                 continue
+            total_size = _check_extract_limits(len(members) + 1, total_size, member.size, member.name)
             target = (extract_root / member.name).resolve()
             if not target.is_relative_to(extract_root.resolve()):
                 raise ValueError(f"unsafe archive path: {member.name}")
             archive.extract(member, extract_root, filter="data")
             members.append(target)
     return members
+
+
+def _check_extract_limits(member_count: int, current_size: int, next_size: int, name: str) -> int:
+    if member_count > MAX_ARTIFACT_FILE_COUNT:
+        raise ValueError(f"artifact extraction exceeds {MAX_ARTIFACT_FILE_COUNT} file limit")
+    if next_size < 0:
+        raise ValueError(f"artifact member has invalid size: {name}")
+    total_size = current_size + next_size
+    if total_size > MAX_ARTIFACT_EXTRACTED_BYTES:
+        raise ValueError(f"artifact extraction exceeds {MAX_ARTIFACT_EXTRACTED_BYTES} byte uncompressed limit")
+    return total_size
 
 
 def _inspection_from_metadata_without_artifact(metadata: PackageMetadata) -> PackageInspection:

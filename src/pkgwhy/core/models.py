@@ -19,6 +19,8 @@ from pkgwhy.core.constants import (
 )
 
 RiskModelVersion = Literal["pkgwhy.risk_model.v1"]
+PrecheckSchemaVersion = Literal["pkgwhy.precheck.v1"]
+PrecheckBatchSchemaVersion = Literal["pkgwhy.precheck_batch.v1"]
 
 
 class RiskLevel(StrEnum):
@@ -400,7 +402,7 @@ class PrecheckArtifactSummary(BaseModel):
 class PreInstallPackagePrecheckResult(BaseModel):
     """Schema-versioned pre-install package gate result."""
 
-    schema_version: str = PRECHECK_SCHEMA_VERSION
+    schema_version: PrecheckSchemaVersion = PRECHECK_SCHEMA_VERSION
     target_type: Literal["package"] = "package"
     requested: str
     package: str
@@ -433,7 +435,7 @@ class PreInstallPackagePrecheckResult(BaseModel):
 class PrecheckBatchResult(BaseModel):
     """Schema-versioned pre-install gate result for dependency declaration files."""
 
-    schema_version: str = PRECHECK_BATCH_SCHEMA_VERSION
+    schema_version: PrecheckBatchSchemaVersion = PRECHECK_BATCH_SCHEMA_VERSION
     target_type: Literal["requirements", "pyproject"] = "requirements"
     source: str
     package_count: int = Field(default=0, ge=0)

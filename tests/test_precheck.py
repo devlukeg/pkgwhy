@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 import zipfile
 
+from pydantic import ValidationError
+import pytest
 from typer.testing import CliRunner
 
 from pkgwhy.cli import app
@@ -41,6 +43,16 @@ def test_precheck_missing_package_offline_does_not_install_or_fetch() -> None:
     assert get_installed_package(package_name) is None
 
 
+def test_precheck_schema_version_is_fixed() -> None:
+    package_name = "definitely-not-installed-pkgwhy-precheck-schema-1"
+    result = build_package_precheck(package_name)
+    data = result.model_dump(mode="json")
+    data["schema_version"] = "wrong.version"
+
+    with pytest.raises(ValidationError):
+        PreInstallPackagePrecheckResult.model_validate(data)
+
+
 def test_precheck_uses_mocked_pypi_metadata_without_artifact_download(monkeypatch) -> None:
     payload = {
         "info": {
@@ -64,6 +76,26 @@ def test_precheck_uses_mocked_pypi_metadata_without_artifact_download(monkeypatc
     assert result.provenance_summary.status == "pypi_json"
     assert result.static_summary.status == "not_requested"
     assert "Metadata-only precheck cannot prove package contents are safe." in result.warnings
+
+
+def test_precheck_rejects_missing_exact_pypi_release(monkeypatch) -> None:
+    payload = {
+        "info": {
+            "name": "demo-precheck",
+            "version": "2.0.0",
+            "summary": "Demo package",
+            "license": "MIT",
+        },
+        "releases": {"2.0.0": [{"packagetype": "sdist"}]},
+    }
+    monkeypatch.setattr("pkgwhy.precheck.fetch_pypi_project", lambda package: payload)
+
+    result = build_package_precheck("demo-precheck==1.0.0", pypi=True)
+
+    assert result.lookup_status == "requested_release_unavailable"
+    assert result.version == "1.0.0"
+    assert result.exit_code == 2
+    assert any("did not list requested release version 1.0.0" in warning for warning in result.warnings)
 
 
 def test_precheck_cli_json_for_installed_package() -> None:
@@ -113,6 +145,19 @@ def test_precheck_cli_accepts_vulnerability_file(tmp_path: Path) -> None:
     assert data["vulnerability_summary"]["match_count"] == 1
 
 
+def test_precheck_cli_rejects_malformed_vulnerability_file(tmp_path: Path) -> None:
+    vuln_file = tmp_path / "vulns.json"
+    vuln_file.write_text("{not-json", encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        ["precheck", "demo-precheck-vuln==1.0.0", "--vulnerability-file", str(vuln_file), "--json"],
+    )
+
+    assert result.exit_code == 2
+    assert "could not load vulnerability file" in result.output
+
+
 def test_precheck_cli_requirements_file_json(tmp_path: Path) -> None:
     requirements = tmp_path / "requirements.txt"
     requirements.write_text(
@@ -134,6 +179,7 @@ def test_precheck_cli_requirements_file_json(tmp_path: Path) -> None:
     ]
     assert data["decision"] == "block"
     assert data["exit_code"] == 2
+    assert any("recursive include is not evaluated" in warning for warning in data["warnings"])
 
 
 def test_precheck_cli_pyproject_json(tmp_path: Path) -> None:
@@ -181,6 +227,12 @@ def test_precheck_download_artifact_static_inspection_with_mocked_pypi(monkeypat
                     "packagetype": "bdist_wheel",
                     "url": "https://example.invalid/demo_precheck-1.0.0-py3-none-any.whl",
                     "digests": {"sha256": "not-a-real-digest"},
+                },
+                {
+                    "filename": "demo_precheck-1.0.0.tar.gz",
+                    "packagetype": "sdist",
+                    "url": "https://example.invalid/demo_precheck-1.0.0.tar.gz",
+                    "digests": {"sha256": "unused"},
                 }
             ]
         },
@@ -200,7 +252,25 @@ def test_precheck_download_artifact_static_inspection_with_mocked_pypi(monkeypat
     assert result.static_summary.status == "downloaded_artifact_static_analysis"
     assert result.package_judgement.source_availability == "artifact_source_present"
     assert any("Did not install, import, or execute" in item for item in result.evidence)
-    assert any("--download-artifacts requires artifact metadata" in item for item in result.evidence)
+    assert any("additional artifact(s) were not inspected" in warning for warning in result.warnings)
+
+
+def test_precheck_download_artifact_unavailable_maps_to_infrastructure_exit(monkeypatch) -> None:
+    payload = {
+        "info": {
+            "name": "demo-precheck",
+            "version": "1.0.0",
+            "summary": "Demo package",
+            "license": "MIT",
+        },
+        "releases": {"1.0.0": []},
+    }
+    monkeypatch.setattr("pkgwhy.precheck.fetch_pypi_project", lambda package: payload)
+
+    result = build_package_precheck("demo-precheck==1.0.0", download_artifacts=True)
+
+    assert result.artifact_summary.status == "unavailable"
+    assert result.exit_code == 4
 
 
 def test_precheck_cli_enforce_exit_code_returns_gate_code() -> None:

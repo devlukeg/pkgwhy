@@ -788,8 +788,10 @@ def _emit_precheck_package(result: PreInstallPackagePrecheckResult, *, as_json: 
             console.print(f"  - {reason}")
     if result.warnings:
         console.print("Warnings:")
-        for warning in result.warnings:
+        for warning in result.warnings[:10]:
             console.print(f"  - {warning}")
+        if len(result.warnings) > 10:
+            console.print(f"  ... and {len(result.warnings) - 10} more")
 
 
 def _emit_precheck_batch(result: PrecheckBatchResult, *, as_json: bool) -> None:
@@ -800,6 +802,7 @@ def _emit_precheck_batch(result: PrecheckBatchResult, *, as_json: bool) -> None:
     console.print("Before pip install, ask why.")
     console.print(f"Packages checked: {result.package_count}")
     console.print(f"Decision: {result.decision.value}")
+    console.print(f"Exit code: {result.exit_code}")
     console.print(f"Risk level: {result.risk_level.value}")
     console.print(f"Confidence: {result.confidence.value}")
     table = Table(title="Precheck results")
@@ -821,6 +824,8 @@ def _emit_precheck_batch(result: PrecheckBatchResult, *, as_json: bool) -> None:
         console.print("Warnings:")
         for warning in result.warnings[:10]:
             console.print(f"  - {warning}")
+        if len(result.warnings) > 10:
+            console.print(f"  ... and {len(result.warnings) - 10} more")
 
 
 def _dedupe_vulnerability_matches(matches: list[VulnerabilityMatch]) -> list[VulnerabilityMatch]:
