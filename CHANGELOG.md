@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0 - 2026-06-30
+
+- Add `pkgwhy pip install <package>` as a local pip install gate over `pkgwhy precheck`.
+- Add `pkgwhy pip install -r requirements.txt` for requirements-file gate checks before pip is invoked.
+- Add schema-versioned `pkgwhy.pip_install_gate.v1` JSON with precheck decision, gate exit code, pip invocation status, override status, warnings, reasons, and embedded precheck output.
+- Add `--policy strict`, `--dry-run`, `--override-review`, `--override-block`, and `--override-reason` for explicit install-gate workflows.
+- Add best-effort compact local pip gate decision logs that omit full precheck evidence.
+- Keep tests deterministic by using fake pip runners and dry-run paths; tests do not install arbitrary public packages.
+- Keep the pip gate conservative: pip is called only after precheck allows it or an explicit override is used, and unavailable or incomplete precheck evidence exits without invoking pip.
+
 ## 1.1.0 - 2026-06-30
 
 - Add top-level `pkgwhy precheck` as a local pre-install package gate for humans, CI, and agents.

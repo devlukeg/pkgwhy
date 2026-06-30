@@ -2,7 +2,7 @@
 
 ## Supported Status
 
-`pkgwhy` 1.0.0 includes static evidence hardening, vulnerability/provenance foundations, static rule corpus/schema hardening, release/process hardening, a safe-fail experimental dynamic command skeleton, agent policy foundations, and local registry/runner hardening. It is not a production malware scanner and should not be treated as a definitive malware detector or full sandbox.
+`pkgwhy` 1.2.0 includes static evidence hardening, vulnerability/provenance foundations, static rule corpus/schema hardening, release/process hardening, a safe-fail experimental dynamic command skeleton, agent policy foundations, local pre-install and pip install gates, and local registry/runner hardening. It is not a production malware scanner and should not be treated as a definitive malware detector or full sandbox.
 
 ## Reporting Security Issues
 
@@ -38,6 +38,8 @@ Local registry publishing blocks duplicate owner/name/version records and reject
 
 Pre-install package gate commands are decision support. `pkgwhy precheck <package> --json` checks package requirements before installation and can optionally query PyPI/OSV or download artifacts only when explicit flags request that work. Artifact precheck downloads to a temporary review directory, verifies SHA-256 when PyPI metadata provides it, statically inspects files, and deletes temporary files by default. It does not install, import, or execute inspected package code.
 
+Pip install gate commands are also decision support. `pkgwhy pip install <package>` and `pkgwhy pip install -r requirements.txt` run precheck before invoking pip. Pip is invoked only when policy allows or when a human uses an explicit override flag. The gate logs compact local decision summaries when possible, but those logs are not tamper-proof audit records. The pip gate does not sandbox pip, installed package code, build backends, or install-time behavior.
+
 Agent policy commands are decision support. `pkgwhy agent precheck <package> --json` applies conservative policy to package judgement JSON and defaults to blocking unknown or high-risk package use in non-interactive mode until a human reviews the evidence. Agent decision logs are local compact summaries, best-effort when the config directory is writable, and intentionally omit full package evidence. They are not a tamper-proof audit system.
 
 Runner warning:
@@ -57,6 +59,7 @@ Dynamic analysis is a separate experimental roadmap area and is not part of the 
 - No runner dependency installation yet.
 - No tool bundle signing or signature verification yet.
 - No tamper-proof audit log, remote attestation, or signed decision record yet.
+- No sandboxed pip execution; `pkgwhy pip install` is a policy gate before pip, not an installer sandbox.
 - No tool-specific agent judgement beyond the current package precheck alias yet.
 - No cloud registry, remote pull, hosted review API, or account-based registry auth yet.
 - Typosquatting detection is heuristic and conservative. It can miss risky names and can surface false positives.

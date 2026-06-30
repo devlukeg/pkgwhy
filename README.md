@@ -6,11 +6,11 @@ Know why a package exists before you or your agent trusts it.
 
 ## Status
 
-`pkgwhy` 1.1.0 is a Python supply-chain security decision-support tool and local pre-install package gate for developers and AI agents. It is useful for local package inspection, conservative static package review, agent-readable JSON, vulnerability and provenance foundations, policy checks, artifact precheck, and the local private-registry and runner MVP.
+`pkgwhy` 1.2.0 is a Python supply-chain security decision-support tool and local pip install gate for developers and AI agents. It is useful for local package inspection, conservative static package review, agent-readable JSON, vulnerability and provenance foundations, policy checks, artifact precheck, guarded pip installs, and the local private-registry and runner MVP.
 
 It is not a production security scanner, not malware-detection certainty, and not a full sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
 
-Current packaged version: `1.1.0`.
+Current packaged version: `1.2.0`.
 
 ## What Works Now
 
@@ -27,6 +27,8 @@ pkgwhy precheck "typer==0.12.5" --json
 pkgwhy precheck -r requirements.txt --json
 pkgwhy precheck pyproject.toml --json
 pkgwhy precheck annotated-doc==0.0.4 --download-artifacts --json
+pkgwhy pip install typer --dry-run
+pkgwhy pip install -r requirements.txt --dry-run
 pkgwhy agent policy --json
 pkgwhy agent precheck typer --json
 pkgwhy risk typer
@@ -59,6 +61,7 @@ Implemented capabilities include:
 - Pre-install package precheck for package requirements, requirements files, and `pyproject.toml` dependencies.
 - Explicit artifact-download precheck that downloads a PyPI wheel or source artifact to a temporary review directory, verifies SHA-256 when available, extracts safely, statically inspects files, and deletes temporary files by default.
 - Optional gate exit codes via `pkgwhy precheck --enforce-exit-code`.
+- Guarded pip install flow via `pkgwhy pip install`, with precheck first, stable exit codes, explicit overrides, and compact local decision logs.
 - Stable JSON output for agent workflows.
 - Schema-versioned agent policy and package precheck output.
 - Conservative non-interactive agent defaults that block unknown or high-risk package use until a human reviews the evidence.
@@ -107,7 +110,6 @@ These are roadmap items, not current features:
 - Complete vulnerability database coverage, transitive vulnerability analysis, or guaranteed advisory freshness.
 - Default online vulnerability lookup. Network access is only used when explicitly requested.
 - Persistent cached PyPI/source lookup beyond the current OSV response cache.
-- `pkgwhy pip install` as a pip wrapper gate.
 - Cloud/private remote registry backends.
 - `pull`, mirroring, and remote synchronization.
 - Tool dependency installation in the runner.
@@ -193,6 +195,26 @@ Exit codes are:
 - `1`: allow with caution or manual review.
 - `2`: block or sandbox-only.
 - `4`: requested online/artifact lookup was unavailable or failed.
+
+To gate an install, use `pkgwhy pip install` instead of raw `pip install`:
+
+```bash
+pkgwhy pip install typer
+pkgwhy pip install typer --policy strict
+pkgwhy pip install -r requirements.txt
+pkgwhy pip install typer --dry-run --json
+```
+
+The pip gate always runs precheck first. It invokes pip only when the precheck policy allows the install, or when a human uses an explicit override flag. Review/caution results exit `1`, block/sandbox-only results exit `2`, tool/config errors exit `3`, and unavailable or incomplete requested evidence exits `4`. `--dry-run` evaluates the gate and writes the local decision log without invoking pip.
+
+Overrides are explicit:
+
+```bash
+pkgwhy pip install typer --override-review --override-reason "reviewed local evidence"
+pkgwhy pip install suspicious-name --override-block --override-reason "temporary isolated test"
+```
+
+Agents and automated workflows should use `pkgwhy pip install` when dependency policy is required, not raw `pip install`. The command is still decision support: it does not prove a package is safe and it does not sandbox pip or installed package code.
 
 Inspect the default agent policy and run a conservative agent precheck:
 

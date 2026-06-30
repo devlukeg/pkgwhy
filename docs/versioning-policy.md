@@ -1,6 +1,6 @@
 # Versioning Policy
 
-`pkgwhy` is in the `1.1.0` release line. Public JSON schemas and rule IDs are compatibility surfaces; incompatible changes require changelog coverage and may require a schema or catalog version bump.
+`pkgwhy` is in the `1.2.0` release line. Public JSON schemas and rule IDs are compatibility surfaces; incompatible changes require changelog coverage and may require a schema or catalog version bump.
 
 ## Package Versions
 
@@ -17,6 +17,7 @@
 - `1.0.0rc1`: prior local release-candidate review candidate, only if the full release-candidate checklist passed locally.
 - `1.0.0`: stable release for the current package-intelligence, conservative static security signal, vulnerability/provenance foundation, agent JSON, local registry/runner, and dynamic-analysis safe-fail surface.
 - `1.1.0`: local pre-install package gate with metadata-only precheck, requirements/pyproject batch precheck, explicit artifact-download static inspection, and enforceable gate exit codes.
+- `1.2.0`: local pip install gate that runs precheck before pip, supports requirements files, strict policy mode, explicit overrides, stable gate exit codes, and compact local decision logs.
 
 ## JSON Schemas
 
