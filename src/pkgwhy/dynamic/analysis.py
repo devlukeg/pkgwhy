@@ -18,9 +18,7 @@ from pkgwhy.core.models import (
 EXPERIMENTAL_DYNAMIC_WARNING = "Experimental dynamic analysis is not a production sandbox."
 STATIC_DEFAULT_WARNING = "Static package inspection remains the default pkgwhy review path."
 HOST_EXECUTION_REFUSAL = "Refusing to run dynamic analysis for unknown package code on the host."
-DYNAMIC_OPTION_B_DECISION = (
-    "Dynamic analysis is experimental and out of scope for 1.0.0 production security guarantees in this build."
-)
+DYNAMIC_SCOPE_WARNING = "Dynamic analysis is experimental and not part of the stable security decision surface in this build."
 
 
 def build_unavailable_dynamic_result(
@@ -34,10 +32,10 @@ def build_unavailable_dynamic_result(
         EXPERIMENTAL_DYNAMIC_WARNING,
         STATIC_DEFAULT_WARNING,
         HOST_EXECUTION_REFUSAL,
-        DYNAMIC_OPTION_B_DECISION,
+        DYNAMIC_SCOPE_WARNING,
     ]
     limitations = [
-        DYNAMIC_OPTION_B_DECISION,
+        DYNAMIC_SCOPE_WARNING,
         "No dynamic sandbox backend is implemented in this build.",
         "No process, filesystem, or network events were collected.",
         "Empty event lists are not proof that no behavior would occur in a real run.",

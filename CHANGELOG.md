@@ -4,7 +4,7 @@
 
 - Promote the `1.0.0rc1` release-candidate surface to the final 1.0.0 tracked codebase after local release-prep review.
 - Freeze the 1.0.0 feature surface for package intelligence, static rule evidence, vulnerability/provenance decision support, agent policy JSON, local registry/runner safety, and release-process documentation.
-- Keep dynamic analysis explicitly experimental and out of scope for `1.0.0` production security guarantees.
+- Keep dynamic analysis explicitly experimental and outside the stable security decision surface for this release.
 - Align README, SECURITY, package metadata, and version metadata for final local `1.0.0` validation.
 - Harden release validation with artifact trace scanning, cache metadata validation, Markdown audit warnings, hermetic JSON snapshots, and exact rule catalog membership tests.
 - Align final release wording and package classifier for local 1.0.0 hardening.
@@ -20,9 +20,9 @@
 
 ## 0.9.0a0 - Unreleased pre-alpha
 
-- Choose dynamic analysis Option B for the `1.0.0` readiness line: dynamic analysis remains experimental and out of scope for production security guarantees.
+- Keep dynamic analysis experimental for this release, with no production sandboxing claim.
 - Keep `pkgwhy dynamic inspect` as a safe-fail CLI skeleton that refuses host execution of unknown package code and does not invoke Docker or run containers.
-- Add tests that assert the dynamic result warnings and limitations carry the explicit Option B boundary.
+- Add tests that assert the dynamic result warnings and limitations carry the explicit experimental boundary.
 - Align README, SECURITY, CLI help, and local package metadata for the `0.9.0a0` dynamic-analysis boundary.
 
 ## 0.8.0a0 - Unreleased pre-alpha
@@ -98,4 +98,4 @@
 - Add metadata-first inspection, package-size scanning, AST-only Python capability signals, dependency classification, and conservative judgement models.
 - Add local registry, local publish, local tool inspect/judge, and local `pkgwhy run` MVP with hash verification, per-tool virtual environments, execution logs, and explicit non-sandboxing warning.
 - Add initial local tool execution policy checks for hash verification, non-interactive defaults, unsupported execution modes, unsigned-tool warnings, and deferred dependency installation.
-- Document that results are static evidence and decision support, not production security guarantees or malware certainty.
+- Document that results are static evidence and decision support, not proof of package safety or malware certainty.

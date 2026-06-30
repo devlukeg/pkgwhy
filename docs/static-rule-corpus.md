@@ -45,7 +45,7 @@ Rule evidence appears inside package judgement JSON and audit JSON. Each rule ev
 
 ## Corpus Strategy
 
-The 1.0.0 corpus uses controlled fixtures only. Fixtures should be small, local, and synthetic. They must not contain real malware, real credentials, or real vulnerability claims. Core corpus validation must work offline using local fixtures or cached fetched data; OSV.dev and PyPI-backed inputs are optional online enrichment paths.
+The 1.0.0 corpus uses controlled fixtures only. Fixtures should be small, local, and synthetic. They do not contain real malware, real credentials, or real vulnerability claims. Core corpus validation works offline using local fixtures or cached fetched data; OSV.dev and PyPI-backed inputs are optional online enrichment paths.
 
 The broader corpus roadmap should cover:
 
@@ -119,7 +119,7 @@ Static analysis can miss risky behavior. Current known gaps include:
 - incomplete installed metadata or distribution file lists;
 - missing, stale, or unavailable vulnerability and provenance sources.
 
-No match, no warning, or an empty event list must not be interpreted as proof that a package is safe.
+No match, no warning, or an empty event list is not proof that a package is safe.
 
 ## Local Validation
 

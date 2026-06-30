@@ -36,7 +36,7 @@ def judge_tool(reference: str) -> ToolJudgement:
         risk = RiskLevel.UNKNOWN
         decision = AgentDecision.REVIEW_MANUALLY
         reason = "Tool bundle is missing from the local registry."
-        recommendation = "Do not run until the bundle is restored or republished."
+        recommendation = "Restore or republish the bundle before running this tool."
         warnings.append("Bundle file is missing.")
     else:
         risk = RiskLevel.HIGH

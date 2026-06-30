@@ -8,11 +8,11 @@
 - Use `aN` versions for local pre-alpha milestone builds, such as `0.9.0a0`.
 - Use `rcN` versions only when the release-candidate checklist has passed locally for that candidate.
 - Use final versions only after the full release checklist and artifact validation pass locally.
-- Do not tag or publish a version without explicit approval.
+- Tags and publication happen through the project release process after local validation.
 
 ## Milestone Meaning
 
-- `0.9.0a0`: dynamic-analysis decision is explicit. Dynamic analysis is experimental and out of scope for `1.0.0` production security guarantees unless a later commit safely implements a sandbox backend.
+- `0.9.0a0`: dynamic-analysis decision is explicit. Dynamic analysis is experimental in this release unless a later commit safely implements a sandbox backend.
 - `0.9.5a0`: release/process hardening milestone.
 - `1.0.0rc1`: prior local release-candidate review candidate, only if the full release-candidate checklist passed locally.
 - `1.0.0`: stable release for the current package-intelligence, conservative static security signal, vulnerability/provenance foundation, agent JSON, local registry/runner, and dynamic-analysis safe-fail surface.
@@ -25,7 +25,7 @@ In short:
 
 - Additive optional fields may keep the same schema version when existing consumers can ignore them safely.
 - Required fields, removed fields, renamed fields, enum meaning changes, or nested shape changes require a schema version bump.
-- A schema version must not be reused for an incompatible shape.
+- Schema versions are not reused for incompatible shapes.
 
 ## Static Rule IDs
 

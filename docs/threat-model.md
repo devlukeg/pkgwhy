@@ -15,7 +15,7 @@
 - Static package inspection reads locally installed metadata, package files, AST, text patterns, lockfiles, manifests, and cached fetched data without requiring network access.
 - Optional OSV.dev, PyPI, and future source-summary lookups are online enrichment features only. They are not required for baseline package analysis.
 - `pkgwhy run` is explicit execution of local private registry tools after registry, hash, manifest, and policy checks.
-- Dynamic analysis is experimental and out of scope for `1.0.0` production security guarantees. It must not run unknown package code on the host.
+- Dynamic analysis is experimental and not part of the stable security decision surface in this release. Unknown package code is not run on the host.
 - Optional OSV.dev and PyPI lookups cross the network only when explicitly requested.
 
 ## In-Scope Threats
@@ -45,13 +45,13 @@
 
 ## Safety Properties
 
-- Package inspection must not import or execute inspected package code.
-- Missing vulnerability matches must not be described as safety evidence.
-- Empty dynamic event lists must not be described as proof that no behavior occurred.
-- Static signals must be described as review evidence, not proof of runtime behavior or intent.
-- Unknown or unavailable provenance fields must remain `unknown`, `unavailable`, or `not_implemented`.
-- Hash mismatch, unsupported entries, corrupt indexes, and unsafe registry paths must fail closed.
-- The local runner warning must remain clear that a Python virtual environment is dependency isolation only, not an OS sandbox.
+- Package inspection reads metadata, files, text, and AST without importing or executing inspected package code.
+- Missing vulnerability matches are not safety evidence.
+- Empty dynamic event lists are not proof that no behavior occurred.
+- Static signals are review evidence, not proof of runtime behavior or intent.
+- Unknown or unavailable provenance fields remain `unknown`, `unavailable`, or `not_implemented`.
+- Hash mismatch, unsupported entries, corrupt indexes, and unsafe registry paths fail closed.
+- The local runner warning stays clear that a Python virtual environment is dependency isolation only, not an OS sandbox.
 
 ## Residual Risk
 

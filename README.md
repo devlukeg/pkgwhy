@@ -446,7 +446,7 @@ Supported risk levels are:
 
 ## Security Model
 
-`pkgwhy` is static and metadata-first. It must not import or execute inspected packages merely to inspect them.
+`pkgwhy` is static and metadata-first. Package inspection reads metadata, files, text, and AST without importing or executing inspected packages.
 
 Python packages do not have browser or mobile style permissions. They usually run with the same operating-system permissions as the Python process and user executing them. `pkgwhy` therefore reports capability exposure signals, not guaranteed permissions.
 
@@ -464,14 +464,14 @@ These signals can be legitimate. They are review prompts, not proof of malicious
 
 ## Dynamic Sandbox Roadmap
 
-Dynamic analysis has an experimental command skeleton, but it is not production-ready and is out of scope for `1.0.0` production security guarantees. Dynamic analysis intentionally executes code, so it has a different safety boundary from static inspection.
+Dynamic analysis has an experimental command skeleton, but it is not part of the stable security decision surface in this release. Dynamic analysis intentionally executes code, so it has a different safety boundary from static inspection.
 
-For the `1.0.0` readiness line, `pkgwhy` has chosen Option B: no arbitrary package dynamic analysis, no container MVP, and no production sandboxing claim. The command remains as a safe-fail surface for the intended JSON shape and safety boundary.
+The current release includes no arbitrary package dynamic analysis, no container backend, and no production sandboxing claim. The command remains as a safe-fail surface for the intended JSON shape and safety boundary.
 
 The design is documented in [docs/dynamic-sandbox.md](docs/dynamic-sandbox.md). The key constraints are:
 
 - static package inspection remains the default;
-- no unknown package code should run on the host;
+- unknown package code is not run on the host;
 - no arbitrary dynamic package installation, import, or CLI execution;
 - a future dynamic backend should use a disposable sandbox boundary;
 - network should be off by default;
@@ -581,7 +581,7 @@ Native extensions, WASM files, minified JavaScript, URL references, and credenti
 
 ## Private Registry And Agent Policy
 
-`pkgwhy` is intended to grow into a private, security-aware executable layer for Python tools and AI-agent skills. The current MVP is local-only:
+`pkgwhy` is intended to grow into a private, security-aware executable layer for Python tools and AI-agent skills. The current MVP uses a local registry:
 
 ```bash
 pkgwhy registry init ~/.pkgwhy/registry

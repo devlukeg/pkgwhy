@@ -1,15 +1,15 @@
 # Release Checklist
 
-`pkgwhy` releases are local-first until Luke explicitly approves pushing, tagging, publishing, or changing repository visibility.
+`pkgwhy` releases are validated locally before any push, tag, publication, or repository-visibility change.
 
 This checklist is required before any release candidate or final release is described as locally ready. Passing it does not publish anything and does not prove packages are safe.
 
 ## Scope Review
 
 - Confirm the target version and milestone in `CHANGELOG.md`, `README.md`, `SECURITY.md`, and `pyproject.toml`.
-- Confirm future-only features are labelled future, planned, experimental, or out of scope.
+- Confirm future-only features are labelled future, planned, experimental, or not included in the release.
 - Confirm no production-ready, definitive malware-detection, or full-sandboxing claims are present.
-- Confirm dynamic analysis is either implemented and tested as an opt-in sandbox backend or explicitly experimental/out of scope for the release line.
+- Confirm dynamic analysis is either implemented and tested as an opt-in sandbox backend or clearly labelled experimental for the release line.
 - Confirm vulnerability, provenance, attestation, and trusted-publishing fields remain source-attributed, `unknown`, `unavailable`, or `not_implemented` when evidence is unavailable.
 
 ## Local Checks
@@ -51,7 +51,7 @@ rm -rf dist build *.egg-info
 
 ## Public Trace Scan
 
-Tracked public files must not contain local work-loop files or provider traces. Run:
+Tracked public files should not contain private workflow files or provider-attribution traces. Run:
 
 ```bash
 python scripts/check_public_traces.py
@@ -73,8 +73,8 @@ Product-facing `pkgwhy agent` references are allowed.
 - Run external review only after local checks pass and the diff is coherent.
 - Fix accepted findings only.
 - Defer or reject findings that weaken safety boundaries, loosen hash/path/signature controls, run unknown code, remove conservative warnings, or overclaim security.
-- Do not fake review results.
+- Review results should be recorded exactly as returned. If external review is unavailable, report it as unavailable.
 
 ## Publishing Gate
 
-Do not run publish, tag, push, PR, visibility, cloud, billing, or credential setup commands unless Luke explicitly approves that action for the session.
+Publication, tags, pushes, pull requests, visibility changes, cloud setup, billing setup, and credential setup are handled through the project release process, not ordinary local validation.

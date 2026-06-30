@@ -13,13 +13,13 @@ This document tracks the 1.0.0 release posture and the remaining work before `pk
 - Golden JSON snapshot tests for package judgement, audit, agent precheck, agent judge, and tool judgement.
 - Conservative agent policy defaults for unknown and high-risk non-interactive decisions.
 - Local registry and runner hardening for corrupt indexes, duplicate publishes, symlinks, bounded registry paths, missing bundles, hash mismatch, unsupported entrypoints, and explicit non-sandboxing warnings.
-- Dynamic analysis Option B: experimental and out of scope for `1.0.0` production security guarantees.
+- Dynamic analysis remains experimental and outside the stable security decision surface for this release.
 
-## Release Operations Requiring Luke Approval
+## Release Operations
 
-- Luke review and explicit approval for any push, PR, tag, or publish action.
-- Remote CI status after an approved push/PR flow.
-- Confirmation that public responsible disclosure guidance is acceptable for the public repository.
+- Pushes, pull requests, tags, and publication are handled through the project release process.
+- Remote CI should pass before publication.
+- Public responsible disclosure guidance should be reviewed before public release.
 
 ## Future Production-Security Hardening
 
@@ -28,7 +28,7 @@ This document tracks the 1.0.0 release posture and the remaining work before `pk
 - Broader vulnerability database coverage and transitive vulnerability analysis.
 - Trusted Publishing, attestation verification, and source distribution versus wheel comparison if implemented with source-attributed evidence.
 
-## Explicit Non-Goals For `1.0.0`
+## Current Limitations
 
 - Definitive malware detection.
 - Full OS sandboxing.

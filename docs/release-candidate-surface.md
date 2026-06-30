@@ -18,9 +18,9 @@ This document freezes the `1.0.0` release surface. It describes what is implemen
 - Local runner hash verification, corrupt-index handling, duplicate publish protection, symlink rejection, bounded registry paths, unsupported-entrypoint blocking, and non-sandboxing warning.
 - Release checklist, versioning policy, JSON compatibility policy, threat model, production-readiness blocker list, and public trace hygiene script.
 
-## Experimental Or Out Of Scope For `1.0.0`
+## Experimental Or Not Included In The Stable Security Surface
 
-- Dynamic analysis of arbitrary packages is experimental and out of scope for `1.0.0` production security guarantees.
+- Dynamic analysis of arbitrary packages is experimental and not part of the stable security decision surface in this release.
 - `pkgwhy dynamic inspect` is a safe-fail skeleton. It exposes the intended JSON shape and safety boundary, but refuses host execution and does not invoke Docker or run containers.
 - Trusted Publishing verification is not implemented.
 - Attestation verification is not implemented.
@@ -37,7 +37,7 @@ This document freezes the `1.0.0` release surface. It describes what is implemen
 - Hosted review or model-backed review over retrieved evidence.
 - Additional ecosystem support and broader corpus validation.
 
-## Required Language Boundaries
+## Language Boundaries
 
 Allowed:
 
@@ -47,7 +47,7 @@ Allowed:
 - conservative static analysis;
 - decision support, not a guarantee.
 
-Not allowed:
+Avoid stronger claims such as:
 
 - proves packages are safe;
 - definitively detects all malware;

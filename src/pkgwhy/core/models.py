@@ -551,7 +551,7 @@ class ToolManifest(BaseModel):
 
 
 class PublishResult(BaseModel):
-    """Result of a local-only publish operation."""
+    """Result of a local registry publish operation."""
 
     manifest: ToolManifest
     registry_name: str

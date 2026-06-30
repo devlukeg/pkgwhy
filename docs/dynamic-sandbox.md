@@ -1,6 +1,6 @@
 # Dynamic Sandbox Design
 
-Status: experimental and out of scope for `1.0.0` production security guarantees.
+Status: experimental and not part of the stable security decision surface in this release.
 
 `pkgwhy` is static and metadata-first by default. Dynamic analysis is different: it intentionally executes code, so it changes the trust and safety boundary. This document defines the safety constraints for any future dynamic analysis work.
 
@@ -10,7 +10,7 @@ Dynamic package analysis is not implemented for arbitrary packages.
 
 There is no production malware sandbox, no arbitrary package execution, no dynamic package installation, and no claim of full operating-system sandboxing. Static inspection remains the default package review path.
 
-For the `1.0.0` readiness line, `pkgwhy` has chosen Option B: dynamic analysis remains experimental and out of scope for production security guarantees. The CLI skeleton remains available to expose the intended JSON shape and safety boundary, but it must fail closed rather than run unknown code.
+In this release, dynamic analysis remains experimental. The CLI skeleton remains available to expose the intended JSON shape and safety boundary, and it fails closed rather than running unknown code.
 
 The current CLI surface is a safe-fail skeleton:
 
@@ -20,7 +20,7 @@ pkgwhy dynamic inspect --help
 pkgwhy dynamic inspect <target> --container --network off
 ```
 
-Until a sandbox backend exists, `pkgwhy dynamic inspect` refuses to execute the target and reports that the backend is unavailable or blocked. It must not fall back to host execution.
+Until a sandbox backend exists, `pkgwhy dynamic inspect` refuses to execute the target and reports that the backend is unavailable or blocked. It does not fall back to host execution.
 
 `pkgwhy run` is a separate local private-tool execution path. It resolves tools from a configured local registry and verifies bundle hashes before running them in a Python virtual environment. A virtual environment is dependency isolation only; it is not an operating-system sandbox.
 
@@ -32,11 +32,11 @@ Until a sandbox backend exists, `pkgwhy dynamic inspect` refuses to execute the 
 - Local private-tool execution: runs local registry tools through `pkgwhy run` after local registry, hash, manifest, and policy checks.
 - Dynamic sandbox analysis: future opt-in analysis that may execute code only inside a disposable sandbox boundary.
 
-These modes must stay separate in commands, docs, result models, and tests.
+These modes stay separate in commands, docs, result models, and tests.
 
 ## Threat Model
 
-Dynamic analysis must assume inspected code may try to:
+Dynamic analysis assumes inspected code may try to:
 
 - read host files, environment variables, credentials, SSH keys, browser profiles, package indexes, or cloud metadata;
 - write or delete files outside the analysis workspace;
@@ -50,7 +50,7 @@ The design goal is to collect bounded behavior evidence, not to prove that code 
 
 ## Safety Principles
 
-Dynamic analysis must be:
+Dynamic analysis is designed to be:
 
 - opt-in only;
 - disabled by default;
@@ -62,7 +62,7 @@ Dynamic analysis must be:
 - explicit about unsupported monitoring and incomplete evidence;
 - conservative in language and decisions.
 
-If a required sandbox backend is unavailable, the command must fail safely with a clear result. It must not silently fall back to host execution.
+If a required sandbox backend is unavailable, the command fails safely with a clear result. It does not silently fall back to host execution.
 
 ## Future Container Boundary
 
@@ -78,7 +78,7 @@ If dynamic analysis is revisited after `1.0.0`, the preferred backend is a dispo
 - process, filesystem, and network event collection where supported;
 - automatic cleanup after the run.
 
-Docker may be one backend, but the CLI must not require Docker for static inspection or normal package judgement.
+Docker may be one backend, but the CLI does not require Docker for static inspection or normal package judgement.
 
 The current `--container` path checks only whether a `docker` executable exists. It does not invoke Docker, start a container, mount files, install packages, or execute target code.
 
@@ -98,17 +98,17 @@ Future dynamic result JSON should distinguish observed events from unavailable t
 - warnings: unsupported monitors, backend limitations, timeout, blocked network, blocked host execution;
 - limitations: what was not observed or could not be monitored.
 
-Do not fabricate events. Empty event lists mean no events were recorded by the selected backend, not proof that no behavior occurred.
+Empty event lists only mean the selected backend did not record events. They should not be interpreted as proof that no behavior occurred.
 
 ## Controlled Fixtures
 
-Tests may execute only controlled local fixtures created specifically for `pkgwhy` tests. Fixture execution must not install packages, import arbitrary installed packages, access host secrets, or use the network.
+Dynamic-analysis tests use controlled local fixtures created specifically for `pkgwhy` tests. Fixture execution does not install packages, import arbitrary installed packages, access host secrets, or use the network.
 
 Controlled fixture execution is not evidence that arbitrary package execution is safe.
 
 The current controlled fixture helper is for test coverage only. It requires a fixture path under a caller-provided fixture root, runs with a minimal environment, uses a caller-provided scratch working directory, records the fixture process exit code and scratch file creations/modifications, and does not collect network telemetry. It is not exposed as arbitrary package execution.
 
-## Non-Goals For `1.0.0`
+## Current Limitations
 
 - No arbitrary PyPI package execution.
 - No dynamic import or CLI execution of unknown packages.

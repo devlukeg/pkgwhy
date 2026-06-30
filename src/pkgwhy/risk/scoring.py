@@ -190,7 +190,7 @@ def _recommendation_for_risk(risk: RiskLevel) -> str:
     if risk == RiskLevel.HIGH:
         return "Manual review recommended before installation, import, or execution."
     if risk == RiskLevel.CRITICAL:
-        return "Block for AI-agent usage unless a human explicitly approves after review."
+        return "Block for AI-agent usage until a human reviews the evidence."
     if risk == RiskLevel.UNKNOWN:
         return "Risk is unknown. Manual review recommended."
     return "Risk is unknown. Manual review recommended."

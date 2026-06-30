@@ -2,7 +2,7 @@
 
 `pkgwhy` JSON output is intended for conservative decision support by humans and agents. It is not a safety guarantee, malware verdict, or sandboxing claim.
 
-Public command JSON is offline-first by default. Optional online enrichment, such as explicit OSV.dev or PyPI lookups, may add source-attributed evidence, warnings, or status values to the same public schemas, but it must not require a different schema for offline use and must not guarantee non-empty vulnerability, provenance, attestation, or release-activity fields. When enrichment is unavailable, fields may remain empty, `unknown`, `unavailable`, or `not_implemented`.
+Public command JSON is offline-first by default. Optional online enrichment, such as explicit OSV.dev or PyPI lookups, may add source-attributed evidence, warnings, or status values to the same public schemas without requiring a different schema for offline use or guaranteeing non-empty vulnerability, provenance, attestation, or release-activity fields. When enrichment is unavailable, fields may remain empty, `unknown`, `unavailable`, or `not_implemented`.
 
 Current public JSON contracts:
 
@@ -21,7 +21,7 @@ During the 1.0.0 release line, schema versions are compatibility surfaces for ag
 - Additive optional fields may keep the same schema version when existing consumers can ignore them safely.
 - Required field additions, removals, renamed fields, enum meaning changes, or nested shape changes must bump the affected schema version.
 - Rule ID meaning changes that affect `risk_rules` should update the static rule catalog version or the affected output schema version.
-- A schema version must not be reused for a different incompatible shape.
+- Schema versions are not reused for different incompatible shapes.
 - Compatibility changes must be documented in `CHANGELOG.md`.
 
 ## Snapshot Coverage

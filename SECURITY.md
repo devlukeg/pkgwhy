@@ -2,7 +2,7 @@
 
 ## Supported Status
 
-`pkgwhy` 1.0.0 includes static evidence hardening, vulnerability/provenance foundations, static rule corpus/schema hardening, an explicit dynamic-analysis out-of-scope decision for `1.0.0`, release/process hardening, a safe-fail dynamic command skeleton, agent policy foundations, and local registry/runner hardening. It is not a production malware scanner and should not be treated as a definitive malware detector or full sandbox.
+`pkgwhy` 1.0.0 includes static evidence hardening, vulnerability/provenance foundations, static rule corpus/schema hardening, release/process hardening, a safe-fail experimental dynamic command skeleton, agent policy foundations, and local registry/runner hardening. It is not a production malware scanner and should not be treated as a definitive malware detector or full sandbox.
 
 ## Reporting Security Issues
 
@@ -12,25 +12,25 @@ For non-sensitive security bugs or documentation issues, use GitHub Issues:
 
 For sensitive security reports, use GitHub private vulnerability reporting if it is enabled for the public repository. If it is not enabled, contact the maintainer privately through the contact channel listed on the project or repository profile before sharing exploit details.
 
-Do not disclose sensitive details publicly. Public issues are appropriate for non-sensitive coordination only.
+Sensitive details should be reported privately. Public issues are appropriate for non-sensitive coordination only.
 
-Do not include secrets, private package contents, or credentials in public issues.
+Public issues should not include secrets, private package contents, or credentials.
 
 ## Security Model
 
-`pkgwhy` uses static, metadata-first inspection. It must not import or execute inspected package code merely to inspect it.
+`pkgwhy` uses static, metadata-first inspection. Package inspection reads metadata, files, text, and AST without importing or executing inspected package code.
 
 Capability analysis reports static signals such as API references, package files, and entry points. These signals are not proof of runtime behavior, intent, or maliciousness.
 
 Static rule evidence can include rule IDs, severity, confidence, file paths, line numbers, symbols, and false-positive notes where available. URL/domain references, native extensions, WASM files, minified JavaScript, source-map references, and credential-like names are review evidence only. They are not proof that code connects to a network, contains a real secret, or is malicious.
 
-Credential-pattern reporting masks suspicious assignment values before output. Do not rely on `pkgwhy` as a secret scanner; use dedicated secret-scanning tools for repository and release gates.
+Credential-pattern reporting masks suspicious assignment values before output. `pkgwhy` is not a substitute for dedicated secret-scanning tools in repository and release gates.
 
 Known-vulnerability analysis is source-attributed decision support. Local OSV-like files, explicit OSV.dev queries, and cached OSV responses can be incomplete, stale, unavailable, or missing ecosystem-specific details. A missing vulnerability match does not prove that a package has no vulnerabilities.
 
 Provenance analysis is currently metadata-derived. Repository, documentation, homepage, release-activity, and source-distribution fields are reported only when available from installed metadata or optional PyPI JSON payloads. Trusted Publishing and attestation verification are not implemented and must be treated as unknown or not implemented.
 
-`pkgwhy run` is a separate local private-tool execution feature. It intentionally executes local private tool code only after resolving a valid local registry entry, verifying the stored bundle hash, and applying policy checks. This execution path is separate from package inspection and must not be treated as evidence that package inspection imports or executes inspected package code.
+`pkgwhy run` is a separate local private-tool execution feature. It intentionally executes local private tool code only after resolving a valid local registry entry, verifying the stored bundle hash, and applying policy checks. This execution path is separate from package inspection and does not mean package inspection imports or executes inspected package code.
 
 The local runner blocks missing or hash-mismatched bundles, corrupt registry indexes, unsupported entrypoints, declared dependencies, and non-interactive runs that are not allowed by both judgement and manifest policy. It uses a Python virtual environment for dependency isolation only; it does not provide OS-level filesystem, network, process, or user permission sandboxing.
 
@@ -44,7 +44,7 @@ Runner warning:
 This run uses a Python virtual environment for dependency isolation. It does not fully sandbox operating-system permissions.
 ```
 
-Dynamic analysis is a separate experimental roadmap area and is out of scope for `1.0.0` production security guarantees. Dynamic analysis intentionally executes code and must not run unknown package code on the host. The current `pkgwhy dynamic inspect` command is a safe-fail skeleton: it reports that no sandbox backend is available or that execution is blocked, and refuses to execute the target. Future dynamic analysis must be opt-in, use a disposable sandbox boundary, disable network access by default, use temporary scratch filesystem access by default, avoid host secrets, and fail safely if the requested sandbox backend is unavailable. Empty process, filesystem, or network event lists must not be treated as proof that no behavior occurred.
+Dynamic analysis is a separate experimental roadmap area and is not part of the stable security decision surface in this release. Dynamic analysis intentionally executes code, so unknown package code is not run on the host. The current `pkgwhy dynamic inspect` command is a safe-fail skeleton: it reports that no sandbox backend is available or that execution is blocked, and refuses to execute the target. Future dynamic analysis is expected to be opt-in, use a disposable sandbox boundary, disable network access by default, use temporary scratch filesystem access by default, avoid host secrets, and fail safely if the requested sandbox backend is unavailable. Empty process, filesystem, or network event lists should not be treated as proof that no behavior occurred.
 
 ## Current Limitations
 
@@ -60,7 +60,7 @@ Dynamic analysis is a separate experimental roadmap area and is out of scope for
 - Typosquatting detection is heuristic and conservative. It can miss risky names and can surface false positives.
 - Static URL/domain and credential-pattern extraction is heuristic. It can miss references and can surface documentation, examples, tests, or placeholders.
 - JavaScript minification and native/WASM files are not automatically malicious, and static analysis cannot fully explain compiled or generated artifacts.
-- No OS-level sandboxing or production dynamic sandbox in the `1.0.0` readiness line.
+- No OS-level sandboxing or production dynamic sandbox in this release.
 - No cloud review or remote evidence lookup in the current release.
 - No guarantee that every risky behavior can be detected statically.
 

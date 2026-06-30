@@ -10,16 +10,15 @@ python -m venv .venv
 .venv/bin/python -m pytest
 ```
 
-## Engineering Rules
+## Engineering Expectations
 
-- Do not import or execute inspected package code during inspection.
+- Inspection code should read metadata, package files, text, and AST without importing or executing inspected package code.
 - Keep inspection paths separate from the explicit `pkgwhy run` execution path for local private tools.
 - Keep agent policy decisions separate from package inspection and local tool execution.
 - Prefer static metadata, file, text, and AST analysis.
 - Use conservative security language.
-- Do not claim malware certainty without definitive evidence.
-- Do not claim full sandboxing unless it is implemented.
-- Do not fabricate metadata, source availability, vulnerability findings, risk results, signatures, hashes, or review findings.
+- Malware, source availability, vulnerability, risk, signature, hash, and review claims should be backed by evidence from the implementation or the cited source.
+- Full sandboxing should be described only for isolation that is actually implemented and tested.
 - Keep JSON output stable for agent workflows.
 - Keep release, publishing, repository visibility, and distribution changes out of ordinary feature pull requests.
 
@@ -40,7 +39,7 @@ git diff --check
 
 For release work, also follow [docs/release-checklist.md](docs/release-checklist.md), [docs/versioning-policy.md](docs/versioning-policy.md), and [docs/production-readiness.md](docs/production-readiness.md).
 
-Publishing automation, external services, payment processing, secrets, and cloud backends are out of scope for this release line.
+Publishing automation, external services, payment processing, secrets, and cloud backends are not included in this release line.
 
 Repository: <https://github.com/devlukeg/pkgwhy>
 

@@ -2,7 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from pkgwhy.core.models import DynamicAnalysisResult, DynamicFilesystemEvent
-from pkgwhy.dynamic.analysis import DYNAMIC_OPTION_B_DECISION, build_unavailable_dynamic_result, run_controlled_fixture
+from pkgwhy.dynamic.analysis import DYNAMIC_SCOPE_WARNING, build_unavailable_dynamic_result, run_controlled_fixture
 
 
 def test_unavailable_dynamic_result_blocks_without_events(monkeypatch) -> None:
@@ -21,8 +21,8 @@ def test_unavailable_dynamic_result_blocks_without_events(monkeypatch) -> None:
     assert result.process_events == []
     assert result.filesystem_events == []
     assert result.network_events == []
-    assert DYNAMIC_OPTION_B_DECISION in result.warnings
-    assert DYNAMIC_OPTION_B_DECISION in result.limitations
+    assert DYNAMIC_SCOPE_WARNING in result.warnings
+    assert DYNAMIC_SCOPE_WARNING in result.limitations
     assert any("Empty event lists are not proof" in limitation for limitation in result.limitations)
     assert any("Docker container backend is unavailable" in warning for warning in result.warnings)
 

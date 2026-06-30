@@ -34,7 +34,7 @@ registry_app = typer.Typer(no_args_is_help=True, help="Manage local private regi
 tool_app = typer.Typer(no_args_is_help=True, help="Inspect and judge local private tools.")
 dynamic_app = typer.Typer(
     no_args_is_help=True,
-    help="Experimental dynamic analysis; out of scope for 1.0.0 production security guarantees.",
+    help="Experimental dynamic analysis; not part of the stable security decision surface in this release.",
 )
 agent_app = typer.Typer(no_args_is_help=True, help="Agent-facing policy and package precheck commands.")
 app.add_typer(registry_app, name="registry")
@@ -429,7 +429,7 @@ def dynamic_inspect(
     ] = "off",
     as_json: Annotated[bool, typer.Option("--json", help="Emit schema-versioned dynamic analysis JSON.")] = False,
 ) -> None:
-    """Experimental dynamic analysis skeleton that fails safely and is out of scope for 1.0.0 guarantees."""
+    """Experimental dynamic analysis skeleton that fails safely without a backend."""
     result = build_unavailable_dynamic_result(target, container=container, network=network)
     if as_json:
         print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))

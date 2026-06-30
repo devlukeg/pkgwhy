@@ -106,7 +106,7 @@ def _recommendation_for_decision(decision: AgentDecision, fallback: str, *, non_
     if decision == AgentDecision.BLOCK:
         if non_interactive:
             return "Block non-interactive package use until a human reviews the judgement evidence."
-        return "Block package use unless a human explicitly approves after reviewing the evidence."
+        return "Block package use until a human reviews the evidence."
     if decision == AgentDecision.REVIEW_MANUALLY:
         return "Manual review is required before an agent uses this package."
     if decision == AgentDecision.SANDBOX_ONLY:
