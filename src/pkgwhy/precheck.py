@@ -213,7 +213,7 @@ def build_package_precheck(
     evidence.append("Did not install, import, or execute inspected package code.")
 
     static_summary = _static_summary(judgement)
-    if artifact_summary.status in {"inspected", "kept"}:
+    if artifact_summary.status in {"inspected", "kept", "partial"}:
         static_summary.status = "downloaded_artifact_static_analysis"
         static_summary.sources = ["downloaded_artifact_files"]
 
@@ -227,7 +227,7 @@ def build_package_precheck(
         metadata_source=metadata_source,
         lookup_status=lookup_status,
         network_requested=pypi or osv or download_artifacts,
-        artifacts_downloaded=artifact_summary.status in {"inspected", "kept"},
+        artifacts_downloaded=artifact_summary.status in {"inspected", "kept", "partial"},
         decision=decision,
         exit_code=_exit_code_for_precheck(decision, lookup_status, artifact_summary.status),
         risk_level=risk_level,
@@ -467,7 +467,7 @@ def _strictest_decision(decisions: list[AgentDecision]) -> AgentDecision:
 
 
 def _exit_code_for_precheck(decision: AgentDecision, lookup_status: str, artifact_status: str) -> int:
-    if lookup_status == "online_metadata_unavailable" or artifact_status in {"failed", "unavailable"}:
+    if lookup_status == "online_metadata_unavailable" or artifact_status in {"failed", "unavailable", "partial"}:
         return 4
     if decision in {AgentDecision.BLOCK, AgentDecision.SANDBOX_ONLY}:
         return 2
@@ -563,12 +563,26 @@ def _inspect_downloaded_artifact(
                 warnings=["PyPI metadata did not list a wheel or source artifact for the requested release."],
             ),
         )
+    raw_filename = _string_or_none(artifact.get("filename")) or ""
+    try:
+        filename = _safe_artifact_filename(raw_filename)
+    except ValueError as exc:
+        return ArtifactReview(
+            inspection=_inspection_from_metadata_without_artifact(metadata),
+            summary=PrecheckArtifactSummary(
+                status="failed",
+                filename=raw_filename or None,
+                package_type=artifact.get("packagetype"),
+                url=artifact.get("url"),
+                warnings=[f"Artifact download/static inspection failed: {exc}"],
+            ),
+        )
 
     review_root_manager = None
     if keep_artifacts:
         review_root = (artifact_dir or Path.cwd() / ".pkgwhy-artifacts").expanduser()
         review_root.mkdir(parents=True, exist_ok=True)
-        review_root = review_root / f"{parsed.normalized_package}-{artifact['filename']}"
+        review_root = review_root / f"{parsed.normalized_package}-{filename}"
         if review_root.exists():
             shutil.rmtree(review_root)
         review_root.mkdir(parents=True)
@@ -577,7 +591,7 @@ def _inspect_downloaded_artifact(
         review_root = Path(review_root_manager.name)
 
     try:
-        artifact_path = review_root / artifact["filename"]
+        artifact_path = review_root / filename
         downloaded = _download_url(artifact["url"])
         artifact_path.write_bytes(downloaded)
         sha256_status = _sha256_status(downloaded, artifact.get("sha256"))
@@ -592,6 +606,7 @@ def _inspect_downloaded_artifact(
         excluded_filenames = artifact.get("excluded_filenames")
         excluded_count = len(excluded_filenames) if isinstance(excluded_filenames, list) else 0
         if excluded_count:
+            status = "partial"
             preview = ", ".join(str(name) for name in excluded_filenames[:5])
             if excluded_count > 5:
                 preview = f"{preview}, ..."
@@ -600,7 +615,7 @@ def _inspect_downloaded_artifact(
                 f"{excluded_count} additional artifact(s) were not inspected: {preview}."
             )
         evidence = [
-            f"Downloaded PyPI artifact {artifact['filename']} for static inspection.",
+            f"Downloaded PyPI artifact {filename} for static inspection.",
             f"SHA-256 status: {sha256_status}.",
             f"Extracted {len(extracted_paths)} files without installing or executing package code.",
         ]
@@ -614,7 +629,7 @@ def _inspect_downloaded_artifact(
             inspection=inspection,
             summary=PrecheckArtifactSummary(
                 status=status,
-                filename=artifact["filename"],
+                filename=filename,
                 package_type=artifact.get("packagetype"),
                 url=artifact.get("url"),
                 sha256_status=sha256_status,
@@ -630,7 +645,7 @@ def _inspect_downloaded_artifact(
             inspection=_inspection_from_metadata_without_artifact(metadata),
             summary=PrecheckArtifactSummary(
                 status="failed",
-                filename=artifact["filename"],
+                filename=filename,
                 package_type=artifact.get("packagetype"),
                 url=artifact.get("url"),
                 warnings=[f"Artifact download/static inspection failed: {exc}"],
@@ -643,6 +658,12 @@ def _inspect_downloaded_artifact(
 
 class ArtifactDownloadError(RuntimeError):
     """Raised when an explicit artifact download request cannot retrieve bytes."""
+
+
+def _safe_artifact_filename(filename: str) -> str:
+    if Path(filename).name != filename or filename in {"", ".", ".."}:
+        raise ValueError(f"unsafe artifact filename: {filename}")
+    return filename
 
 
 def _download_url(url: str, *, timeout_seconds: float = 15.0, max_bytes: int = MAX_ARTIFACT_DOWNLOAD_BYTES) -> bytes:

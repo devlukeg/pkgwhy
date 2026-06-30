@@ -5,7 +5,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from pkgwhy.core.constants import (
     AGENT_PACKAGE_PRECHECK_SCHEMA_VERSION,
@@ -392,8 +392,8 @@ class PrecheckArtifactSummary(BaseModel):
     package_type: str | None = None
     url: str | None = None
     sha256_status: str = "not_checked"
-    size_bytes: int = 0
-    extracted_file_count: int = 0
+    size_bytes: int = Field(default=0, ge=0)
+    extracted_file_count: int = Field(default=0, ge=0)
     kept_path: str | None = None
     warnings: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
@@ -436,15 +436,21 @@ class PrecheckBatchResult(BaseModel):
     """Schema-versioned pre-install gate result for dependency declaration files."""
 
     schema_version: PrecheckBatchSchemaVersion = PRECHECK_BATCH_SCHEMA_VERSION
-    target_type: Literal["requirements", "pyproject"] = "requirements"
+    target_type: Literal["requirements", "pyproject"]
     source: str
-    package_count: int = Field(default=0, ge=0)
+    package_count: int = Field(ge=0)
     decision: AgentDecision
     exit_code: int = Field(default=0, ge=0)
     risk_level: RiskLevel
     confidence: Confidence
     warnings: list[str] = Field(default_factory=list)
     results: list[PreInstallPackagePrecheckResult] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_package_count(self) -> PrecheckBatchResult:
+        if self.package_count != len(self.results):
+            raise ValueError("package_count must match number of precheck results")
+        return self
 
 
 class DynamicProcessEvent(BaseModel):

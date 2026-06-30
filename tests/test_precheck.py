@@ -1,3 +1,4 @@
+import hashlib
 import json
 from pathlib import Path
 import zipfile
@@ -7,7 +8,7 @@ import pytest
 from typer.testing import CliRunner
 
 from pkgwhy.cli import app
-from pkgwhy.core.models import PrecheckBatchResult, PreInstallPackagePrecheckResult
+from pkgwhy.core.models import PrecheckArtifactSummary, PrecheckBatchResult, PreInstallPackagePrecheckResult
 from pkgwhy.metadata.installed import get_installed_package
 from pkgwhy.precheck import build_package_precheck, parse_precheck_target
 
@@ -51,6 +52,31 @@ def test_precheck_schema_version_is_fixed() -> None:
 
     with pytest.raises(ValidationError):
         PreInstallPackagePrecheckResult.model_validate(data)
+
+
+def test_precheck_artifact_counters_reject_negative_values() -> None:
+    with pytest.raises(ValidationError):
+        PrecheckArtifactSummary(size_bytes=-1)
+    with pytest.raises(ValidationError):
+        PrecheckArtifactSummary(extracted_file_count=-1)
+
+
+def test_precheck_batch_package_count_must_match_results() -> None:
+    result = build_package_precheck("definitely-not-installed-pkgwhy-precheck-count-1")
+    data = {
+        "schema_version": "pkgwhy.precheck_batch.v1",
+        "target_type": "requirements",
+        "source": "requirements.txt",
+        "package_count": 2,
+        "decision": result.decision,
+        "exit_code": result.exit_code,
+        "risk_level": result.risk_level,
+        "confidence": result.confidence,
+        "results": [result.model_dump(mode="json")],
+    }
+
+    with pytest.raises(ValidationError):
+        PrecheckBatchResult.model_validate(data)
 
 
 def test_precheck_uses_mocked_pypi_metadata_without_artifact_download(monkeypatch) -> None:
@@ -212,6 +238,7 @@ def test_precheck_download_artifact_static_inspection_with_mocked_pypi(monkeypat
     artifact = tmp_path / "demo_precheck-1.0.0-py3-none-any.whl"
     with zipfile.ZipFile(artifact, "w") as archive:
         archive.writestr("demo_precheck/__init__.py", "import subprocess\n")
+    artifact_sha256 = hashlib.sha256(artifact.read_bytes()).hexdigest()
 
     payload = {
         "info": {
@@ -226,7 +253,7 @@ def test_precheck_download_artifact_static_inspection_with_mocked_pypi(monkeypat
                     "filename": artifact.name,
                     "packagetype": "bdist_wheel",
                     "url": "https://example.invalid/demo_precheck-1.0.0-py3-none-any.whl",
-                    "digests": {"sha256": "not-a-real-digest"},
+                    "digests": {"sha256": artifact_sha256},
                 },
                 {
                     "filename": "demo_precheck-1.0.0.tar.gz",
@@ -244,13 +271,14 @@ def test_precheck_download_artifact_static_inspection_with_mocked_pypi(monkeypat
 
     assert result.network_requested is True
     assert result.artifacts_downloaded is True
-    assert result.artifact_summary.status == "inspected"
+    assert result.artifact_summary.status == "partial"
     assert result.artifact_summary.filename == artifact.name
-    assert result.artifact_summary.sha256_status == "mismatch"
+    assert result.artifact_summary.sha256_status == "verified"
     assert result.artifact_summary.extracted_file_count == 1
-    assert result.exit_code == 2
+    assert result.exit_code == 4
     assert result.static_summary.status == "downloaded_artifact_static_analysis"
     assert result.package_judgement.source_availability == "artifact_source_present"
+    assert "Subprocess or shell execution signals" in result.package_judgement.detected_capabilities
     assert any("Did not install, import, or execute" in item for item in result.evidence)
     assert any("additional artifact(s) were not inspected" in warning for warning in result.warnings)
 
@@ -271,6 +299,35 @@ def test_precheck_download_artifact_unavailable_maps_to_infrastructure_exit(monk
 
     assert result.artifact_summary.status == "unavailable"
     assert result.exit_code == 4
+
+
+def test_precheck_download_artifact_rejects_unsafe_metadata_filename(monkeypatch) -> None:
+    payload = {
+        "info": {
+            "name": "demo-precheck",
+            "version": "1.0.0",
+            "summary": "Demo package",
+            "license": "MIT",
+        },
+        "releases": {
+            "1.0.0": [
+                {
+                    "filename": "../demo_precheck-1.0.0-py3-none-any.whl",
+                    "packagetype": "bdist_wheel",
+                    "url": "https://example.invalid/demo_precheck-1.0.0-py3-none-any.whl",
+                    "digests": {"sha256": "unused"},
+                }
+            ]
+        },
+    }
+    monkeypatch.setattr("pkgwhy.precheck.fetch_pypi_project", lambda package: payload)
+
+    result = build_package_precheck("demo-precheck==1.0.0", download_artifacts=True)
+
+    assert result.artifact_summary.status == "failed"
+    assert result.artifacts_downloaded is False
+    assert result.exit_code == 4
+    assert any("unsafe artifact filename" in warning for warning in result.warnings)
 
 
 def test_precheck_cli_enforce_exit_code_returns_gate_code() -> None:
