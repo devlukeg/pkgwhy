@@ -14,6 +14,7 @@ from pkgwhy.core.constants import CAPABILITY_EXPOSURE_NOTE
 from pkgwhy.core.models import (
     AgentPackagePrecheckResult,
     PackageMetadata,
+    PrecheckBatchResult,
     PreInstallPackagePrecheckResult,
     RiskRuleEvidence,
     VulnerabilityMatch,
@@ -26,7 +27,13 @@ from pkgwhy.metadata.pypi import PyPIMetadataError, fetch_pypi_project, provenan
 from pkgwhy.metadata.installed import get_installed_package, list_installed_packages
 from pkgwhy.policy.audit_log import write_agent_package_decision_log
 from pkgwhy.policy.agent_policy import default_agent_policy, evaluate_package_policy
-from pkgwhy.precheck import PrecheckTargetError, build_package_precheck
+from pkgwhy.precheck import (
+    PrecheckFileError,
+    PrecheckTargetError,
+    build_package_precheck,
+    build_pyproject_precheck,
+    build_requirements_precheck,
+)
 from pkgwhy.registry.local import add_registry, init_local_registry, list_registries, use_registry
 from pkgwhy.registry.publish import publish_local_tool
 from pkgwhy.registry.run import RUNNER_ISOLATION_WARNING, run_local_tool
@@ -303,7 +310,14 @@ def audit(
 
 @app.command()
 def precheck(
-    package: Annotated[str, typer.Argument(help="Package requirement to check before installation.")],
+    package: Annotated[
+        str | None,
+        typer.Argument(help="Package requirement or pyproject.toml to check before installation."),
+    ] = None,
+    requirements: Annotated[
+        Path | None,
+        typer.Option("-r", "--requirement", help="Requirements file to check before installation."),
+    ] = None,
     as_json: Annotated[bool, typer.Option("--json", help="Emit schema-versioned precheck JSON.")] = False,
     pypi: Annotated[
         bool,
@@ -324,17 +338,41 @@ def precheck(
 ) -> None:
     """Check a package before installation without installing, importing, or executing it."""
     try:
-        result = build_package_precheck(
-            package,
-            pypi=pypi,
-            osv=osv,
-            osv_cache_dir=osv_cache_dir,
-            vulnerability_file=vulnerability_file,
-        )
-    except PrecheckTargetError as exc:
+        if requirements is not None:
+            if package is not None:
+                raise PrecheckFileError("use either a package target or -r/--requirement, not both")
+            result = build_requirements_precheck(
+                requirements,
+                pypi=pypi,
+                osv=osv,
+                osv_cache_dir=osv_cache_dir,
+                vulnerability_file=vulnerability_file,
+            )
+        elif package is not None and Path(package).name == "pyproject.toml":
+            result = build_pyproject_precheck(
+                Path(package),
+                pypi=pypi,
+                osv=osv,
+                osv_cache_dir=osv_cache_dir,
+                vulnerability_file=vulnerability_file,
+            )
+        elif package is not None:
+            result = build_package_precheck(
+                package,
+                pypi=pypi,
+                osv=osv,
+                osv_cache_dir=osv_cache_dir,
+                vulnerability_file=vulnerability_file,
+            )
+        else:
+            raise PrecheckTargetError("precheck requires a package target, pyproject.toml, or -r/--requirement file")
+    except (PrecheckTargetError, PrecheckFileError) as exc:
         raise typer.BadParameter(str(exc)) from exc
 
-    _emit_precheck(result, as_json=as_json)
+    if isinstance(result, PrecheckBatchResult):
+        _emit_precheck_batch(result, as_json=as_json)
+        return
+    _emit_precheck_package(result, as_json=as_json)
 
 
 @app.command()
@@ -692,7 +730,7 @@ def _emit_agent_package_precheck(
             console.print(f"  - {warning}")
 
 
-def _emit_precheck(result: PreInstallPackagePrecheckResult, *, as_json: bool) -> None:
+def _emit_precheck_package(result: PreInstallPackagePrecheckResult, *, as_json: bool) -> None:
     if as_json:
         print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
         return
@@ -716,6 +754,37 @@ def _emit_precheck(result: PreInstallPackagePrecheckResult, *, as_json: bool) ->
     if result.warnings:
         console.print("Warnings:")
         for warning in result.warnings:
+            console.print(f"  - {warning}")
+
+
+def _emit_precheck_batch(result: PrecheckBatchResult, *, as_json: bool) -> None:
+    if as_json:
+        print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
+        return
+    console.print(f"[bold]{result.source}[/bold]")
+    console.print("Before pip install, ask why.")
+    console.print(f"Packages checked: {result.package_count}")
+    console.print(f"Decision: {result.decision.value}")
+    console.print(f"Risk level: {result.risk_level.value}")
+    console.print(f"Confidence: {result.confidence.value}")
+    table = Table(title="Precheck results")
+    table.add_column("Package")
+    table.add_column("Version")
+    table.add_column("Risk")
+    table.add_column("Decision")
+    table.add_column("Lookup")
+    for item in result.results:
+        table.add_row(
+            item.requested,
+            item.version or "unknown",
+            item.risk_level.value,
+            item.decision.value,
+            item.lookup_status,
+        )
+    console.print(table)
+    if result.warnings:
+        console.print("Warnings:")
+        for warning in result.warnings[:10]:
             console.print(f"  - {warning}")
 
 

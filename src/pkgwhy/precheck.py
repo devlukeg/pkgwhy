@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import tomllib
 from typing import Any
 
 from packaging.requirements import InvalidRequirement, Requirement
@@ -10,17 +11,20 @@ from packaging.utils import canonicalize_name
 
 from pkgwhy.agent.judge import inspect_installed_package, judge_installed_package
 from pkgwhy.core.models import (
+    AgentDecision,
     Confidence,
     FileStaticAnalysis,
     PackageIdentity,
     PackageInspection,
     PackageMetadata,
     PackageProvenance,
+    PrecheckBatchResult,
     PreInstallPackagePrecheckResult,
     PrecheckSignalSummary,
     ProjectUrls,
     ReadabilityStatus,
     RuleCategory,
+    RiskLevel,
     SourceAvailability,
     VulnerabilityMatch,
 )
@@ -45,6 +49,10 @@ class ParsedPrecheckTarget:
 
 class PrecheckTargetError(ValueError):
     """Raised when a precheck target is not a supported package requirement."""
+
+
+class PrecheckFileError(ValueError):
+    """Raised when a dependency declaration file cannot be prechecked."""
 
 
 def build_package_precheck(
@@ -162,6 +170,50 @@ def build_package_precheck(
     )
 
 
+def build_requirements_precheck(
+    path: Path,
+    *,
+    pypi: bool = False,
+    osv: bool = False,
+    osv_cache_dir: Path | None = None,
+    vulnerability_file: Path | None = None,
+) -> PrecheckBatchResult:
+    """Build precheck results for a requirements file without installing dependencies."""
+
+    requirements = _requirements_from_file(path)
+    return _build_batch_precheck(
+        target_type="requirements",
+        source=str(path),
+        requirements=requirements,
+        pypi=pypi,
+        osv=osv,
+        osv_cache_dir=osv_cache_dir,
+        vulnerability_file=vulnerability_file,
+    )
+
+
+def build_pyproject_precheck(
+    path: Path,
+    *,
+    pypi: bool = False,
+    osv: bool = False,
+    osv_cache_dir: Path | None = None,
+    vulnerability_file: Path | None = None,
+) -> PrecheckBatchResult:
+    """Build precheck results for PEP 621 pyproject dependencies."""
+
+    requirements = _requirements_from_pyproject(path)
+    return _build_batch_precheck(
+        target_type="pyproject",
+        source=str(path),
+        requirements=requirements,
+        pypi=pypi,
+        osv=osv,
+        osv_cache_dir=osv_cache_dir,
+        vulnerability_file=vulnerability_file,
+    )
+
+
 def parse_precheck_target(target: str) -> ParsedPrecheckTarget:
     stripped = target.strip()
     if not stripped:
@@ -179,6 +231,121 @@ def parse_precheck_target(target: str) -> ParsedPrecheckTarget:
         specifier=specifier,
         exact_version=exact_version,
     )
+
+
+def _build_batch_precheck(
+    *,
+    target_type: str,
+    source: str,
+    requirements: list[str],
+    pypi: bool,
+    osv: bool,
+    osv_cache_dir: Path | None,
+    vulnerability_file: Path | None,
+) -> PrecheckBatchResult:
+    results = [
+        build_package_precheck(
+            requirement,
+            pypi=pypi,
+            osv=osv,
+            osv_cache_dir=osv_cache_dir,
+            vulnerability_file=vulnerability_file,
+        )
+        for requirement in requirements
+    ]
+    warnings: list[str] = []
+    if not requirements:
+        warnings.append(f"No supported package requirements found in {source}.")
+    warnings.extend(warning for result in results for warning in result.warnings)
+    return PrecheckBatchResult(
+        target_type=target_type,
+        source=source,
+        package_count=len(results),
+        decision=_strictest_decision([result.decision for result in results]),
+        risk_level=_highest_risk([result.risk_level for result in results]),
+        confidence=_lowest_confidence([result.confidence for result in results]),
+        warnings=sorted(set(warnings)),
+        results=results,
+    )
+
+
+def _requirements_from_file(path: Path) -> list[str]:
+    if not path.exists():
+        raise PrecheckFileError(f"requirements file not found: {path}")
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise PrecheckFileError(f"could not read requirements file {path}: {exc}") from exc
+    requirements: list[str] = []
+    for line in lines:
+        cleaned = line.split("#", 1)[0].strip()
+        if not cleaned or cleaned.startswith(("-", "http:", "https:", "git+", "svn+", "hg+", "bzr+", "file://")):
+            continue
+        try:
+            Requirement(cleaned)
+        except InvalidRequirement:
+            continue
+        requirements.append(cleaned)
+    return requirements
+
+
+def _requirements_from_pyproject(path: Path) -> list[str]:
+    if not path.exists():
+        raise PrecheckFileError(f"pyproject file not found: {path}")
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        raise PrecheckFileError(f"could not read pyproject dependencies from {path}: {exc}") from exc
+    project = data.get("project")
+    project = project if isinstance(project, dict) else {}
+    requirements: list[str] = []
+    for dependency in project.get("dependencies", []):
+        if isinstance(dependency, str) and _is_valid_requirement(dependency):
+            requirements.append(dependency)
+    optional = project.get("optional-dependencies")
+    if isinstance(optional, dict):
+        for dependencies in optional.values():
+            if not isinstance(dependencies, list):
+                continue
+            for dependency in dependencies:
+                if isinstance(dependency, str) and _is_valid_requirement(dependency):
+                    requirements.append(dependency)
+    return requirements
+
+
+def _is_valid_requirement(value: str) -> bool:
+    try:
+        Requirement(value)
+    except InvalidRequirement:
+        return False
+    return True
+
+
+def _strictest_decision(decisions: list[AgentDecision]) -> AgentDecision:
+    if not decisions:
+        return AgentDecision.REVIEW_MANUALLY
+    order = {
+        AgentDecision.ALLOW: 0,
+        AgentDecision.ALLOW_WITH_CAUTION: 1,
+        AgentDecision.REVIEW_MANUALLY: 2,
+        AgentDecision.SANDBOX_ONLY: 3,
+        AgentDecision.BLOCK: 4,
+    }
+    return max(decisions, key=lambda decision: order[decision])
+
+
+def _highest_risk(risks: list[RiskLevel]) -> RiskLevel:
+    if not risks:
+        return RiskLevel.UNKNOWN
+    order = {"low": 0, "medium": 1, "unknown": 1, "high": 2, "critical": 3}
+    return max(risks, key=lambda risk: order[risk.value])
+
+
+def _lowest_confidence(confidences: list[Confidence]) -> Confidence:
+    if not confidences:
+        return Confidence.LOW
+    order = {"low": 0, "medium": 1, "high": 2}
+    return min(confidences, key=lambda confidence: order[confidence.value])
 
 
 def _inspection_from_pypi_payload(parsed: ParsedPrecheckTarget, payload: dict[str, Any]) -> PackageInspection:

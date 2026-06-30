@@ -1,0 +1,2 @@
+typer
+definitely-not-installed-pkgwhy-precheck-fixture==1.0.0

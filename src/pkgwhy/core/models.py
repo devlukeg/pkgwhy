@@ -13,6 +13,7 @@ from pkgwhy.core.constants import (
     CAPABILITY_EXPOSURE_NOTE,
     DYNAMIC_ANALYSIS_SCHEMA_VERSION,
     PACKAGE_JUDGEMENT_SCHEMA_VERSION,
+    PRECHECK_BATCH_SCHEMA_VERSION,
     PRECHECK_SCHEMA_VERSION,
     RISK_MODEL_VERSION,
 )
@@ -409,6 +410,20 @@ class PreInstallPackagePrecheckResult(BaseModel):
     typosquat_summary: PrecheckSignalSummary
     static_summary: PrecheckSignalSummary
     package_judgement: PackageJudgement
+
+
+class PrecheckBatchResult(BaseModel):
+    """Schema-versioned pre-install gate result for dependency declaration files."""
+
+    schema_version: str = PRECHECK_BATCH_SCHEMA_VERSION
+    target_type: Literal["requirements", "pyproject"] = "requirements"
+    source: str
+    package_count: int = Field(default=0, ge=0)
+    decision: AgentDecision
+    risk_level: RiskLevel
+    confidence: Confidence
+    warnings: list[str] = Field(default_factory=list)
+    results: list[PreInstallPackagePrecheckResult] = Field(default_factory=list)
 
 
 class DynamicProcessEvent(BaseModel):

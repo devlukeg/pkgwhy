@@ -4,7 +4,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from pkgwhy.cli import app
-from pkgwhy.core.models import PreInstallPackagePrecheckResult
+from pkgwhy.core.models import PrecheckBatchResult, PreInstallPackagePrecheckResult
 from pkgwhy.metadata.installed import get_installed_package
 from pkgwhy.precheck import build_package_precheck, parse_precheck_target
 
@@ -109,3 +109,50 @@ def test_precheck_cli_accepts_vulnerability_file(tmp_path: Path) -> None:
     data = json.loads(result.output)
     assert data["vulnerability_summary"]["status"] == "matches_found"
     assert data["vulnerability_summary"]["match_count"] == 1
+
+
+def test_precheck_cli_requirements_file_json(tmp_path: Path) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text(
+        "typer\n# ignored\n-r other.txt\ndefinitely-not-installed-pkgwhy-precheck-req-1==1.0.0\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["precheck", "-r", str(requirements), "--json"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    PrecheckBatchResult.model_validate(data)
+    assert data["schema_version"] == "pkgwhy.precheck_batch.v1"
+    assert data["target_type"] == "requirements"
+    assert data["package_count"] == 2
+    assert [item["requested"] for item in data["results"]] == [
+        "typer",
+        "definitely-not-installed-pkgwhy-precheck-req-1==1.0.0",
+    ]
+    assert data["decision"] == "block"
+
+
+def test_precheck_cli_pyproject_json(tmp_path: Path) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        """
+[project]
+dependencies = ["typer"]
+
+[project.optional-dependencies]
+dev = ["definitely-not-installed-pkgwhy-precheck-pyproject-1==2.0.0"]
+""",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["precheck", str(pyproject), "--json"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    PrecheckBatchResult.model_validate(data)
+    assert data["schema_version"] == "pkgwhy.precheck_batch.v1"
+    assert data["target_type"] == "pyproject"
+    assert data["package_count"] == 2
+    assert data["results"][0]["requested"] == "typer"
+    assert data["results"][1]["requested"] == "definitely-not-installed-pkgwhy-precheck-pyproject-1==2.0.0"
