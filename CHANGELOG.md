@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0 - 2026-06-30
+
+- Add a reusable GitHub Actions package-gate template at `examples/github-actions/pkgwhy-package-gate.yml`.
+- Document CI advisory, strict, and agent modes in `docs/ci-templates.md`.
+- The CI template installs `pkgwhy`, runs requirements precheck, emits JSON and Markdown audit reports, optionally runs agent precheck, uploads reports, and fails only in strict or agent mode.
+- Keep CI package-gate usage local and secret-free by default; no cloud service, hosted review, billing, or credentials are required.
+- Add static validation tests for the CI template and documentation boundaries.
+
 ## 1.2.0 - 2026-06-30
 
 - Add `pkgwhy pip install <package>` as a local pip install gate over `pkgwhy precheck`.

@@ -1,0 +1,65 @@
+name: pkgwhy package gate
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # advisory: always produce reports and do not fail the job.
+  # strict: fail when precheck returns review/block/unavailable exit codes.
+  # agent: same fail behavior as strict, plus an optional agent precheck target.
+  PKGWHY_MODE: advisory
+  PKGWHY_AGENT_PACKAGE: ""
+
+jobs:
+  pkgwhy:
+    name: pkgwhy package review
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pkgwhy
+        run: python -m pip install pkgwhy
+
+      - name: Run pkgwhy package checks
+        shell: bash
+        run: |
+          set -u
+          mkdir -p pkgwhy-reports
+
+          precheck_status=0
+          if [ -f requirements.txt ]; then
+            set +e
+            python -m pkgwhy precheck -r requirements.txt --json --enforce-exit-code > pkgwhy-reports/precheck.json
+            precheck_status=$?
+            set -e
+          else
+            printf '{"schema_version":"pkgwhy.ci_note.v1","message":"requirements.txt not found"}\n' > pkgwhy-reports/precheck.json
+          fi
+
+          python -m pkgwhy audit --limit 50 --json > pkgwhy-reports/audit.json
+          python -m pkgwhy audit --limit 50 --markdown > pkgwhy-reports/audit.md
+
+          if [ "${PKGWHY_MODE}" = "agent" ] && [ -n "${PKGWHY_AGENT_PACKAGE}" ]; then
+            python -m pkgwhy agent precheck "${PKGWHY_AGENT_PACKAGE}" --json > pkgwhy-reports/agent-precheck.json
+          fi
+
+          if [ "${PKGWHY_MODE}" = "strict" ] || [ "${PKGWHY_MODE}" = "agent" ]; then
+            exit "${precheck_status}"
+          fi
+
+      - name: Upload pkgwhy reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: pkgwhy-reports
+          path: pkgwhy-reports/

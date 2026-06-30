@@ -6,11 +6,11 @@ Know why a package exists before you or your agent trusts it.
 
 ## Status
 
-`pkgwhy` 1.2.0 is a Python supply-chain security decision-support tool and local pip install gate for developers and AI agents. It is useful for local package inspection, conservative static package review, agent-readable JSON, vulnerability and provenance foundations, policy checks, artifact precheck, guarded pip installs, and the local private-registry and runner MVP.
+`pkgwhy` 1.3.0 is a Python supply-chain security decision-support tool and local pip/CI install gate for developers and AI agents. It is useful for local package inspection, conservative static package review, agent-readable JSON, vulnerability and provenance foundations, policy checks, artifact precheck, guarded pip installs, CI package-gate templates, and the local private-registry and runner MVP.
 
 It is not a production security scanner, not malware-detection certainty, and not a full sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
 
-Current packaged version: `1.2.0`.
+Current packaged version: `1.3.0`.
 
 ## What Works Now
 
@@ -62,6 +62,7 @@ Implemented capabilities include:
 - Explicit artifact-download precheck that downloads a PyPI wheel or source artifact to a temporary review directory, verifies SHA-256 when available, extracts safely, statically inspects files, and deletes temporary files by default.
 - Optional gate exit codes via `pkgwhy precheck --enforce-exit-code`.
 - Guarded pip install flow via `pkgwhy pip install`, with precheck first, stable exit codes, explicit overrides, and compact local decision logs.
+- Reusable GitHub Actions package-gate template with advisory, strict, and agent modes.
 - Stable JSON output for agent workflows.
 - Schema-versioned agent policy and package precheck output.
 - Conservative non-interactive agent defaults that block unknown or high-risk package use until a human reviews the evidence.
@@ -215,6 +216,14 @@ pkgwhy pip install suspicious-name --override-block --override-reason "temporary
 ```
 
 Agents and automated workflows should use `pkgwhy pip install` when dependency policy is required, not raw `pip install`. The command is still decision support: it does not prove a package is safe and it does not sandbox pip or installed package code.
+
+For CI package gates, start from the reusable GitHub Actions template:
+
+```text
+examples/github-actions/pkgwhy-package-gate.yml
+```
+
+See [CI Templates](docs/ci-templates.md) for advisory, strict, and agent-mode usage. The template does not require secrets or a hosted `pkgwhy` service.
 
 Inspect the default agent policy and run a conservative agent precheck:
 
