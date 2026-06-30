@@ -1,4 +1,5 @@
 PACKAGE_JUDGEMENT_SCHEMA_VERSION = "pkgwhy.package_judgement.v1"
+PRECHECK_SCHEMA_VERSION = "pkgwhy.precheck.v1"
 DYNAMIC_ANALYSIS_SCHEMA_VERSION = "pkgwhy.dynamic_analysis.v1"
 AGENT_POLICY_SCHEMA_VERSION = "pkgwhy.agent_policy.v1"
 AGENT_PACKAGE_PRECHECK_SCHEMA_VERSION = "pkgwhy.agent_package_precheck.v1"

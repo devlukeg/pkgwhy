@@ -13,6 +13,7 @@ from pkgwhy.core.constants import (
     CAPABILITY_EXPOSURE_NOTE,
     DYNAMIC_ANALYSIS_SCHEMA_VERSION,
     PACKAGE_JUDGEMENT_SCHEMA_VERSION,
+    PRECHECK_SCHEMA_VERSION,
     RISK_MODEL_VERSION,
 )
 
@@ -365,6 +366,48 @@ class AgentPackagePrecheckResult(BaseModel):
     reasons: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     recommendation: str
+    package_judgement: PackageJudgement
+
+
+class PrecheckSignalSummary(BaseModel):
+    """Compact summary of one evidence source used by pre-install precheck."""
+
+    status: str
+    sources: list[str] = Field(default_factory=list)
+    match_count: int = Field(default=0, ge=0)
+    warning_count: int = Field(default=0, ge=0)
+    warnings: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
+
+
+class PreInstallPackagePrecheckResult(BaseModel):
+    """Schema-versioned pre-install package gate result."""
+
+    schema_version: str = PRECHECK_SCHEMA_VERSION
+    target_type: Literal["package"] = "package"
+    requested: str
+    package: str
+    normalized_package: str
+    requested_specifier: str | None = None
+    requested_version: str | None = None
+    version: str | None = None
+    metadata_source: str
+    lookup_status: str
+    network_requested: bool = False
+    artifacts_downloaded: bool = False
+    decision: AgentDecision
+    risk_level: RiskLevel
+    confidence: Confidence
+    policy_decision: AgentDecision
+    policy_reasons: list[str] = Field(default_factory=list)
+    summary: str
+    recommendation: str
+    warnings: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
+    vulnerability_summary: PrecheckSignalSummary
+    provenance_summary: PrecheckSignalSummary
+    typosquat_summary: PrecheckSignalSummary
+    static_summary: PrecheckSignalSummary
     package_judgement: PackageJudgement
 
 

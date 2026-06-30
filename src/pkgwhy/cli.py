@@ -11,7 +11,13 @@ from rich.table import Table
 
 from pkgwhy.agent.judge import inspect_installed_package, judge_installed_package
 from pkgwhy.core.constants import CAPABILITY_EXPOSURE_NOTE
-from pkgwhy.core.models import AgentPackagePrecheckResult, PackageMetadata, RiskRuleEvidence, VulnerabilityMatch
+from pkgwhy.core.models import (
+    AgentPackagePrecheckResult,
+    PackageMetadata,
+    PreInstallPackagePrecheckResult,
+    RiskRuleEvidence,
+    VulnerabilityMatch,
+)
 from pkgwhy.dependencies.reason import explain_dependency_reason
 from pkgwhy.dynamic.analysis import build_unavailable_dynamic_result
 from pkgwhy.explanations.explain import explain_package
@@ -20,6 +26,7 @@ from pkgwhy.metadata.pypi import PyPIMetadataError, fetch_pypi_project, provenan
 from pkgwhy.metadata.installed import get_installed_package, list_installed_packages
 from pkgwhy.policy.audit_log import write_agent_package_decision_log
 from pkgwhy.policy.agent_policy import default_agent_policy, evaluate_package_policy
+from pkgwhy.precheck import PrecheckTargetError, build_package_precheck
 from pkgwhy.registry.local import add_registry, init_local_registry, list_registries, use_registry
 from pkgwhy.registry.publish import publish_local_tool
 from pkgwhy.registry.run import RUNNER_ISOLATION_WARNING, run_local_tool
@@ -292,6 +299,42 @@ def audit(
     console.print(table)
     for warning in audit_warnings:
         console.print(f"Warning: {warning}")
+
+
+@app.command()
+def precheck(
+    package: Annotated[str, typer.Argument(help="Package requirement to check before installation.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Emit schema-versioned precheck JSON.")] = False,
+    pypi: Annotated[
+        bool,
+        typer.Option("--pypi", help="Explicitly query PyPI metadata. Network is never used unless this is set."),
+    ] = False,
+    osv: Annotated[
+        bool,
+        typer.Option("--osv", help="Explicitly query OSV.dev. Network is never used unless this is set."),
+    ] = False,
+    osv_cache_dir: Annotated[
+        Path | None,
+        typer.Option(help="Optional OSV.dev cache directory. Defaults to the pkgwhy user cache."),
+    ] = None,
+    vulnerability_file: Annotated[
+        Path | None,
+        typer.Option(help="Optional local OSV-like JSON file with vulnerability data. No network is used."),
+    ] = None,
+) -> None:
+    """Check a package before installation without installing, importing, or executing it."""
+    try:
+        result = build_package_precheck(
+            package,
+            pypi=pypi,
+            osv=osv,
+            osv_cache_dir=osv_cache_dir,
+            vulnerability_file=vulnerability_file,
+        )
+    except PrecheckTargetError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    _emit_precheck(result, as_json=as_json)
 
 
 @app.command()
@@ -642,6 +685,33 @@ def _emit_agent_package_precheck(
     if result.reasons:
         console.print("Policy reasons:")
         for reason in result.reasons:
+            console.print(f"  - {reason}")
+    if result.warnings:
+        console.print("Warnings:")
+        for warning in result.warnings:
+            console.print(f"  - {warning}")
+
+
+def _emit_precheck(result: PreInstallPackagePrecheckResult, *, as_json: bool) -> None:
+    if as_json:
+        print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
+        return
+    console.print(f"[bold]{result.requested}[/bold]")
+    console.print("Before pip install, ask why.")
+    console.print(f"Decision: {result.decision.value}")
+    console.print(f"Risk level: {result.risk_level.value}")
+    console.print(f"Confidence: {result.confidence.value}")
+    console.print(f"Metadata source: {result.metadata_source}")
+    console.print(f"Lookup status: {result.lookup_status}")
+    console.print(f"Artifacts downloaded: {str(result.artifacts_downloaded).lower()}")
+    console.print(f"Recommendation: {result.recommendation}")
+    console.print(f"Vulnerability summary: {result.vulnerability_summary.status}")
+    console.print(f"Provenance summary: {result.provenance_summary.status}")
+    console.print(f"Typosquat summary: {result.typosquat_summary.status}")
+    console.print(f"Static summary: {result.static_summary.status}")
+    if result.policy_reasons:
+        console.print("Policy reasons:")
+        for reason in result.policy_reasons:
             console.print(f"  - {reason}")
     if result.warnings:
         console.print("Warnings:")
