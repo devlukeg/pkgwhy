@@ -34,7 +34,7 @@ jobs:
       - name: Run pkgwhy package checks
         shell: bash
         run: |
-          set -u
+          set -euo pipefail
           mkdir -p pkgwhy-reports
 
           precheck_status=0
@@ -43,8 +43,13 @@ jobs:
             python -m pkgwhy precheck -r requirements.txt --json --enforce-exit-code > pkgwhy-reports/precheck.json
             precheck_status=$?
             set -e
+          elif [ -f pyproject.toml ]; then
+            set +e
+            python -m pkgwhy precheck pyproject.toml --json --enforce-exit-code > pkgwhy-reports/precheck.json
+            precheck_status=$?
+            set -e
           else
-            printf '{"schema_version":"pkgwhy.ci_note.v1","message":"requirements.txt not found"}\n' > pkgwhy-reports/precheck.json
+            printf '{"schema_version":"pkgwhy.ci_note.v1","message":"requirements.txt or pyproject.toml not found"}\n' > pkgwhy-reports/precheck.json
           fi
 
           python -m pkgwhy audit --limit 50 --json > pkgwhy-reports/audit.json

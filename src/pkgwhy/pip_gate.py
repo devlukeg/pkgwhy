@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+import hashlib
 import json
+import os
 from pathlib import Path
-import re
 import subprocess
 import sys
+import tempfile
 from typing import Callable, Literal
 
 from pkgwhy.core.models import (
@@ -64,69 +66,84 @@ def run_pip_install_gate(
 
     packages = [package for package in (packages or []) if package]
     _validate_request(packages, requirement_file=requirement_file, policy=policy)
+    requirement_snapshot_manager: tempfile.TemporaryDirectory[str] | None = None
+    precheck_requirement_file = requirement_file
 
     try:
-        precheck = _build_precheck(
-            packages=packages,
-            requirement_file=requirement_file,
-            pypi=pypi,
-            osv=osv,
-            osv_cache_dir=osv_cache_dir,
-            vulnerability_file=vulnerability_file,
-            download_artifacts=download_artifacts,
+        if requirement_file is not None:
+            try:
+                requirement_text = requirement_file.read_text(encoding="utf-8")
+            except OSError as exc:
+                raise PipInstallGateError(f"could not read requirements file {requirement_file}: {exc}") from exc
+            requirement_snapshot_manager = tempfile.TemporaryDirectory(prefix="pkgwhy-pip-requirements-")
+            precheck_requirement_file = Path(requirement_snapshot_manager.name) / "requirements.txt"
+            precheck_requirement_file.write_text(requirement_text, encoding="utf-8")
+
+        try:
+            precheck = _build_precheck(
+                packages=packages,
+                requirement_file=precheck_requirement_file,
+                pypi=pypi,
+                osv=osv,
+                osv_cache_dir=osv_cache_dir,
+                vulnerability_file=vulnerability_file,
+                download_artifacts=download_artifacts,
+            )
+        except (PrecheckTargetError, PrecheckFileError) as exc:
+            raise PipInstallGateError(str(exc)) from exc
+
+        decision = _evaluate_install_decision(
+            precheck,
+            policy=policy,
+            override_review=override_review,
+            override_block=override_block,
+            override_reason=override_reason,
         )
-    except (PrecheckTargetError, PrecheckFileError) as exc:
-        raise PipInstallGateError(str(exc)) from exc
+        command = _pip_command(packages, requirement_file=precheck_requirement_file)
+        pip_returncode: int | None = None
+        pip_invoked = False
+        warnings = list(_precheck_warnings(precheck))
+        reasons = list(decision.reasons)
 
-    decision = _evaluate_install_decision(
-        precheck,
-        policy=policy,
-        override_review=override_review,
-        override_block=override_block,
-        override_reason=override_reason,
-    )
-    command = _pip_command(packages, requirement_file=requirement_file)
-    pip_returncode: int | None = None
-    pip_invoked = False
-    warnings = list(_precheck_warnings(precheck))
-    reasons = list(decision.reasons)
+        if decision.allowed:
+            if dry_run:
+                reasons.append("Dry run requested; pip was not invoked.")
+            else:
+                pip_invoked = True
+                runner = pip_runner or _run_pip_command
+                pip_result = runner(command)
+                pip_returncode = pip_result.returncode
+                if pip_result.returncode != 0:
+                    warnings.append("pip install command failed.")
 
-    if decision.allowed:
-        if dry_run:
-            reasons.append("Dry run requested; pip was not invoked.")
-        else:
-            pip_invoked = True
-            runner = pip_runner or _run_pip_command
-            pip_result = runner(command)
-            pip_returncode = pip_result.returncode
-            if pip_result.returncode != 0:
-                warnings.append("pip install command failed.")
-
-    exit_code = _result_exit_code(decision=decision, pip_returncode=pip_returncode)
-    result = PipInstallGateResult(
-        target_type="requirements" if requirement_file is not None else "package",
-        requested=packages,
-        requirement_file=str(requirement_file) if requirement_file is not None else None,
-        policy=policy,
-        decision=_precheck_decision(precheck),
-        risk_level=_precheck_risk(precheck),
-        confidence=_precheck_confidence(precheck),
-        precheck_exit_code=precheck.exit_code,
-        exit_code=exit_code,
-        pip_invoked=pip_invoked,
-        pip_command=command if decision.allowed else [],
-        pip_returncode=pip_returncode,
-        dry_run=dry_run,
-        override_used=decision.override_used,
-        override_reason=override_reason if decision.override_used else None,
-        reasons=reasons,
-        warnings=sorted(set(warnings)),
-        precheck=precheck,
-    )
-    log_path = write_pip_install_decision_log(result, log_root=log_root)
-    if log_path is not None:
-        result = result.model_copy(update={"log_path": str(log_path)})
-    return result
+        exit_code = _result_exit_code(decision=decision, pip_returncode=pip_returncode)
+        result = PipInstallGateResult(
+            target_type="requirements" if requirement_file is not None else "package",
+            requested=packages,
+            requirement_file=str(requirement_file) if requirement_file is not None else None,
+            policy=policy,
+            decision=_precheck_decision(precheck),
+            risk_level=_precheck_risk(precheck),
+            confidence=_precheck_confidence(precheck),
+            precheck_exit_code=precheck.exit_code,
+            exit_code=exit_code,
+            pip_invoked=pip_invoked,
+            pip_command=command if decision.allowed else [],
+            pip_returncode=pip_returncode,
+            dry_run=dry_run,
+            override_used=decision.override_used,
+            override_reason=override_reason if decision.override_used else None,
+            reasons=reasons,
+            warnings=sorted(set(warnings)),
+            precheck=precheck,
+        )
+        log_path = write_pip_install_decision_log(result, log_root=log_root)
+        if log_path is not None:
+            result = result.model_copy(update={"log_path": str(log_path)})
+        return result
+    finally:
+        if requirement_snapshot_manager is not None:
+            requirement_snapshot_manager.cleanup()
 
 
 @dataclass(frozen=True)
@@ -274,9 +291,10 @@ def write_pip_install_decision_log(
     created_at = datetime.now(tz=UTC)
     target = result.requirement_file or "-".join(result.requested) or "unknown"
     root = log_root or config_dir() / "pip-install-decisions"
-    target_dir = root / _safe_path_segment(target)
+    target_dir = root / _digest_path_segment(target)
     try:
-        target_dir.mkdir(parents=True, exist_ok=True)
+        target_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        target_dir.chmod(0o700)
     except OSError:
         return None
     log_path = target_dir / f"{created_at.strftime('%Y%m%dT%H%M%S%fZ')}.json"
@@ -305,12 +323,15 @@ def write_pip_install_decision_log(
         "warnings": list(result.warnings),
     }
     try:
-        log_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        data = (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+        fd = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(data)
     except OSError:
         return None
     return log_path
 
 
-def _safe_path_segment(value: str) -> str:
-    normalized = re.sub(r"[^A-Za-z0-9._-]+", "-", value).strip(".-_")
-    return normalized or "unknown"
+def _digest_path_segment(value: str) -> str:
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
+    return f"target-{digest}"

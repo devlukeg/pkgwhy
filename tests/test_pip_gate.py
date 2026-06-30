@@ -1,4 +1,5 @@
 import json
+import stat
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -121,6 +122,11 @@ def test_pip_gate_invokes_fake_pip_only_after_allow(monkeypatch, tmp_path: Path)
     assert result.pip_command[-2:] == ["install", "demo-package"]
     assert calls == [result.pip_command]
     assert result.log_path is not None
+    log_path = Path(result.log_path)
+    assert log_path.parent.name.startswith("target-")
+    assert "demo-package" not in log_path.parent.name
+    assert stat.S_IMODE(log_path.parent.stat().st_mode) == 0o700
+    assert stat.S_IMODE(log_path.stat().st_mode) == 0o600
     log_data = json.loads(Path(result.log_path).read_text(encoding="utf-8"))
     assert log_data["schema_version"] == "pkgwhy.pip_install_decision_log.v1"
     assert log_data["pip_invoked"] is True
@@ -181,6 +187,37 @@ def test_pip_gate_review_override_is_explicit_and_logged(monkeypatch, tmp_path: 
     assert log_data["override_reason"] == "controlled fixture approval"
 
 
+def test_pip_gate_block_override_is_explicit_and_logged(monkeypatch, tmp_path: Path) -> None:
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        "pkgwhy.pip_gate.build_package_precheck",
+        lambda *args, **kwargs: _precheck(
+            decision=AgentDecision.BLOCK,
+            risk_level=RiskLevel.HIGH,
+            confidence=Confidence.MEDIUM,
+            exit_code=2,
+        ),
+    )
+
+    result = run_pip_install_gate(
+        packages=["demo-package"],
+        override_block=True,
+        override_reason="controlled block override",
+        pip_runner=lambda command: calls.append(command) or PipCommandResult(returncode=0),
+        log_root=tmp_path,
+    )
+
+    assert result.exit_code == 0
+    assert result.override_used is True
+    assert result.override_reason == "controlled block override"
+    assert result.pip_invoked is True
+    assert calls == [result.pip_command]
+    assert result.log_path is not None
+    log_data = json.loads(Path(result.log_path).read_text(encoding="utf-8"))
+    assert log_data["override_used"] is True
+    assert log_data["override_reason"] == "controlled block override"
+
+
 def test_pip_gate_unavailable_precheck_does_not_allow_override(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(
         "pkgwhy.pip_gate.build_package_precheck",
@@ -219,9 +256,11 @@ def test_pip_gate_requirements_file_uses_fake_pip_runner(monkeypatch, tmp_path: 
     )
 
     assert result.target_type == "requirements"
+    assert result.requirement_file == str(requirements)
     assert result.exit_code == 0
     assert result.pip_invoked is True
-    assert result.pip_command[-3:] == ["install", "-r", str(requirements)]
+    assert result.pip_command[-3:-1] == ["install", "-r"]
+    assert result.pip_command[-1] != str(requirements)
     assert calls == [result.pip_command]
 
 
@@ -247,16 +286,11 @@ def test_pip_gate_cli_help_surfaces_install_command() -> None:
     result = runner.invoke(app, ["pip", "install", "--help"])
 
     assert result.exit_code == 0
-    option_names = {
-        option
-        for parameter in __import__("typer").main.get_command(app).commands["pip"].commands["install"].params
-        for option in getattr(parameter, "opts", ())
-    }
-    assert "--policy" in option_names
-    assert "-r" in option_names
-    assert "--override-review" in option_names
-    assert "--override-block" in option_names
-    assert "--dry-run" in option_names
+    assert "--policy" in result.output
+    assert "-r" in result.output
+    assert "--override-review" in result.output
+    assert "--override-block" in result.output
+    assert "--dry-run" in result.output
 
 
 def test_pip_gate_cli_json_dry_run_uses_precheck_and_never_pip(monkeypatch, tmp_path: Path) -> None:

@@ -34,7 +34,9 @@ The test suite includes normalized golden snapshots or focused schema validation
 - `pkgwhy judge <package> --json`
 - `pkgwhy precheck <package> --json`
 - `pkgwhy precheck -r requirements.txt --json`
+- `pkgwhy precheck pyproject.toml --json`
 - `pkgwhy pip install <package> --json`
+- `pkgwhy pip install -r requirements.txt --json`
 - `pkgwhy audit --json`
 - `pkgwhy agent precheck <package> --json`
 - `pkgwhy agent judge <package> --json`

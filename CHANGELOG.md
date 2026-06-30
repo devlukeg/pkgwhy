@@ -7,6 +7,7 @@
 - Document future tiers for the free local CLI, Pro local policy packs, team review dashboard, hosted package review cache, shared organization policy, and agent install gateway.
 - Add explicit hosted-review boundaries so the current local CLI does not imply active cloud review or definitive malware detection.
 - Add tests that keep the commercial platform design doc future-only and boundary-aware.
+- Harden precheck and pip-gate follow-up review items: direct-reference handling, hash-locked requirements parsing, PyPI specifier release selection, Python 3.11-compatible tar extraction, private pip decision log paths/permissions, and CI pyproject gate coverage.
 
 ## 1.4.0 - 2026-06-30
 

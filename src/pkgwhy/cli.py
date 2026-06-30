@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
@@ -46,6 +47,12 @@ from pkgwhy.reports.audit import build_audit_report, render_audit_markdown
 from pkgwhy.typosquat.detector import detect_typosquats
 from pkgwhy.vulnerabilities.matching import match_vulnerabilities
 from pkgwhy.vulnerabilities.osv import load_osv_records, query_osv_cached
+
+
+class PipPolicyOption(StrEnum):
+    STANDARD = "standard"
+    STRICT = "strict"
+
 
 app = typer.Typer(no_args_is_help=True, help="Explain, inspect, judge packages, and run local private tools.")
 registry_app = typer.Typer(no_args_is_help=True, help="Manage local private registries.")
@@ -424,9 +431,9 @@ def pip_install(
         typer.Option("-r", "--requirement", help="Requirements file to check and install through pip."),
     ] = None,
     policy: Annotated[
-        str,
+        PipPolicyOption,
         typer.Option("--policy", help="Install policy: standard or strict."),
-    ] = "standard",
+    ] = PipPolicyOption.STANDARD,
     as_json: Annotated[bool, typer.Option("--json", help="Emit schema-versioned pip gate JSON.")] = False,
     pypi: Annotated[
         bool,
@@ -474,7 +481,7 @@ def pip_install(
         result = run_pip_install_gate(
             packages=packages,
             requirement_file=requirements,
-            policy=policy,  # type: ignore[arg-type]
+            policy=policy.value,
             pypi=pypi,
             osv=osv,
             osv_cache_dir=osv_cache_dir,

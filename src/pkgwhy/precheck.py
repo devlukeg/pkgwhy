@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import hashlib
 from pathlib import Path
 import shutil
+import shlex
 import tarfile
 import tempfile
 import tomllib
@@ -12,8 +13,9 @@ from urllib import error, request
 import zipfile
 
 from packaging.requirements import InvalidRequirement, Requirement
-from packaging.specifiers import Specifier
+from packaging.specifiers import Specifier, SpecifierSet
 from packaging.utils import canonicalize_name
+from packaging.version import InvalidVersion, Version
 
 from pkgwhy.agent.judge import inspect_installed_package, judge_installed_package
 from pkgwhy.core.models import (
@@ -128,25 +130,28 @@ def build_package_precheck(
             )
             lookup_status = "online_metadata_unavailable"
 
-    if pypi_payload is not None and parsed.exact_version and not _release_exists(pypi_payload, parsed.exact_version):
+    selected_release_version: str | None = None
+    if pypi_payload is not None:
+        selected_release_version = _select_release_version(pypi_payload, parsed)
+    if pypi_payload is not None and selected_release_version is None:
         inspection = _unavailable_inspection(parsed)
         provenance = PackageProvenance(
             package=parsed.normalized_package,
             version=parsed.exact_version,
             metadata_source="pypi_json",
             confidence=Confidence.LOW,
-            warnings=[f"PyPI metadata did not list requested release version {parsed.exact_version}."],
-            evidence=["Read PyPI project JSON but did not find the requested release version."],
+            warnings=[_release_unavailable_warning(parsed)],
+            evidence=["Read PyPI project JSON but did not find a release matching the requested specifier."],
         )
         lookup_status = "requested_release_unavailable"
-        warnings.append(f"PyPI metadata did not list requested release version {parsed.exact_version}.")
-        evidence.append("Read PyPI project JSON but did not reuse latest-release metadata for a missing exact version.")
+        warnings.append(_release_unavailable_warning(parsed))
+        evidence.append("Read PyPI project JSON but did not reuse latest-release metadata for an unmatched specifier.")
     elif pypi_payload is not None:
-        inspection = _inspection_from_pypi_payload(parsed, pypi_payload)
+        inspection = _inspection_from_pypi_payload(parsed, pypi_payload, selected_release_version)
         provenance = provenance_from_pypi_payload(
             parsed.package,
             pypi_payload,
-            audited_version=parsed.exact_version or inspection.metadata.identity.version,
+            audited_version=selected_release_version or inspection.metadata.identity.version,
         )
     elif installed_inspection is not None:
         inspection = installed_inspection
@@ -315,6 +320,8 @@ def parse_precheck_target(target: str) -> ParsedPrecheckTarget:
         raise PrecheckTargetError(f"precheck target must be a package requirement: {target}") from exc
     exact_version = _exact_version(requirement)
     specifier = str(requirement.specifier) or None
+    if requirement.url:
+        raise PrecheckTargetError("precheck does not evaluate direct URL, VCS, or file requirements")
     return ParsedPrecheckTarget(
         requested=stripped,
         package=requirement.name,
@@ -378,7 +385,7 @@ def _requirements_from_file(path: Path) -> DependencyDeclarations:
         raise PrecheckFileError(f"could not read requirements file {path}: {exc}") from exc
     requirements: list[str] = []
     warnings: list[str] = []
-    for line_number, line in enumerate(lines, start=1):
+    for line_number, line in _logical_requirement_lines(lines):
         cleaned = line.split("#", 1)[0].strip()
         if not cleaned:
             continue
@@ -394,12 +401,21 @@ def _requirements_from_file(path: Path) -> DependencyDeclarations:
         if cleaned.startswith("-"):
             warnings.append(f"Skipped requirements line {line_number}: requirements option is not evaluated by precheck.")
             continue
+        normalized = _normalize_requirement_line(cleaned)
+        if normalized is None:
+            warnings.append(f"Skipped requirements line {line_number}: malformed package requirement.")
+            continue
         try:
-            Requirement(cleaned)
+            requirement = Requirement(normalized)
         except InvalidRequirement:
             warnings.append(f"Skipped requirements line {line_number}: malformed package requirement.")
             continue
-        requirements.append(cleaned)
+        if requirement.url:
+            warnings.append(
+                f"Skipped requirements line {line_number}: URL, VCS, or file requirement is not evaluated by precheck."
+            )
+            continue
+        requirements.append(normalized)
     return DependencyDeclarations(requirements=requirements, warnings=warnings)
 
 
@@ -447,10 +463,10 @@ def _requirements_from_pyproject(path: Path) -> DependencyDeclarations:
 
 def _is_valid_requirement(value: str) -> bool:
     try:
-        Requirement(value)
+        requirement = Requirement(value)
     except InvalidRequirement:
         return False
-    return True
+    return requirement.url is None
 
 
 def _strictest_decision(decisions: list[AgentDecision]) -> AgentDecision:
@@ -502,11 +518,53 @@ def _release_exists(payload: dict[str, Any], version: str) -> bool:
     return isinstance(releases, dict) and isinstance(releases.get(version), list)
 
 
-def _inspection_from_pypi_payload(parsed: ParsedPrecheckTarget, payload: dict[str, Any]) -> PackageInspection:
+def _select_release_version(payload: dict[str, Any], parsed: ParsedPrecheckTarget) -> str | None:
+    if parsed.exact_version:
+        return parsed.exact_version if _release_exists(payload, parsed.exact_version) else None
+
+    releases = payload.get("releases")
+    if not isinstance(releases, dict):
+        return None
+    specifier = SpecifierSet(parsed.specifier or "")
+    candidates: list[tuple[Version, str]] = []
+    for version_text, files in releases.items():
+        if not isinstance(version_text, str) or not isinstance(files, list) or not files:
+            continue
+        try:
+            version = Version(version_text)
+        except InvalidVersion:
+            continue
+        if specifier and not specifier.contains(version, prereleases=True):
+            continue
+        candidates.append((version, version_text))
+    if candidates:
+        return max(candidates, key=lambda item: item[0])[1]
+
+    info = payload.get("info")
+    info = info if isinstance(info, dict) else {}
+    info_version = _string_or_none(info.get("version"))
+    if info_version and not parsed.specifier:
+        return info_version
+    return None
+
+
+def _release_unavailable_warning(parsed: ParsedPrecheckTarget) -> str:
+    if parsed.exact_version:
+        return f"PyPI metadata did not list requested release version {parsed.exact_version}."
+    if parsed.specifier:
+        return f"PyPI metadata did not list a release satisfying {parsed.specifier}."
+    return "PyPI metadata did not list a usable release for precheck."
+
+
+def _inspection_from_pypi_payload(
+    parsed: ParsedPrecheckTarget,
+    payload: dict[str, Any],
+    release_version: str | None,
+) -> PackageInspection:
     info = payload.get("info")
     info = info if isinstance(info, dict) else {}
     project_urls = _project_urls(info)
-    version = parsed.exact_version or _string_or_none(info.get("version"))
+    version = release_version or _string_or_none(info.get("version"))
     metadata = PackageMetadata(
         identity=PackageIdentity(
             name=_string_or_none(info.get("name")) or parsed.package,
@@ -554,7 +612,7 @@ def _inspect_downloaded_artifact(
     keep_artifacts: bool,
     artifact_dir: Path | None,
 ) -> ArtifactReview:
-    artifact = _select_artifact(payload, parsed.exact_version)
+    artifact = _select_artifact(payload, metadata.identity.version)
     if artifact is None:
         return ArtifactReview(
             inspection=_inspection_from_metadata_without_artifact(metadata),
@@ -770,14 +828,20 @@ def _extract_tar(artifact_path: Path, extract_root: Path) -> list[Path]:
     with tarfile.open(artifact_path) as archive:
         members = []
         total_size = 0
+        extract_root_resolved = extract_root.resolve()
         for member in archive.getmembers():
             if not member.isfile():
                 continue
             total_size = _check_extract_limits(len(members) + 1, total_size, member.size, member.name)
             target = (extract_root / member.name).resolve()
-            if not target.is_relative_to(extract_root.resolve()):
+            if not target.is_relative_to(extract_root_resolved):
                 raise ValueError(f"unsafe archive path: {member.name}")
-            archive.extract(member, extract_root, filter="data")
+            source = archive.extractfile(member)
+            if source is None:
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with source, target.open("wb") as destination:
+                shutil.copyfileobj(source, destination)
             members.append(target)
     return members
 
@@ -981,6 +1045,50 @@ def _exact_version(requirement: Requirement) -> str | None:
 
 def _is_exact_pin(specifier: Specifier) -> bool:
     return specifier.operator in {"==", "==="} and "*" not in specifier.version
+
+
+def _logical_requirement_lines(lines: list[str]) -> list[tuple[int, str]]:
+    logical_lines: list[tuple[int, str]] = []
+    buffer = ""
+    start_line = 1
+    for line_number, line in enumerate(lines, start=1):
+        stripped = line.rstrip()
+        if not buffer:
+            start_line = line_number
+        if stripped.endswith("\\"):
+            buffer += stripped[:-1] + " "
+            continue
+        logical_lines.append((start_line, buffer + stripped))
+        buffer = ""
+    if buffer:
+        logical_lines.append((start_line, buffer))
+    return logical_lines
+
+
+def _normalize_requirement_line(value: str) -> str | None:
+    try:
+        parts = shlex.split(value)
+    except ValueError:
+        return None
+    if not parts:
+        return None
+    requirement_parts: list[str] = []
+    skip_next = False
+    for part in parts:
+        if skip_next:
+            skip_next = False
+            continue
+        if part == "--hash":
+            skip_next = True
+            continue
+        if part.startswith("--hash="):
+            continue
+        if part.startswith("-"):
+            return None
+        requirement_parts.append(part)
+    if not requirement_parts:
+        return None
+    return " ".join(requirement_parts)
 
 
 def _find_url(values: dict[str, str], tokens: tuple[str, ...]) -> str | None:

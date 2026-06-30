@@ -142,10 +142,11 @@ def test_registry_trust_commands_mark_and_list_tools(tmp_path: Path) -> None:
     blocked_result = runner.invoke(app, ["registry", "blocked"], env=env)
 
     assert trust_result.exit_code == 0
-    assert "trusted" in trust_result.output
+    assert "local/blocked_tool 0.1.0: trusted" in trust_result.output
     assert review_result.exit_code == 0
-    assert "reviewed" in review_result.output
+    assert "local/blocked_tool 0.1.0: reviewed" in review_result.output
     assert block_result.exit_code == 0
-    assert "blocked" in block_result.output
+    assert "local/blocked_tool 0.1.0: blocked" in block_result.output
     assert blocked_result.exit_code == 0
     assert "blocked_tool" in blocked_result.output
+    assert "blocked" in blocked_result.output.split("blocked_tool", 1)[1]

@@ -1,6 +1,7 @@
 import hashlib
 import json
 from pathlib import Path
+import tarfile
 import zipfile
 
 from pydantic import ValidationError
@@ -10,7 +11,13 @@ from typer.testing import CliRunner
 from pkgwhy.cli import app
 from pkgwhy.core.models import PrecheckArtifactSummary, PrecheckBatchResult, PreInstallPackagePrecheckResult
 from pkgwhy.metadata.installed import get_installed_package
-from pkgwhy.precheck import build_package_precheck, parse_precheck_target
+from pkgwhy.precheck import (
+    PrecheckTargetError,
+    _extract_tar,
+    build_package_precheck,
+    build_requirements_precheck,
+    parse_precheck_target,
+)
 
 runner = CliRunner()
 
@@ -22,6 +29,11 @@ def test_parse_precheck_target_preserves_exact_version() -> None:
     assert parsed.normalized_package == "typer"
     assert parsed.specifier == "==0.12.5"
     assert parsed.exact_version == "0.12.5"
+
+
+def test_parse_precheck_target_rejects_direct_references() -> None:
+    with pytest.raises(PrecheckTargetError):
+        parse_precheck_target("demo-precheck @ https://example.invalid/demo-precheck.whl")
 
 
 def test_precheck_missing_package_offline_does_not_install_or_fetch() -> None:
@@ -124,6 +136,48 @@ def test_precheck_rejects_missing_exact_pypi_release(monkeypatch) -> None:
     assert any("did not list requested release version 1.0.0" in warning for warning in result.warnings)
 
 
+def test_precheck_pypi_non_exact_specifier_selects_matching_release(monkeypatch) -> None:
+    payload = {
+        "info": {
+            "name": "demo-precheck",
+            "version": "2.0.0",
+            "summary": "Demo package",
+            "license": "MIT",
+        },
+        "releases": {
+            "1.0.0": [{"packagetype": "sdist"}],
+            "1.5.0": [{"packagetype": "sdist"}],
+            "2.0.0": [{"packagetype": "sdist"}],
+        },
+    }
+    monkeypatch.setattr("pkgwhy.precheck.fetch_pypi_project", lambda package: payload)
+
+    result = build_package_precheck("demo-precheck>=1,<2", pypi=True)
+
+    assert result.lookup_status == "metadata_found"
+    assert result.version == "1.5.0"
+    assert result.provenance_summary.status == "pypi_json"
+
+
+def test_precheck_pypi_non_exact_specifier_requires_matching_release(monkeypatch) -> None:
+    payload = {
+        "info": {
+            "name": "demo-precheck",
+            "version": "2.0.0",
+            "summary": "Demo package",
+            "license": "MIT",
+        },
+        "releases": {"2.0.0": [{"packagetype": "sdist"}]},
+    }
+    monkeypatch.setattr("pkgwhy.precheck.fetch_pypi_project", lambda package: payload)
+
+    result = build_package_precheck("demo-precheck<2", pypi=True)
+
+    assert result.lookup_status == "requested_release_unavailable"
+    assert result.version is None
+    assert any("did not list a release satisfying <2" in warning for warning in result.warnings)
+
+
 def test_precheck_cli_json_for_installed_package() -> None:
     assert get_installed_package("typer") is not None
 
@@ -206,6 +260,24 @@ def test_precheck_cli_requirements_file_json(tmp_path: Path) -> None:
     assert data["decision"] == "block"
     assert data["exit_code"] == 2
     assert any("recursive include is not evaluated" in warning for warning in data["warnings"])
+
+
+def test_precheck_requirements_normalizes_hash_locked_lines_and_skips_direct_references(tmp_path: Path) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text(
+        """
+demo-precheck-hash==1.0.0 \\
+    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+direct-demo @ https://example.invalid/direct-demo.whl
+""",
+        encoding="utf-8",
+    )
+
+    result = build_requirements_precheck(requirements)
+
+    assert result.package_count == 1
+    assert result.results[0].requested == "demo-precheck-hash==1.0.0"
+    assert any("URL, VCS, or file requirement" in warning for warning in result.warnings)
 
 
 def test_precheck_cli_pyproject_json(tmp_path: Path) -> None:
@@ -328,6 +400,23 @@ def test_precheck_download_artifact_rejects_unsafe_metadata_filename(monkeypatch
     assert result.artifacts_downloaded is False
     assert result.exit_code == 4
     assert any("unsafe artifact filename" in warning for warning in result.warnings)
+
+
+def test_precheck_tar_extraction_uses_static_file_copy(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    package_file = source / "demo_pkg.py"
+    package_file.write_text("VALUE = 1\n", encoding="utf-8")
+    archive_path = tmp_path / "demo.tar.gz"
+    with tarfile.open(archive_path, "w:gz") as archive:
+        archive.add(package_file, arcname="demo_pkg.py")
+
+    extract_root = tmp_path / "extracted"
+    extract_root.mkdir()
+    extracted = _extract_tar(archive_path, extract_root)
+
+    assert extracted == [extract_root / "demo_pkg.py"]
+    assert (extract_root / "demo_pkg.py").read_text(encoding="utf-8") == "VALUE = 1\n"
 
 
 def test_precheck_cli_enforce_exit_code_returns_gate_code() -> None:
