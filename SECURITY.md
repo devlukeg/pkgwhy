@@ -2,7 +2,7 @@
 
 ## Supported Status
 
-`pkgwhy` 1.3.0 includes static evidence hardening, vulnerability/provenance foundations, static rule corpus/schema hardening, release/process hardening, a safe-fail experimental dynamic command skeleton, agent policy foundations, local pre-install and pip install gates, reusable CI package-gate templates, and local registry/runner hardening. It is not a production malware scanner and should not be treated as a definitive malware detector or full sandbox.
+`pkgwhy` 1.4.0 includes static evidence hardening, vulnerability/provenance foundations, static rule corpus/schema hardening, release/process hardening, a safe-fail experimental dynamic command skeleton, agent policy foundations, local pre-install and pip install gates, reusable CI package-gate templates, local registry trust states, and local registry/runner hardening. It is not a production malware scanner and should not be treated as a definitive malware detector or full sandbox.
 
 ## Reporting Security Issues
 
@@ -36,6 +36,8 @@ The local runner blocks missing or hash-mismatched bundles, corrupt registry ind
 
 Local registry publishing blocks duplicate owner/name/version records and rejects symlinks in tool bundles. Registry-stored manifest and bundle paths must resolve inside the registry root.
 
+Local registry trust states are local policy labels. New tools default to `unknown`. `trusted` and `reviewed` are human-maintained labels, not cryptographic verification. `quarantined` and `blocked` tools are refused by the local runner before execution.
+
 Pre-install package gate commands are decision support. `pkgwhy precheck <package> --json` checks package requirements before installation and can optionally query PyPI/OSV or download artifacts only when explicit flags request that work. Artifact precheck downloads to a temporary review directory, verifies SHA-256 when PyPI metadata provides it, statically inspects files, and deletes temporary files by default. It does not install, import, or execute inspected package code.
 
 Pip install gate commands are also decision support. `pkgwhy pip install <package>` and `pkgwhy pip install -r requirements.txt` run precheck before invoking pip. Pip is invoked only when policy allows or when a human uses an explicit override flag. The gate logs compact local decision summaries when possible, but those logs are not tamper-proof audit records. The pip gate does not sandbox pip, installed package code, build backends, or install-time behavior.
@@ -60,6 +62,7 @@ Dynamic analysis is a separate experimental roadmap area and is not part of the 
 - Full source distribution versus wheel comparison is not implemented yet.
 - No runner dependency installation yet.
 - No tool bundle signing or signature verification yet.
+- No tool lock/verify commands or registry export/import yet.
 - No tamper-proof audit log, remote attestation, or signed decision record yet.
 - No sandboxed pip execution; `pkgwhy pip install` is a policy gate before pip, not an installer sandbox.
 - No tool-specific agent judgement beyond the current package precheck alias yet.

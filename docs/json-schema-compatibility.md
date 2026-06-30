@@ -13,7 +13,7 @@ Current public JSON contracts:
 - `pkgwhy.audit.v2` for `pkgwhy audit --json`.
 - `pkgwhy.agent_policy.v1` for `pkgwhy agent policy --json`.
 - `pkgwhy.agent_package_precheck.v1` for `pkgwhy agent precheck <package> --json` and `pkgwhy agent judge <package> --json`.
-- `pkgwhy.tool_judgement.v1` for `pkgwhy tool judge <tool> --json`.
+- `pkgwhy.tool_judgement.v1` for `pkgwhy tool judge <tool> --json`, including local registry `trust_state`.
 - `pkgwhy.tool_manifest.v1` for local private-tool manifests embedded in tool judgement JSON.
 - `pkgwhy.dynamic_analysis.v1` for experimental dynamic-analysis JSON.
 

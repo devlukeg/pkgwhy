@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from pkgwhy.core.models import AgentDecision, HashStatus, ToolJudgement
+from pkgwhy.core.models import AgentDecision, HashStatus, ToolJudgement, ToolTrustState
 
 SIGNATURE_STATUS_VERIFIED = "verified"
 SIGNATURE_STATUS_NOT_IMPLEMENTED = "not_implemented"
@@ -43,6 +43,11 @@ def evaluate_tool_execution_policy(
 
     if active_policy.require_hash_verification and judgement.hash_status != HashStatus.VERIFIED:
         reasons.append(f"Tool bundle hash is not verified: {judgement.hash_status.value}.")
+
+    if judgement.trust_state in {ToolTrustState.QUARANTINED, ToolTrustState.BLOCKED}:
+        reasons.append(f"Registry trust state blocks execution: {judgement.trust_state.value}.")
+    elif judgement.trust_state == ToolTrustState.UNKNOWN:
+        warnings.append("Registry trust state is unknown; manual review is recommended before execution.")
 
     if judgement.decision == AgentDecision.BLOCK:
         reasons.append("Tool judgement blocks execution.")

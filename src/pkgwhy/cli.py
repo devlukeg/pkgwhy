@@ -18,6 +18,7 @@ from pkgwhy.core.models import (
     PrecheckBatchResult,
     PreInstallPackagePrecheckResult,
     RiskRuleEvidence,
+    ToolTrustState,
     VulnerabilityMatch,
 )
 from pkgwhy.dependencies.reason import explain_dependency_reason
@@ -40,6 +41,7 @@ from pkgwhy.registry.local import add_registry, init_local_registry, list_regist
 from pkgwhy.registry.publish import publish_local_tool
 from pkgwhy.registry.run import RUNNER_ISOLATION_WARNING, run_local_tool
 from pkgwhy.registry.tools import judge_tool
+from pkgwhy.registry.trust import list_tools_by_trust_state, set_tool_trust_state
 from pkgwhy.reports.audit import build_audit_report, render_audit_markdown
 from pkgwhy.typosquat.detector import detect_typosquats
 from pkgwhy.vulnerabilities.matching import match_vulnerabilities
@@ -655,6 +657,7 @@ def tool_inspect(reference: Annotated[str, typer.Argument(help="Tool name or own
     console.print(f"Artifact type: {judgement.manifest.artifact_type.value}")
     console.print(f"Entrypoint: {judgement.manifest.entrypoint}")
     console.print(f"Hash status: {judgement.hash_status.value}")
+    console.print(f"Trust state: {judgement.trust_state.value}")
     console.print(f"Signature status: {judgement.signature_status}")
     console.print(f"Risk level: {judgement.risk_level.value}")
     console.print(f"Decision: {judgement.decision.value}")
@@ -687,6 +690,7 @@ def tool_judge(
     console.print(f"Decision: {judgement.decision.value}")
     console.print(f"Risk level: {judgement.risk_level.value}")
     console.print(f"Hash status: {judgement.hash_status.value}")
+    console.print(f"Trust state: {judgement.trust_state.value}")
     console.print(f"Recommendation: {judgement.recommendation}")
 
 
@@ -749,6 +753,62 @@ def registry_list() -> None:
             str(entry.path),
             "present" if entry.index_exists else "missing",
         )
+    console.print(table)
+
+
+@registry_app.command("trust")
+def registry_trust(reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to mark trusted.")]) -> None:
+    """Mark a local registry tool as trusted."""
+    _set_registry_trust_state(reference, ToolTrustState.TRUSTED)
+
+
+@registry_app.command("review")
+def registry_review(reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to mark reviewed.")]) -> None:
+    """Mark a local registry tool as reviewed."""
+    _set_registry_trust_state(reference, ToolTrustState.REVIEWED)
+
+
+@registry_app.command("quarantine")
+def registry_quarantine(
+    reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to quarantine.")]
+) -> None:
+    """Mark a local registry tool as quarantined."""
+    _set_registry_trust_state(reference, ToolTrustState.QUARANTINED)
+
+
+@registry_app.command("blocked")
+def registry_blocked() -> None:
+    """List tools marked blocked in the current registry."""
+    entries = list_tools_by_trust_state(ToolTrustState.BLOCKED)
+    _emit_registry_trust_table("Blocked tools", entries)
+
+
+@registry_app.command("block")
+def registry_block(reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to block.")]) -> None:
+    """Mark a local registry tool as blocked."""
+    _set_registry_trust_state(reference, ToolTrustState.BLOCKED)
+
+
+def _set_registry_trust_state(reference: str, state: ToolTrustState) -> None:
+    try:
+        entry = set_tool_trust_state(reference, state)
+    except ValueError as exc:
+        console.print(str(exc))
+        raise typer.Exit(1) from exc
+    console.print(f"{entry.owner}/{entry.name} {entry.version}: {entry.trust_state.value}")
+
+
+def _emit_registry_trust_table(title: str, entries: list) -> None:
+    if not entries:
+        console.print("No tools found.")
+        return
+    table = Table(title=title)
+    table.add_column("Owner")
+    table.add_column("Name")
+    table.add_column("Version")
+    table.add_column("Trust")
+    for entry in entries:
+        table.add_row(entry.owner, entry.name, entry.version, entry.trust_state.value)
     console.print(table)
 
 

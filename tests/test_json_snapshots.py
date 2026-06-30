@@ -312,6 +312,7 @@ def test_tool_judge_json_golden_snapshot(tmp_path: Path) -> None:
             "schema_version",
             "signature_status",
             "tool",
+            "trust_state",
             "version",
             "warnings",
         ],

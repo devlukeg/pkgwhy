@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.0 - 2026-06-30
+
+- Add local registry trust states: `trusted`, `reviewed`, `quarantined`, `blocked`, and `unknown`.
+- Add trust-state storage to registry index entries and include trust state in tool judgement JSON and human output.
+- Add `pkgwhy registry trust <tool>`, `pkgwhy registry review <tool>`, `pkgwhy registry quarantine <tool>`, `pkgwhy registry block <tool>`, and `pkgwhy registry blocked`.
+- Enforce registry trust state in the local runner policy: `quarantined` and `blocked` tools are refused before execution.
+- Keep newly published local tools at `unknown` trust until a human marks them.
+- Keep tool lock/verify and registry export/import deferred rather than inventing incomplete trust guarantees.
+
 ## 1.3.0 - 2026-06-30
 
 - Add a reusable GitHub Actions package-gate template at `examples/github-actions/pkgwhy-package-gate.yml`.

@@ -6,11 +6,11 @@ Know why a package exists before you or your agent trusts it.
 
 ## Status
 
-`pkgwhy` 1.3.0 is a Python supply-chain security decision-support tool and local pip/CI install gate for developers and AI agents. It is useful for local package inspection, conservative static package review, agent-readable JSON, vulnerability and provenance foundations, policy checks, artifact precheck, guarded pip installs, CI package-gate templates, and the local private-registry and runner MVP.
+`pkgwhy` 1.4.0 is a Python supply-chain security decision-support tool and local pip/CI install gate for developers and AI agents. It is useful for local package inspection, conservative static package review, agent-readable JSON, vulnerability and provenance foundations, policy checks, artifact precheck, guarded pip installs, CI package-gate templates, local registry trust states, and the local private-registry and runner MVP.
 
 It is not a production security scanner, not malware-detection certainty, and not a full sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
 
-Current packaged version: `1.3.0`.
+Current packaged version: `1.4.0`.
 
 ## What Works Now
 
@@ -63,6 +63,7 @@ Implemented capabilities include:
 - Optional gate exit codes via `pkgwhy precheck --enforce-exit-code`.
 - Guarded pip install flow via `pkgwhy pip install`, with precheck first, stable exit codes, explicit overrides, and compact local decision logs.
 - Reusable GitHub Actions package-gate template with advisory, strict, and agent modes.
+- Local registry trust states for private tools: `trusted`, `reviewed`, `quarantined`, `blocked`, and `unknown`.
 - Stable JSON output for agent workflows.
 - Schema-versioned agent policy and package precheck output.
 - Conservative non-interactive agent defaults that block unknown or high-risk package use until a human reviews the evidence.
@@ -76,6 +77,9 @@ pkgwhy registry list
 pkgwhy registry add local-copy ~/.pkgwhy/registry
 pkgwhy registry use local
 pkgwhy publish ./my_tool.py
+pkgwhy registry trust local/my_tool
+pkgwhy registry quarantine local/my_tool
+pkgwhy registry blocked
 pkgwhy tool inspect local/my_tool
 pkgwhy tool judge local/my_tool --json
 pkgwhy run local/my_tool
@@ -97,6 +101,7 @@ Current runner policy is intentionally conservative:
 - Corrupt registry indexes fail closed for publish and tool-judgement paths.
 - Symlinks are not bundled, and stored registry paths must remain inside the registry root.
 - Bundle hash mismatch or a missing bundle blocks execution.
+- Quarantined or blocked registry trust states block execution.
 - `sandbox_only` and `block` tool judgements block execution.
 - Non-interactive execution is blocked unless both the judgement and manifest agent policy allow it.
 - Tools with declared dependencies are not run yet because dependency installation is not implemented.
@@ -115,6 +120,7 @@ These are roadmap items, not current features:
 - `pull`, mirroring, and remote synchronization.
 - Tool dependency installation in the runner.
 - Tool bundle signing and signature verification.
+- Tool lock/verify commands and registry export/import.
 - Dynamic sandbox analysis for arbitrary packages.
 - Tool-specific `pkgwhy agent judge` expansion beyond the current package precheck path.
 - `pkgwhy agent explain-decision <review-id>`.

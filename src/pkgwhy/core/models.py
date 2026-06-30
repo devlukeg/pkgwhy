@@ -80,6 +80,14 @@ class ToolRunStatus(StrEnum):
     BLOCKED = "blocked"
 
 
+class ToolTrustState(StrEnum):
+    TRUSTED = "trusted"
+    REVIEWED = "reviewed"
+    QUARANTINED = "quarantined"
+    BLOCKED = "blocked"
+    UNKNOWN = "unknown"
+
+
 class DynamicAnalysisStatus(StrEnum):
     BLOCKED = "blocked"
     BACKEND_UNAVAILABLE = "backend_unavailable"
@@ -585,6 +593,7 @@ class RegistryToolEntry(BaseModel):
     sha256: str
     manifest_path: str
     published_at: str
+    trust_state: ToolTrustState = ToolTrustState.UNKNOWN
 
 
 class RegistryIndex(BaseModel):
@@ -690,6 +699,7 @@ class ToolJudgement(BaseModel):
     declared_permissions: list[str] = Field(default_factory=list)
     detected_capabilities: list[str] = Field(default_factory=list)
     hash_status: HashStatus
+    trust_state: ToolTrustState = ToolTrustState.UNKNOWN
     signature_status: str = "not_implemented"
     warnings: list[str] = Field(default_factory=list)
     recommendation: str
