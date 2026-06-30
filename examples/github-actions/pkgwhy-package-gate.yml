@@ -52,15 +52,37 @@ jobs:
             printf '{"schema_version":"pkgwhy.ci_note.v1","message":"requirements.txt or pyproject.toml not found"}\n' > pkgwhy-reports/precheck.json
           fi
 
+          set +e
           python -m pkgwhy audit --limit 50 --json > pkgwhy-reports/audit.json
+          audit_json_status=$?
           python -m pkgwhy audit --limit 50 --markdown > pkgwhy-reports/audit.md
+          audit_markdown_status=$?
+          set -e
+          audit_status=0
+          if [ "${audit_json_status}" -ne 0 ]; then
+            audit_status="${audit_json_status}"
+          elif [ "${audit_markdown_status}" -ne 0 ]; then
+            audit_status="${audit_markdown_status}"
+          fi
 
+          agent_status=0
           if [ "${PKGWHY_MODE}" = "agent" ] && [ -n "${PKGWHY_AGENT_PACKAGE}" ]; then
+            set +e
             python -m pkgwhy agent precheck "${PKGWHY_AGENT_PACKAGE}" --json > pkgwhy-reports/agent-precheck.json
+            agent_status=$?
+            set -e
           fi
 
           if [ "${PKGWHY_MODE}" = "strict" ] || [ "${PKGWHY_MODE}" = "agent" ]; then
-            exit "${precheck_status}"
+            if [ "${precheck_status}" -ne 0 ]; then
+              exit "${precheck_status}"
+            fi
+            if [ "${audit_status}" -ne 0 ]; then
+              exit "${audit_status}"
+            fi
+            if [ "${agent_status}" -ne 0 ]; then
+              exit "${agent_status}"
+            fi
           fi
 
       - name: Upload pkgwhy reports

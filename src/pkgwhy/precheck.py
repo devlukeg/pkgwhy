@@ -9,7 +9,7 @@ import tarfile
 import tempfile
 import tomllib
 from typing import Any
-from urllib import error, request
+from urllib import error, parse, request
 import zipfile
 
 from packaging.requirements import InvalidRequirement, Requirement
@@ -534,9 +534,15 @@ def _select_release_version(payload: dict[str, Any], parsed: ParsedPrecheckTarge
             version = Version(version_text)
         except InvalidVersion:
             continue
-        if specifier and not specifier.contains(version, prereleases=True):
-            continue
         candidates.append((version, version_text))
+    if specifier:
+        matching = [item for item in candidates if specifier.contains(item[0])]
+        if not matching:
+            matching = [item for item in candidates if specifier.contains(item[0], prereleases=True)]
+        return max(matching, key=lambda item: item[0])[1] if matching else None
+    stable_candidates = [item for item in candidates if not item[0].is_prerelease]
+    if stable_candidates:
+        return max(stable_candidates, key=lambda item: item[0])[1]
     if candidates:
         return max(candidates, key=lambda item: item[0])[1]
 
@@ -565,17 +571,32 @@ def _inspection_from_pypi_payload(
     info = info if isinstance(info, dict) else {}
     project_urls = _project_urls(info)
     version = release_version or _string_or_none(info.get("version"))
+    info_version = _string_or_none(info.get("version"))
+    version_specific_info = release_version is None or info_version in {None, release_version}
+    warnings = [
+        "Precheck used PyPI metadata only; artifacts were not downloaded or statically inspected.",
+        "Metadata-only precheck cannot prove package contents are safe.",
+    ]
+    evidence = [
+        "Read package identity and project metadata from PyPI JSON.",
+        "Did not download, install, import, or execute package artifacts.",
+    ]
+    if not version_specific_info:
+        warnings.append(
+            "Selected PyPI release differs from project-level info.version; version-specific summary, author, license, and dependency metadata were not inferred."
+        )
+        evidence.append("Used selected release version from PyPI releases and omitted latest-project-only metadata fields.")
     metadata = PackageMetadata(
         identity=PackageIdentity(
             name=_string_or_none(info.get("name")) or parsed.package,
             normalized_name=parsed.normalized_package,
             version=version,
         ),
-        summary=_string_or_none(info.get("summary")),
-        author=_string_or_none(info.get("author")),
-        maintainer=_string_or_none(info.get("maintainer")),
-        license=_string_or_none(info.get("license")),
-        requires=[value for value in info.get("requires_dist") or [] if isinstance(value, str)],
+        summary=_string_or_none(info.get("summary")) if version_specific_info else None,
+        author=_string_or_none(info.get("author")) if version_specific_info else None,
+        maintainer=_string_or_none(info.get("maintainer")) if version_specific_info else None,
+        license=_string_or_none(info.get("license")) if version_specific_info else None,
+        requires=[value for value in info.get("requires_dist") or [] if isinstance(value, str)] if version_specific_info else [],
         project_urls=project_urls,
         metadata_available=True,
     )
@@ -586,14 +607,8 @@ def _inspection_from_pypi_payload(
         size=measure_distribution_size(None),
         package_paths=[],
         detected_capabilities=[],
-        warnings=[
-            "Precheck used PyPI metadata only; artifacts were not downloaded or statically inspected.",
-            "Metadata-only precheck cannot prove package contents are safe.",
-        ],
-        evidence=[
-            "Read package identity and project metadata from PyPI JSON.",
-            "Did not download, install, import, or execute package artifacts.",
-        ],
+        warnings=warnings,
+        evidence=evidence,
         file_analysis=FileStaticAnalysis(),
     )
 
@@ -631,24 +646,23 @@ def _inspect_downloaded_artifact(
                 status="failed",
                 filename=raw_filename or None,
                 package_type=artifact.get("packagetype"),
-                url=artifact.get("url"),
+                url=_safe_artifact_url(artifact.get("url")),
                 warnings=[f"Artifact download/static inspection failed: {exc}"],
             ),
         )
 
     review_root_manager = None
-    if keep_artifacts:
-        review_root = (artifact_dir or Path.cwd() / ".pkgwhy-artifacts").expanduser()
-        review_root.mkdir(parents=True, exist_ok=True)
-        review_root = review_root / f"{parsed.normalized_package}-{filename}"
-        if review_root.exists():
-            shutil.rmtree(review_root)
-        review_root.mkdir(parents=True)
-    else:
-        review_root_manager = tempfile.TemporaryDirectory(prefix="pkgwhy-artifact-")
-        review_root = Path(review_root_manager.name)
-
     try:
+        if keep_artifacts:
+            review_root = (artifact_dir or Path.cwd() / ".pkgwhy-artifacts").expanduser()
+            review_root.mkdir(parents=True, exist_ok=True)
+            review_root = review_root / f"{parsed.normalized_package}-{filename}"
+            if review_root.exists():
+                shutil.rmtree(review_root)
+            review_root.mkdir(parents=True)
+        else:
+            review_root_manager = tempfile.TemporaryDirectory(prefix="pkgwhy-artifact-")
+            review_root = Path(review_root_manager.name)
         artifact_path = review_root / filename
         downloaded = _download_url(artifact["url"])
         artifact_path.write_bytes(downloaded)
@@ -689,7 +703,7 @@ def _inspect_downloaded_artifact(
                 status=status,
                 filename=filename,
                 package_type=artifact.get("packagetype"),
-                url=artifact.get("url"),
+                url=_safe_artifact_url(artifact.get("url")),
                 sha256_status=sha256_status,
                 size_bytes=len(downloaded),
                 extracted_file_count=len(extracted_paths),
@@ -705,7 +719,7 @@ def _inspect_downloaded_artifact(
                 status="failed",
                 filename=filename,
                 package_type=artifact.get("packagetype"),
-                url=artifact.get("url"),
+                url=_safe_artifact_url(artifact.get("url")),
                 warnings=[f"Artifact download/static inspection failed: {exc}"],
             ),
         )
@@ -798,6 +812,22 @@ def _sha256_status(data: bytes, expected: str | None) -> str:
         return "not_available"
     actual = hashlib.sha256(data).hexdigest()
     return "verified" if actual == expected else "mismatch"
+
+
+def _safe_artifact_url(value: Any) -> str | None:
+    url = _string_or_none(value)
+    if url is None:
+        return None
+    parts = parse.urlsplit(url)
+    host = parts.hostname or ""
+    if not host:
+        return None
+    netloc = host
+    if parts.port is not None:
+        netloc = f"{netloc}:{parts.port}"
+    basename = Path(parts.path).name
+    safe_path = f"/{basename}" if basename else ""
+    return parse.urlunsplit((parts.scheme, netloc, safe_path, "", ""))
 
 
 def _extract_artifact(artifact_path: Path, extract_root: Path) -> list[Path]:

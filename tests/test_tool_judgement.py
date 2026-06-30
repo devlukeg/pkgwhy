@@ -138,6 +138,7 @@ def test_registry_trust_commands_mark_and_list_tools(tmp_path: Path) -> None:
     assert runner.invoke(app, ["publish", str(script)], env=env).exit_code == 0
     trust_result = runner.invoke(app, ["registry", "trust", "local/blocked_tool"], env=env)
     review_result = runner.invoke(app, ["registry", "review", "local/blocked_tool"], env=env)
+    quarantine_result = runner.invoke(app, ["registry", "quarantine", "local/blocked_tool"], env=env)
     block_result = runner.invoke(app, ["registry", "block", "local/blocked_tool"], env=env)
     blocked_result = runner.invoke(app, ["registry", "blocked"], env=env)
 
@@ -145,6 +146,8 @@ def test_registry_trust_commands_mark_and_list_tools(tmp_path: Path) -> None:
     assert "local/blocked_tool 0.1.0: trusted" in trust_result.output
     assert review_result.exit_code == 0
     assert "local/blocked_tool 0.1.0: reviewed" in review_result.output
+    assert quarantine_result.exit_code == 0
+    assert "local/blocked_tool 0.1.0: quarantined" in quarantine_result.output
     assert block_result.exit_code == 0
     assert "local/blocked_tool 0.1.0: blocked" in block_result.output
     assert blocked_result.exit_code == 0

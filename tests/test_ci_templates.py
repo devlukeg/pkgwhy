@@ -10,6 +10,9 @@ def test_github_action_package_gate_template_is_local_and_secret_free() -> None:
     assert "set -euo pipefail" in template
     assert "python -m pkgwhy precheck -r requirements.txt --json --enforce-exit-code" in template
     assert "python -m pkgwhy precheck pyproject.toml --json --enforce-exit-code" in template
+    assert "audit_status=0" in template
+    assert "audit_json_status" in template
+    assert "audit_markdown_status" in template
     assert "python -m pkgwhy audit --limit 50 --json" in template
     assert "python -m pkgwhy audit --limit 50 --markdown" in template
     assert "python -m pkgwhy agent precheck" in template

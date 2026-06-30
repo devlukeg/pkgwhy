@@ -17,7 +17,7 @@ from pkgwhy.core.models import (
     RiskLevel,
     SourceAvailability,
 )
-from pkgwhy.pip_gate import PipCommandResult, run_pip_install_gate
+from pkgwhy.pip_gate import PipCommandResult, PipInstallGateError, run_pip_install_gate
 
 runner = CliRunner()
 
@@ -119,7 +119,7 @@ def test_pip_gate_invokes_fake_pip_only_after_allow(monkeypatch, tmp_path: Path)
     PipInstallGateResult.model_validate(result.model_dump(mode="json"))
     assert result.exit_code == 0
     assert result.pip_invoked is True
-    assert result.pip_command[-2:] == ["install", "demo-package"]
+    assert result.pip_command[-3:] == ["install", "--", "demo-package"]
     assert calls == [result.pip_command]
     assert result.log_path is not None
     log_path = Path(result.log_path)
@@ -262,6 +262,23 @@ def test_pip_gate_requirements_file_uses_fake_pip_runner(monkeypatch, tmp_path: 
     assert result.pip_command[-3:-1] == ["install", "-r"]
     assert result.pip_command[-1] != str(requirements)
     assert calls == [result.pip_command]
+
+
+def test_pip_gate_requirements_file_rejects_unsupported_relative_constructs(monkeypatch, tmp_path: Path) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("-r other-requirements.txt\n", encoding="utf-8")
+    monkeypatch.setattr("pkgwhy.pip_gate.build_requirements_precheck", lambda *args, **kwargs: _batch_precheck(_precheck()))
+
+    try:
+        run_pip_install_gate(
+            requirement_file=requirements,
+            pip_runner=lambda command: PipCommandResult(returncode=0),
+            log_root=tmp_path / "logs",
+        )
+    except PipInstallGateError as exc:
+        assert "cannot be safely snapshotted" in str(exc)
+    else:
+        raise AssertionError("unsupported requirements constructs should fail closed")
 
 
 def test_pip_gate_strict_policy_requires_clean_allow(monkeypatch, tmp_path: Path) -> None:

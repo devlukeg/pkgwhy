@@ -75,6 +75,13 @@ def run_pip_install_gate(
                 requirement_text = requirement_file.read_text(encoding="utf-8")
             except OSError as exc:
                 raise PipInstallGateError(f"could not read requirements file {requirement_file}: {exc}") from exc
+            unsupported = _unsupported_requirement_file_constructs(requirement_text)
+            if unsupported:
+                joined = "; ".join(unsupported)
+                raise PipInstallGateError(
+                    "requirements file contains pip constructs that cannot be safely snapshotted by the install gate: "
+                    f"{joined}"
+                )
             requirement_snapshot_manager = tempfile.TemporaryDirectory(prefix="pkgwhy-pip-requirements-")
             precheck_requirement_file = Path(requirement_snapshot_manager.name) / "requirements.txt"
             precheck_requirement_file.write_text(requirement_text, encoding="utf-8")
@@ -250,7 +257,7 @@ def _pip_command(packages: list[str], *, requirement_file: Path | None) -> list[
     command = [sys.executable, "-m", "pip", "install"]
     if requirement_file is not None:
         return [*command, "-r", str(requirement_file)]
-    return [*command, packages[0]]
+    return [*command, "--", packages[0]]
 
 
 def _run_pip_command(command: list[str]) -> PipCommandResult:
@@ -335,3 +342,41 @@ def write_pip_install_decision_log(
 def _digest_path_segment(value: str) -> str:
     digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
     return f"target-{digest}"
+
+
+def _unsupported_requirement_file_constructs(requirement_text: str) -> list[str]:
+    unsupported: list[str] = []
+    option_prefixes = (
+        "-r",
+        "--requirement",
+        "-c",
+        "--constraint",
+        "-e",
+        "--editable",
+        "-f",
+        "--find-links",
+        "-i",
+        "--index-url",
+        "--extra-index-url",
+        "--no-index",
+    )
+    local_prefixes = (".", "/", "~")
+    direct_prefixes = ("http:", "https:", "git+", "svn+", "hg+", "bzr+", "file://")
+    for line_number, line in enumerate(requirement_text.splitlines(), start=1):
+        cleaned = line.split("#", 1)[0].strip()
+        if not cleaned:
+            continue
+        if cleaned.startswith(option_prefixes):
+            unsupported.append(f"line {line_number}")
+            continue
+        if (
+            cleaned.startswith(local_prefixes)
+            or cleaned.startswith(direct_prefixes)
+            or " @ file:" in cleaned
+            or " @ http:" in cleaned
+            or " @ https:" in cleaned
+            or " @ ./" in cleaned
+            or " @ ../" in cleaned
+        ):
+            unsupported.append(f"line {line_number}")
+    return unsupported

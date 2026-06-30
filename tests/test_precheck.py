@@ -156,7 +156,9 @@ def test_precheck_pypi_non_exact_specifier_selects_matching_release(monkeypatch)
 
     assert result.lookup_status == "metadata_found"
     assert result.version == "1.5.0"
+    assert result.summary == "No installed summary is available for this package."
     assert result.provenance_summary.status == "pypi_json"
+    assert any("version-specific summary" in warning for warning in result.warnings)
 
 
 def test_precheck_pypi_non_exact_specifier_requires_matching_release(monkeypatch) -> None:
@@ -176,6 +178,26 @@ def test_precheck_pypi_non_exact_specifier_requires_matching_release(monkeypatch
     assert result.lookup_status == "requested_release_unavailable"
     assert result.version is None
     assert any("did not list a release satisfying <2" in warning for warning in result.warnings)
+
+
+def test_precheck_pypi_bare_target_prefers_stable_release(monkeypatch) -> None:
+    payload = {
+        "info": {
+            "name": "demo-precheck",
+            "version": "2.0.0a1",
+            "summary": "Demo package",
+            "license": "MIT",
+        },
+        "releases": {
+            "1.0.0": [{"packagetype": "sdist"}],
+            "2.0.0a1": [{"packagetype": "sdist"}],
+        },
+    }
+    monkeypatch.setattr("pkgwhy.precheck.fetch_pypi_project", lambda package: payload)
+
+    result = build_package_precheck("demo-precheck", pypi=True)
+
+    assert result.version == "1.0.0"
 
 
 def test_precheck_cli_json_for_installed_package() -> None:
@@ -324,7 +346,7 @@ def test_precheck_download_artifact_static_inspection_with_mocked_pypi(monkeypat
                 {
                     "filename": artifact.name,
                     "packagetype": "bdist_wheel",
-                    "url": "https://example.invalid/demo_precheck-1.0.0-py3-none-any.whl",
+                    "url": "https://user:token@example.invalid/private/demo_precheck-1.0.0-py3-none-any.whl?token=secret",
                     "digests": {"sha256": artifact_sha256},
                 },
                 {
@@ -345,6 +367,7 @@ def test_precheck_download_artifact_static_inspection_with_mocked_pypi(monkeypat
     assert result.artifacts_downloaded is True
     assert result.artifact_summary.status == "partial"
     assert result.artifact_summary.filename == artifact.name
+    assert result.artifact_summary.url == "https://example.invalid/demo_precheck-1.0.0-py3-none-any.whl"
     assert result.artifact_summary.sha256_status == "verified"
     assert result.artifact_summary.extracted_file_count == 1
     assert result.exit_code == 4
@@ -400,6 +423,41 @@ def test_precheck_download_artifact_rejects_unsafe_metadata_filename(monkeypatch
     assert result.artifacts_downloaded is False
     assert result.exit_code == 4
     assert any("unsafe artifact filename" in warning for warning in result.warnings)
+
+
+def test_precheck_keep_artifacts_filesystem_error_returns_failed_summary(monkeypatch, tmp_path: Path) -> None:
+    artifact_dir = tmp_path / "not-a-directory"
+    artifact_dir.write_text("not a directory\n", encoding="utf-8")
+    payload = {
+        "info": {
+            "name": "demo-precheck",
+            "version": "1.0.0",
+            "summary": "Demo package",
+            "license": "MIT",
+        },
+        "releases": {
+            "1.0.0": [
+                {
+                    "filename": "demo_precheck-1.0.0-py3-none-any.whl",
+                    "packagetype": "bdist_wheel",
+                    "url": "https://example.invalid/demo_precheck-1.0.0-py3-none-any.whl",
+                    "digests": {"sha256": "unused"},
+                }
+            ]
+        },
+    }
+    monkeypatch.setattr("pkgwhy.precheck.fetch_pypi_project", lambda package: payload)
+
+    result = build_package_precheck(
+        "demo-precheck==1.0.0",
+        download_artifacts=True,
+        keep_artifacts=True,
+        artifact_dir=artifact_dir,
+    )
+
+    assert result.artifact_summary.status == "failed"
+    assert result.exit_code == 4
+    assert any("Artifact download/static inspection failed" in warning for warning in result.warnings)
 
 
 def test_precheck_tar_extraction_uses_static_file_copy(tmp_path: Path) -> None:
