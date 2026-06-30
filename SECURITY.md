@@ -36,6 +36,8 @@ The local runner blocks missing or hash-mismatched bundles, corrupt registry ind
 
 Local registry publishing blocks duplicate owner/name/version records and rejects symlinks in tool bundles. Registry-stored manifest and bundle paths must resolve inside the registry root.
 
+Pre-install package gate commands are decision support. `pkgwhy precheck <package> --json` checks package requirements before installation and can optionally query PyPI/OSV or download artifacts only when explicit flags request that work. Artifact precheck downloads to a temporary review directory, verifies SHA-256 when PyPI metadata provides it, statically inspects files, and deletes temporary files by default. It does not install, import, or execute inspected package code.
+
 Agent policy commands are decision support. `pkgwhy agent precheck <package> --json` applies conservative policy to package judgement JSON and defaults to blocking unknown or high-risk package use in non-interactive mode until a human reviews the evidence. Agent decision logs are local compact summaries, best-effort when the config directory is writable, and intentionally omit full package evidence. They are not a tamper-proof audit system.
 
 Runner warning:

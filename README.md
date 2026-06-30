@@ -6,11 +6,11 @@ Know why a package exists before you or your agent trusts it.
 
 ## Status
 
-`pkgwhy` 1.0.0 is a Python supply-chain security decision-support tool for developers and AI agents. It is useful for local package inspection, conservative static package review, agent-readable JSON, vulnerability and provenance foundations, policy checks, and the local private-registry and runner MVP.
+`pkgwhy` 1.1.0 is a Python supply-chain security decision-support tool and local pre-install package gate for developers and AI agents. It is useful for local package inspection, conservative static package review, agent-readable JSON, vulnerability and provenance foundations, policy checks, artifact precheck, and the local private-registry and runner MVP.
 
 It is not a production security scanner, not malware-detection certainty, and not a full sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
 
-Current packaged version: `1.0.0`.
+Current packaged version: `1.1.0`.
 
 ## What Works Now
 
@@ -22,6 +22,11 @@ pkgwhy explain typer
 pkgwhy why typer
 pkgwhy inspect typer
 pkgwhy judge typer --json
+pkgwhy precheck typer --json
+pkgwhy precheck "typer==0.12.5" --json
+pkgwhy precheck -r requirements.txt --json
+pkgwhy precheck pyproject.toml --json
+pkgwhy precheck annotated-doc==0.0.4 --download-artifacts --json
 pkgwhy agent policy --json
 pkgwhy agent precheck typer --json
 pkgwhy risk typer
@@ -51,6 +56,9 @@ Implemented capabilities include:
 - Metadata-derived provenance/source-trust fields from installed metadata and optional PyPI JSON, with unsupported attestation and trusted-publishing checks marked as unknown or not implemented.
 - Conservative risk level, decision, warning, recommendation, evidence, confidence, risk model version, and rule-ID output.
 - Human `inspect`, `risk`, and `judge` reports that show compact rule-evidence summaries, while JSON reports include structured rule details.
+- Pre-install package precheck for package requirements, requirements files, and `pyproject.toml` dependencies.
+- Explicit artifact-download precheck that downloads a PyPI wheel or source artifact to a temporary review directory, verifies SHA-256 when available, extracts safely, statically inspects files, and deletes temporary files by default.
+- Optional gate exit codes via `pkgwhy precheck --enforce-exit-code`.
 - Stable JSON output for agent workflows.
 - Schema-versioned agent policy and package precheck output.
 - Conservative non-interactive agent defaults that block unknown or high-risk package use until a human reviews the evidence.
@@ -98,7 +106,8 @@ These are roadmap items, not current features:
 
 - Complete vulnerability database coverage, transitive vulnerability analysis, or guaranteed advisory freshness.
 - Default online vulnerability lookup. Network access is only used when explicitly requested.
-- Cached PyPI/source lookup beyond the current OSV response cache.
+- Persistent cached PyPI/source lookup beyond the current OSV response cache.
+- `pkgwhy pip install` as a pip wrapper gate.
 - Cloud/private remote registry backends.
 - `pull`, mirroring, and remote synchronization.
 - Tool dependency installation in the runner.
@@ -160,6 +169,30 @@ Emit machine-readable judgement JSON:
 ```bash
 pkgwhy judge typer --json
 ```
+
+Before installing a package, run a local precheck:
+
+```bash
+pkgwhy precheck typer --json
+pkgwhy precheck "typer==0.12.5" --json
+pkgwhy precheck -r requirements.txt --json
+pkgwhy precheck pyproject.toml --json
+```
+
+By default, `pkgwhy precheck` uses local installed metadata when available and does not use the network. Add `--pypi` or `--osv` only when you want explicit online enrichment. Add `--download-artifacts` to query PyPI, download one wheel or source artifact, verify its SHA-256 when PyPI metadata provides it, extract it to a temporary review directory, inspect it statically, and delete the temporary files. The command does not install, import, or execute inspected package code.
+
+For CI or install-gate usage, add `--enforce-exit-code`:
+
+```bash
+pkgwhy precheck typer --json --enforce-exit-code
+```
+
+Exit codes are:
+
+- `0`: allow.
+- `1`: allow with caution or manual review.
+- `2`: block or sandbox-only.
+- `4`: requested online/artifact lookup was unavailable or failed.
 
 Inspect the default agent policy and run a conservative agent precheck:
 

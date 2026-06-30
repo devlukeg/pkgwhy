@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.0 - 2026-06-30
+
+- Add top-level `pkgwhy precheck` as a local pre-install package gate for humans, CI, and agents.
+- Add schema-versioned `pkgwhy.precheck.v1` JSON for single package requirements, including decision, risk, confidence, evidence summaries, vulnerability/provenance/typosquat/static summaries, and embedded package judgement.
+- Add schema-versioned `pkgwhy.precheck_batch.v1` JSON for `pkgwhy precheck -r requirements.txt` and `pkgwhy precheck pyproject.toml`.
+- Add explicit `--download-artifacts` support that queries PyPI, downloads one wheel or source artifact to a temporary review directory, verifies SHA-256 when PyPI metadata provides it, extracts safely, statically inspects files, and deletes temporary files unless `--keep-artifacts` is set.
+- Add optional `--pypi`, `--osv`, and local `--vulnerability-file` enrichment boundaries to precheck without enabling network by default.
+- Add `--enforce-exit-code` for gate usage while keeping default JSON and human precheck commands easy to inspect interactively.
+- Keep precheck static-first: it does not install, import, or execute inspected package code.
+
 ## 1.0.0 - 2026-06-30
 
 - Promote the `1.0.0rc1` release-candidate surface to the final 1.0.0 tracked codebase after local release-prep review.

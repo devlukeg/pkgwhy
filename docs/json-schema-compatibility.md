@@ -7,6 +7,8 @@ Public command JSON is offline-first by default. Optional online enrichment, suc
 Current public JSON contracts:
 
 - `pkgwhy.package_judgement.v1` for `pkgwhy judge <package> --json` and embedded package judgements.
+- `pkgwhy.precheck.v1` for `pkgwhy precheck <package> --json`.
+- `pkgwhy.precheck_batch.v1` for `pkgwhy precheck -r requirements.txt --json` and `pkgwhy precheck pyproject.toml --json`.
 - `pkgwhy.audit.v2` for `pkgwhy audit --json`.
 - `pkgwhy.agent_policy.v1` for `pkgwhy agent policy --json`.
 - `pkgwhy.agent_package_precheck.v1` for `pkgwhy agent precheck <package> --json` and `pkgwhy agent judge <package> --json`.
@@ -29,6 +31,8 @@ During the 1.0.0 release line, schema versions are compatibility surfaces for ag
 The test suite includes normalized golden snapshots for:
 
 - `pkgwhy judge <package> --json`
+- `pkgwhy precheck <package> --json`
+- `pkgwhy precheck -r requirements.txt --json`
 - `pkgwhy audit --json`
 - `pkgwhy agent precheck <package> --json`
 - `pkgwhy agent judge <package> --json`
