@@ -1,10 +1,10 @@
-# Release Candidate Feature Surface
+# 1.0.0 Feature Surface
 
-This document freezes the local `1.0.0rc1` review surface. It describes what is implemented, what remains experimental, and what is future work.
+This document freezes the `1.0.0` release surface. It describes what is implemented, what remains experimental, and what is future work.
 
 `pkgwhy` is a Python supply-chain security decision-support tool for developers and AI agents. It helps identify dependency risk signals and supports safer package and agent policy decisions. It does not prove packages are safe and does not definitively detect malware.
 
-## Implemented In The Candidate
+## Implemented In `1.0.0`
 
 - Offline-first package metadata, explanation, dependency-reasoning, inspection, risk, judgement, audit, and typosquatting commands.
 - Static Python AST and file/text analysis without importing or executing inspected package code.
@@ -52,4 +52,4 @@ Not allowed:
 - proves packages are safe;
 - definitively detects all malware;
 - fully sandboxes code;
-- production-ready final release before all release gates pass.
+- production malware-scanner guarantees.

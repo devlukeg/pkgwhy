@@ -108,7 +108,7 @@ Controlled fixture execution is not evidence that arbitrary package execution is
 
 The current controlled fixture helper is for test coverage only. It requires a fixture path under a caller-provided fixture root, runs with a minimal environment, uses a caller-provided scratch working directory, records the fixture process exit code and scratch file creations/modifications, and does not collect network telemetry. It is not exposed as arbitrary package execution.
 
-## Non-Goals For `0.5.0`
+## Non-Goals For `1.0.0`
 
 - No arbitrary PyPI package execution.
 - No dynamic import or CLI execution of unknown packages.

@@ -16,7 +16,7 @@ Current public JSON contracts:
 
 ## Compatibility Rules
 
-During release-candidate hardening, schema versions are compatibility candidates for agent workflows. Changes should be deliberate:
+During the 1.0.0 release line, schema versions are compatibility surfaces for agent workflows. Changes should be deliberate:
 
 - Additive optional fields may keep the same schema version when existing consumers can ignore them safely.
 - Required field additions, removals, renamed fields, enum meaning changes, or nested shape changes must bump the affected schema version.

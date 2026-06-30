@@ -2,7 +2,7 @@
 
 ## Supported Status
 
-`pkgwhy` is in local release-candidate readiness review for `1.0.0rc1`. The current candidate includes static evidence hardening, vulnerability/provenance hardening, static rule corpus/schema hardening, an explicit dynamic-analysis out-of-scope decision for `1.0.0`, release/process hardening, a safe-fail dynamic command skeleton, agent policy foundations, and local registry/runner hardening. It is not a production security scanner and should not be treated as a definitive malware detector or full sandbox.
+`pkgwhy` 1.0.0 includes static evidence hardening, vulnerability/provenance foundations, static rule corpus/schema hardening, an explicit dynamic-analysis out-of-scope decision for `1.0.0`, release/process hardening, a safe-fail dynamic command skeleton, agent policy foundations, and local registry/runner hardening. It is not a production malware scanner and should not be treated as a definitive malware detector or full sandbox.
 
 ## Reporting Security Issues
 
@@ -10,9 +10,9 @@ For non-sensitive security bugs or documentation issues, use GitHub Issues:
 
 <https://github.com/devlukeg/pkgwhy/issues>
 
-For sensitive security reports, use the private channel where you received access to the project until a dedicated security contact is configured.
+For sensitive security reports, use GitHub private vulnerability reporting if it is enabled for the public repository. If it is not enabled, contact the maintainer privately through the contact channel listed on the project or repository profile before sharing exploit details.
 
-If GitHub private vulnerability reporting is enabled for the public repository, use that channel for sensitive reports. If it is not enabled, do not disclose sensitive details publicly; use a private maintainer contact channel and include only non-sensitive coordination details in public issues.
+Do not disclose sensitive details publicly. Public issues are appropriate for non-sensitive coordination only.
 
 Do not include secrets, private package contents, or credentials in public issues.
 
@@ -61,7 +61,7 @@ Dynamic analysis is a separate experimental roadmap area and is out of scope for
 - Static URL/domain and credential-pattern extraction is heuristic. It can miss references and can surface documentation, examples, tests, or placeholders.
 - JavaScript minification and native/WASM files are not automatically malicious, and static analysis cannot fully explain compiled or generated artifacts.
 - No OS-level sandboxing or production dynamic sandbox in the `1.0.0` readiness line.
-- No cloud review or remote evidence lookup in the current candidate.
+- No cloud review or remote evidence lookup in the current release.
 - No guarantee that every risky behavior can be detected statically.
 
 ## Publishing And Secrets

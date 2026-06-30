@@ -2,7 +2,7 @@
 
 `pkgwhy` releases are local-first until Luke explicitly approves pushing, tagging, publishing, or changing repository visibility.
 
-This checklist is required before any release candidate is described as locally ready. Passing it does not publish anything and does not prove packages are safe.
+This checklist is required before any release candidate or final release is described as locally ready. Passing it does not publish anything and does not prove packages are safe.
 
 ## Scope Review
 

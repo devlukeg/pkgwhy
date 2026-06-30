@@ -1,12 +1,13 @@
 # Changelog
 
-## 1.0.0rc1 - Unreleased release candidate
+## 1.0.0 - 2026-06-30
 
-- Freeze the local release-candidate feature surface for package intelligence, static rule evidence, vulnerability/provenance decision support, agent policy JSON, local registry/runner safety, and release-process documentation.
+- Promote the `1.0.0rc1` release-candidate surface to the final 1.0.0 tracked codebase after local release-prep review.
+- Freeze the 1.0.0 feature surface for package intelligence, static rule evidence, vulnerability/provenance decision support, agent policy JSON, local registry/runner safety, and release-process documentation.
 - Keep dynamic analysis explicitly experimental and out of scope for `1.0.0` production security guarantees.
-- Align README, SECURITY, package metadata, and version metadata for local `1.0.0rc1` validation.
-- Harden release-candidate validation with artifact trace scanning, cache metadata validation, Markdown audit warnings, hermetic JSON snapshots, and exact rule catalog membership tests.
-- Align release-candidate wording and package classifier for final local rc1 hardening.
+- Align README, SECURITY, package metadata, and version metadata for final local `1.0.0` validation.
+- Harden release validation with artifact trace scanning, cache metadata validation, Markdown audit warnings, hermetic JSON snapshots, and exact rule catalog membership tests.
+- Align final release wording and package classifier for local 1.0.0 hardening.
 - Harden final review checks for offline-first documentation, trace path matching, dynamic boundary wording, Markdown escaping, static corpus import traps, and rule-category ordering.
 
 ## 0.9.5a0 - Unreleased pre-alpha

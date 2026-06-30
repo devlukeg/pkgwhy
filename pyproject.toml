@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pkgwhy"
-version = "1.0.0rc1"
-description = "Offline-first Python package intelligence, agent policy, and local private-tool decision support."
+version = "1.0.0"
+description = "Offline-first Python package intelligence and supply-chain security decision support."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -17,7 +17,7 @@ maintainers = [
 ]
 keywords = ["python", "packages", "security", "cli", "dependencies", "static-analysis"]
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "Environment :: Console",
   "Intended Audience :: Developers",
   "License :: OSI Approved :: MIT License",
