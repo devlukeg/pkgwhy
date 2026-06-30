@@ -14,6 +14,7 @@ from pkgwhy.core.constants import CAPABILITY_EXPOSURE_NOTE
 from pkgwhy.core.models import (
     AgentPackagePrecheckResult,
     PackageMetadata,
+    PipInstallGateResult,
     PrecheckBatchResult,
     PreInstallPackagePrecheckResult,
     RiskRuleEvidence,
@@ -27,6 +28,7 @@ from pkgwhy.metadata.pypi import PyPIMetadataError, fetch_pypi_project, provenan
 from pkgwhy.metadata.installed import get_installed_package, list_installed_packages
 from pkgwhy.policy.audit_log import write_agent_package_decision_log
 from pkgwhy.policy.agent_policy import default_agent_policy, evaluate_package_policy
+from pkgwhy.pip_gate import PipInstallGateError, run_pip_install_gate
 from pkgwhy.precheck import (
     PrecheckFileError,
     PrecheckTargetError,
@@ -46,6 +48,7 @@ from pkgwhy.vulnerabilities.osv import load_osv_records, query_osv_cached
 app = typer.Typer(no_args_is_help=True, help="Explain, inspect, judge packages, and run local private tools.")
 registry_app = typer.Typer(no_args_is_help=True, help="Manage local private registries.")
 tool_app = typer.Typer(no_args_is_help=True, help="Inspect and judge local private tools.")
+pip_app = typer.Typer(no_args_is_help=True, help="Run pip through pkgwhy's pre-install package gate.")
 dynamic_app = typer.Typer(
     no_args_is_help=True,
     help="Experimental dynamic analysis; not part of the stable security decision surface in this release.",
@@ -53,6 +56,7 @@ dynamic_app = typer.Typer(
 agent_app = typer.Typer(no_args_is_help=True, help="Agent-facing policy and package precheck commands.")
 app.add_typer(registry_app, name="registry")
 app.add_typer(tool_app, name="tool")
+app.add_typer(pip_app, name="pip")
 app.add_typer(dynamic_app, name="dynamic")
 app.add_typer(agent_app, name="agent")
 console = Console()
@@ -405,6 +409,85 @@ def precheck(
     _emit_precheck_package(result, as_json=as_json)
     if enforce_exit_code:
         raise typer.Exit(result.exit_code)
+
+
+@pip_app.command("install")
+def pip_install(
+    packages: Annotated[
+        list[str] | None,
+        typer.Argument(help="Package requirement to check and install. Multiple package targets are not supported yet."),
+    ] = None,
+    requirements: Annotated[
+        Path | None,
+        typer.Option("-r", "--requirement", help="Requirements file to check and install through pip."),
+    ] = None,
+    policy: Annotated[
+        str,
+        typer.Option("--policy", help="Install policy: standard or strict."),
+    ] = "standard",
+    as_json: Annotated[bool, typer.Option("--json", help="Emit schema-versioned pip gate JSON.")] = False,
+    pypi: Annotated[
+        bool,
+        typer.Option("--pypi", help="Explicitly query PyPI metadata during precheck. Network is used only with this flag."),
+    ] = False,
+    osv: Annotated[
+        bool,
+        typer.Option("--osv", help="Explicitly query OSV.dev during precheck. Network is used only with this flag."),
+    ] = False,
+    osv_cache_dir: Annotated[
+        Path | None,
+        typer.Option(help="Optional OSV.dev cache directory. Defaults to the pkgwhy user cache."),
+    ] = None,
+    vulnerability_file: Annotated[
+        Path | None,
+        typer.Option(help="Optional local OSV-like JSON file with vulnerability data. No network is used."),
+    ] = None,
+    download_artifacts: Annotated[
+        bool,
+        typer.Option(
+            "--download-artifacts",
+            help="Explicitly download a PyPI wheel or sdist for static precheck before pip install.",
+        ),
+    ] = False,
+    override_review: Annotated[
+        bool,
+        typer.Option("--override-review", help="Explicitly allow pip when precheck requires caution or manual review."),
+    ] = False,
+    override_block: Annotated[
+        bool,
+        typer.Option("--override-block", help="Explicitly allow pip when precheck blocks or requires sandbox-only use."),
+    ] = False,
+    override_reason: Annotated[
+        str | None,
+        typer.Option("--override-reason", help="Human-readable reason stored in the local pip gate log."),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Run precheck and policy evaluation without invoking pip."),
+    ] = False,
+) -> None:
+    """Run precheck before pip install and invoke pip only when policy allows."""
+
+    try:
+        result = run_pip_install_gate(
+            packages=packages,
+            requirement_file=requirements,
+            policy=policy,  # type: ignore[arg-type]
+            pypi=pypi,
+            osv=osv,
+            osv_cache_dir=osv_cache_dir,
+            vulnerability_file=vulnerability_file,
+            download_artifacts=download_artifacts,
+            override_review=override_review,
+            override_block=override_block,
+            override_reason=override_reason,
+            dry_run=dry_run,
+        )
+    except PipInstallGateError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    _emit_pip_install_gate(result, as_json=as_json)
+    raise typer.Exit(result.exit_code)
 
 
 @app.command()
@@ -820,6 +903,35 @@ def _emit_precheck_batch(result: PrecheckBatchResult, *, as_json: bool) -> None:
             item.lookup_status,
         )
     console.print(table)
+    if result.warnings:
+        console.print("Warnings:")
+        for warning in result.warnings[:10]:
+            console.print(f"  - {warning}")
+        if len(result.warnings) > 10:
+            console.print(f"  ... and {len(result.warnings) - 10} more")
+
+
+def _emit_pip_install_gate(result: PipInstallGateResult, *, as_json: bool) -> None:
+    if as_json:
+        print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
+        return
+    target = result.requirement_file or " ".join(result.requested)
+    console.print(f"[bold]{target}[/bold]")
+    console.print("Before pip install, ask why.")
+    console.print(f"Policy: {result.policy}")
+    console.print(f"Decision: {result.decision.value}")
+    console.print(f"Exit code: {result.exit_code}")
+    console.print(f"Risk level: {result.risk_level.value}")
+    console.print(f"Precheck exit code: {result.precheck_exit_code}")
+    console.print(f"Pip invoked: {str(result.pip_invoked).lower()}")
+    if result.pip_command:
+        console.print(f"Pip command: {' '.join(result.pip_command)}")
+    if result.log_path:
+        console.print(f"Decision log: {result.log_path}")
+    if result.reasons:
+        console.print("Reasons:")
+        for reason in result.reasons:
+            console.print(f"  - {reason}")
     if result.warnings:
         console.print("Warnings:")
         for warning in result.warnings[:10]:

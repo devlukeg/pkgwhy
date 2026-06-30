@@ -13,6 +13,7 @@ from pkgwhy.core.constants import (
     CAPABILITY_EXPOSURE_NOTE,
     DYNAMIC_ANALYSIS_SCHEMA_VERSION,
     PACKAGE_JUDGEMENT_SCHEMA_VERSION,
+    PIP_INSTALL_GATE_SCHEMA_VERSION,
     PRECHECK_BATCH_SCHEMA_VERSION,
     PRECHECK_SCHEMA_VERSION,
     RISK_MODEL_VERSION,
@@ -21,6 +22,7 @@ from pkgwhy.core.constants import (
 RiskModelVersion = Literal["pkgwhy.risk_model.v1"]
 PrecheckSchemaVersion = Literal["pkgwhy.precheck.v1"]
 PrecheckBatchSchemaVersion = Literal["pkgwhy.precheck_batch.v1"]
+PipInstallGateSchemaVersion = Literal["pkgwhy.pip_install_gate.v1"]
 
 
 class RiskLevel(StrEnum):
@@ -451,6 +453,31 @@ class PrecheckBatchResult(BaseModel):
         if self.package_count != len(self.results):
             raise ValueError("package_count must match number of precheck results")
         return self
+
+
+class PipInstallGateResult(BaseModel):
+    """Schema-versioned result for the pip install gate."""
+
+    schema_version: PipInstallGateSchemaVersion = PIP_INSTALL_GATE_SCHEMA_VERSION
+    target_type: Literal["package", "requirements"]
+    requested: list[str] = Field(default_factory=list)
+    requirement_file: str | None = None
+    policy: Literal["standard", "strict"] = "standard"
+    decision: AgentDecision
+    risk_level: RiskLevel
+    confidence: Confidence
+    precheck_exit_code: int = Field(ge=0)
+    exit_code: int = Field(ge=0)
+    pip_invoked: bool = False
+    pip_command: list[str] = Field(default_factory=list)
+    pip_returncode: int | None = None
+    dry_run: bool = False
+    override_used: bool = False
+    override_reason: str | None = None
+    log_path: str | None = None
+    reasons: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    precheck: PreInstallPackagePrecheckResult | PrecheckBatchResult
 
 
 class DynamicProcessEvent(BaseModel):
