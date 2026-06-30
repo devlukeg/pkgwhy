@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import zipfile
 
 from typer.testing import CliRunner
 
@@ -156,3 +157,43 @@ dev = ["definitely-not-installed-pkgwhy-precheck-pyproject-1==2.0.0"]
     assert data["package_count"] == 2
     assert data["results"][0]["requested"] == "typer"
     assert data["results"][1]["requested"] == "definitely-not-installed-pkgwhy-precheck-pyproject-1==2.0.0"
+
+
+def test_precheck_download_artifact_static_inspection_with_mocked_pypi(monkeypatch, tmp_path: Path) -> None:
+    artifact = tmp_path / "demo_precheck-1.0.0-py3-none-any.whl"
+    with zipfile.ZipFile(artifact, "w") as archive:
+        archive.writestr("demo_precheck/__init__.py", "import subprocess\n")
+
+    payload = {
+        "info": {
+            "name": "demo-precheck",
+            "version": "1.0.0",
+            "summary": "Demo package",
+            "license": "MIT",
+        },
+        "releases": {
+            "1.0.0": [
+                {
+                    "filename": artifact.name,
+                    "packagetype": "bdist_wheel",
+                    "url": "https://example.invalid/demo_precheck-1.0.0-py3-none-any.whl",
+                    "digests": {"sha256": "not-a-real-digest"},
+                }
+            ]
+        },
+    }
+    monkeypatch.setattr("pkgwhy.precheck.fetch_pypi_project", lambda package: payload)
+    monkeypatch.setattr("pkgwhy.precheck._download_url", lambda url: artifact.read_bytes())
+
+    result = build_package_precheck("demo-precheck==1.0.0", download_artifacts=True)
+
+    assert result.network_requested is True
+    assert result.artifacts_downloaded is True
+    assert result.artifact_summary.status == "inspected"
+    assert result.artifact_summary.filename == artifact.name
+    assert result.artifact_summary.sha256_status == "mismatch"
+    assert result.artifact_summary.extracted_file_count == 1
+    assert result.static_summary.status == "downloaded_artifact_static_analysis"
+    assert result.package_judgement.source_availability == "artifact_source_present"
+    assert any("Did not install, import, or execute" in item for item in result.evidence)
+    assert any("--download-artifacts requires artifact metadata" in item for item in result.evidence)

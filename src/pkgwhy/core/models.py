@@ -125,6 +125,7 @@ class DependencyStatus(StrEnum):
 
 class SourceAvailability(StrEnum):
     INSTALLED_SOURCE_PRESENT = "installed_source_present"
+    ARTIFACT_SOURCE_PRESENT = "artifact_source_present"
     INSTALLED_METADATA_ONLY = "installed_metadata_only"
     SOURCE_AVAILABILITY_UNKNOWN = "source_availability_unknown"
     NOT_INSTALLED = "not_installed"
@@ -381,6 +382,21 @@ class PrecheckSignalSummary(BaseModel):
     evidence: list[str] = Field(default_factory=list)
 
 
+class PrecheckArtifactSummary(BaseModel):
+    """Summary of optional downloaded artifact inspection."""
+
+    status: str = "not_requested"
+    filename: str | None = None
+    package_type: str | None = None
+    url: str | None = None
+    sha256_status: str = "not_checked"
+    size_bytes: int = 0
+    extracted_file_count: int = 0
+    kept_path: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
+
+
 class PreInstallPackagePrecheckResult(BaseModel):
     """Schema-versioned pre-install package gate result."""
 
@@ -409,6 +425,7 @@ class PreInstallPackagePrecheckResult(BaseModel):
     provenance_summary: PrecheckSignalSummary
     typosquat_summary: PrecheckSignalSummary
     static_summary: PrecheckSignalSummary
+    artifact_summary: PrecheckArtifactSummary = Field(default_factory=PrecheckArtifactSummary)
     package_judgement: PackageJudgement
 
 

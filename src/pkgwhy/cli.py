@@ -335,6 +335,21 @@ def precheck(
         Path | None,
         typer.Option(help="Optional local OSV-like JSON file with vulnerability data. No network is used."),
     ] = None,
+    download_artifacts: Annotated[
+        bool,
+        typer.Option(
+            "--download-artifacts",
+            help="Explicitly download a PyPI wheel or sdist to inspect statically. Network is used only with this flag.",
+        ),
+    ] = False,
+    keep_artifacts: Annotated[
+        bool,
+        typer.Option("--keep-artifacts", help="Keep downloaded artifact review files instead of deleting them."),
+    ] = False,
+    artifact_dir: Annotated[
+        Path | None,
+        typer.Option(help="Directory for kept artifact review files. Only used with --keep-artifacts."),
+    ] = None,
 ) -> None:
     """Check a package before installation without installing, importing, or executing it."""
     try:
@@ -347,6 +362,9 @@ def precheck(
                 osv=osv,
                 osv_cache_dir=osv_cache_dir,
                 vulnerability_file=vulnerability_file,
+                download_artifacts=download_artifacts,
+                keep_artifacts=keep_artifacts,
+                artifact_dir=artifact_dir,
             )
         elif package is not None and Path(package).name == "pyproject.toml":
             result = build_pyproject_precheck(
@@ -355,6 +373,9 @@ def precheck(
                 osv=osv,
                 osv_cache_dir=osv_cache_dir,
                 vulnerability_file=vulnerability_file,
+                download_artifacts=download_artifacts,
+                keep_artifacts=keep_artifacts,
+                artifact_dir=artifact_dir,
             )
         elif package is not None:
             result = build_package_precheck(
@@ -363,6 +384,9 @@ def precheck(
                 osv=osv,
                 osv_cache_dir=osv_cache_dir,
                 vulnerability_file=vulnerability_file,
+                download_artifacts=download_artifacts,
+                keep_artifacts=keep_artifacts,
+                artifact_dir=artifact_dir,
             )
         else:
             raise PrecheckTargetError("precheck requires a package target, pyproject.toml, or -r/--requirement file")
@@ -747,6 +771,7 @@ def _emit_precheck_package(result: PreInstallPackagePrecheckResult, *, as_json: 
     console.print(f"Provenance summary: {result.provenance_summary.status}")
     console.print(f"Typosquat summary: {result.typosquat_summary.status}")
     console.print(f"Static summary: {result.static_summary.status}")
+    console.print(f"Artifact summary: {result.artifact_summary.status}")
     if result.policy_reasons:
         console.print("Policy reasons:")
         for reason in result.policy_reasons:

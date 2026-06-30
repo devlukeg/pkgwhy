@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 from pathlib import Path
+import shutil
+import tarfile
+import tempfile
 import tomllib
 from typing import Any
+from urllib import error, request
+import zipfile
 
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.specifiers import Specifier
@@ -18,6 +24,8 @@ from pkgwhy.core.models import (
     PackageInspection,
     PackageMetadata,
     PackageProvenance,
+    PackageSize,
+    PrecheckArtifactSummary,
     PrecheckBatchResult,
     PreInstallPackagePrecheckResult,
     PrecheckSignalSummary,
@@ -28,6 +36,8 @@ from pkgwhy.core.models import (
     SourceAvailability,
     VulnerabilityMatch,
 )
+from pkgwhy.inspection.files import analyze_file_signals, infer_readability, infer_source_availability
+from pkgwhy.inspection.python_static import analyze_python_files
 from pkgwhy.inspection.size import measure_distribution_size
 from pkgwhy.metadata.installed import get_installed_package
 from pkgwhy.metadata.pypi import PyPIMetadataError, fetch_pypi_project, provenance_from_pypi_payload
@@ -62,6 +72,9 @@ def build_package_precheck(
     osv: bool = False,
     osv_cache_dir: Path | None = None,
     vulnerability_file: Path | None = None,
+    download_artifacts: bool = False,
+    keep_artifacts: bool = False,
+    artifact_dir: Path | None = None,
 ) -> PreInstallPackagePrecheckResult:
     """Build a conservative pre-install package gate result without installing code."""
 
@@ -73,6 +86,7 @@ def build_package_precheck(
     metadata_source = "unavailable"
     lookup_status = "offline_metadata_unavailable"
     provenance: PackageProvenance | None = None
+    explicitly_requested_pypi = pypi
 
     if vulnerability_file is not None:
         try:
@@ -85,12 +99,18 @@ def build_package_precheck(
     installed_inspection = inspect_installed_package(parsed.package)
     pypi_payload: dict[str, Any] | None = None
 
+    if download_artifacts:
+        pypi = True
+
     if pypi:
         try:
             pypi_payload = fetch_pypi_project(parsed.package)
             metadata_source = "pypi_json"
             lookup_status = "metadata_found"
-            evidence.append("Read PyPI project JSON because --pypi was explicitly requested.")
+            if explicitly_requested_pypi:
+                evidence.append("Read PyPI project JSON because --pypi was explicitly requested.")
+            else:
+                evidence.append("Read PyPI project JSON because --download-artifacts requires artifact metadata.")
         except PyPIMetadataError as exc:
             warnings.append(
                 f"PyPI metadata lookup unavailable for {parsed.package}: {exc}. "
@@ -134,6 +154,26 @@ def build_package_precheck(
         vulnerability_sources.append("OSV.dev")
         warnings.extend(lookup.warnings)
 
+    artifact_summary = PrecheckArtifactSummary()
+    if download_artifacts:
+        if pypi_payload is None:
+            artifact_summary = PrecheckArtifactSummary(
+                status="unavailable",
+                warnings=["Artifact download requires successful PyPI metadata lookup."],
+            )
+        else:
+            artifact_review = _inspect_downloaded_artifact(
+                parsed,
+                pypi_payload,
+                metadata=inspection.metadata,
+                keep_artifacts=keep_artifacts,
+                artifact_dir=artifact_dir,
+            )
+            inspection = artifact_review.inspection
+            artifact_summary = artifact_review.summary
+            warnings.extend(artifact_summary.warnings)
+            evidence.extend(artifact_summary.evidence)
+
     known_vulnerabilities = match_vulnerabilities(parsed.package, version, vulnerability_records)
     judgement = judge_inspection(inspection, known_vulnerabilities=known_vulnerabilities, provenance=provenance)
     policy_result = evaluate_package_policy(judgement, non_interactive=True)
@@ -141,6 +181,11 @@ def build_package_precheck(
     warnings.extend(policy_result.warnings)
     evidence.extend(judgement.evidence)
     evidence.append("Did not install, import, or execute inspected package code.")
+
+    static_summary = _static_summary(judgement)
+    if artifact_summary.status in {"inspected", "kept"}:
+        static_summary.status = "downloaded_artifact_static_analysis"
+        static_summary.sources = ["downloaded_artifact_files"]
 
     return PreInstallPackagePrecheckResult(
         requested=parsed.requested,
@@ -151,8 +196,8 @@ def build_package_precheck(
         version=judgement.version or version,
         metadata_source=metadata_source,
         lookup_status=lookup_status,
-        network_requested=pypi or osv,
-        artifacts_downloaded=False,
+        network_requested=pypi or osv or download_artifacts,
+        artifacts_downloaded=artifact_summary.status in {"inspected", "kept"},
         decision=policy_result.decision,
         risk_level=policy_result.risk_level,
         confidence=policy_result.confidence,
@@ -165,7 +210,8 @@ def build_package_precheck(
         vulnerability_summary=_vulnerability_summary(known_vulnerabilities, vulnerability_sources, warnings),
         provenance_summary=_provenance_summary(judgement.provenance),
         typosquat_summary=_typosquat_summary(parsed.package),
-        static_summary=_static_summary(judgement),
+        static_summary=static_summary,
+        artifact_summary=artifact_summary,
         package_judgement=judgement,
     )
 
@@ -177,6 +223,9 @@ def build_requirements_precheck(
     osv: bool = False,
     osv_cache_dir: Path | None = None,
     vulnerability_file: Path | None = None,
+    download_artifacts: bool = False,
+    keep_artifacts: bool = False,
+    artifact_dir: Path | None = None,
 ) -> PrecheckBatchResult:
     """Build precheck results for a requirements file without installing dependencies."""
 
@@ -189,6 +238,9 @@ def build_requirements_precheck(
         osv=osv,
         osv_cache_dir=osv_cache_dir,
         vulnerability_file=vulnerability_file,
+        download_artifacts=download_artifacts,
+        keep_artifacts=keep_artifacts,
+        artifact_dir=artifact_dir,
     )
 
 
@@ -199,6 +251,9 @@ def build_pyproject_precheck(
     osv: bool = False,
     osv_cache_dir: Path | None = None,
     vulnerability_file: Path | None = None,
+    download_artifacts: bool = False,
+    keep_artifacts: bool = False,
+    artifact_dir: Path | None = None,
 ) -> PrecheckBatchResult:
     """Build precheck results for PEP 621 pyproject dependencies."""
 
@@ -211,6 +266,9 @@ def build_pyproject_precheck(
         osv=osv,
         osv_cache_dir=osv_cache_dir,
         vulnerability_file=vulnerability_file,
+        download_artifacts=download_artifacts,
+        keep_artifacts=keep_artifacts,
+        artifact_dir=artifact_dir,
     )
 
 
@@ -242,6 +300,9 @@ def _build_batch_precheck(
     osv: bool,
     osv_cache_dir: Path | None,
     vulnerability_file: Path | None,
+    download_artifacts: bool,
+    keep_artifacts: bool,
+    artifact_dir: Path | None,
 ) -> PrecheckBatchResult:
     results = [
         build_package_precheck(
@@ -250,6 +311,9 @@ def _build_batch_precheck(
             osv=osv,
             osv_cache_dir=osv_cache_dir,
             vulnerability_file=vulnerability_file,
+            download_artifacts=download_artifacts,
+            keep_artifacts=keep_artifacts,
+            artifact_dir=artifact_dir,
         )
         for requirement in requirements
     ]
@@ -383,6 +447,264 @@ def _inspection_from_pypi_payload(parsed: ParsedPrecheckTarget, payload: dict[st
             "Did not download, install, import, or execute package artifacts.",
         ],
         file_analysis=FileStaticAnalysis(),
+    )
+
+
+@dataclass(frozen=True)
+class ArtifactReview:
+    inspection: PackageInspection
+    summary: PrecheckArtifactSummary
+
+
+def _inspect_downloaded_artifact(
+    parsed: ParsedPrecheckTarget,
+    payload: dict[str, Any],
+    *,
+    metadata: PackageMetadata,
+    keep_artifacts: bool,
+    artifact_dir: Path | None,
+) -> ArtifactReview:
+    artifact = _select_artifact(payload, parsed.exact_version)
+    if artifact is None:
+        return ArtifactReview(
+            inspection=_inspection_from_metadata_without_artifact(metadata),
+            summary=PrecheckArtifactSummary(
+                status="unavailable",
+                warnings=["PyPI metadata did not list a wheel or source artifact for the requested release."],
+            ),
+        )
+
+    review_root_manager = None
+    if keep_artifacts:
+        review_root = (artifact_dir or Path.cwd() / ".pkgwhy-artifacts").expanduser()
+        review_root.mkdir(parents=True, exist_ok=True)
+        review_root = review_root / f"{parsed.normalized_package}-{artifact['filename']}"
+        if review_root.exists():
+            shutil.rmtree(review_root)
+        review_root.mkdir(parents=True)
+    else:
+        review_root_manager = tempfile.TemporaryDirectory(prefix="pkgwhy-artifact-")
+        review_root = Path(review_root_manager.name)
+
+    try:
+        artifact_path = review_root / artifact["filename"]
+        downloaded = _download_url(artifact["url"])
+        artifact_path.write_bytes(downloaded)
+        sha256_status = _sha256_status(downloaded, artifact.get("sha256"))
+        extract_root = review_root / "extracted"
+        extract_root.mkdir()
+        extracted_paths = _extract_artifact(artifact_path, extract_root)
+        inspection = _inspection_from_artifact_paths(metadata, extracted_paths)
+        status = "kept" if keep_artifacts else "inspected"
+        warnings = []
+        if sha256_status == "mismatch":
+            warnings.append("Downloaded artifact SHA-256 did not match PyPI metadata.")
+        evidence = [
+            f"Downloaded PyPI artifact {artifact['filename']} for static inspection.",
+            f"SHA-256 status: {sha256_status}.",
+            f"Extracted {len(extracted_paths)} files without installing or executing package code.",
+        ]
+        if not keep_artifacts:
+            evidence.append("Temporary artifact review directory was deleted after inspection.")
+        return ArtifactReview(
+            inspection=inspection,
+            summary=PrecheckArtifactSummary(
+                status=status,
+                filename=artifact["filename"],
+                package_type=artifact.get("packagetype"),
+                url=artifact.get("url"),
+                sha256_status=sha256_status,
+                size_bytes=len(downloaded),
+                extracted_file_count=len(extracted_paths),
+                kept_path=str(review_root) if keep_artifacts else None,
+                warnings=warnings,
+                evidence=evidence,
+            ),
+        )
+    except (OSError, zipfile.BadZipFile, tarfile.TarError, ValueError, ArtifactDownloadError) as exc:
+        return ArtifactReview(
+            inspection=_inspection_from_metadata_without_artifact(metadata),
+            summary=PrecheckArtifactSummary(
+                status="failed",
+                filename=artifact["filename"],
+                package_type=artifact.get("packagetype"),
+                url=artifact.get("url"),
+                warnings=[f"Artifact download/static inspection failed: {exc}"],
+            ),
+        )
+    finally:
+        if review_root_manager is not None:
+            review_root_manager.cleanup()
+
+
+class ArtifactDownloadError(RuntimeError):
+    """Raised when an explicit artifact download request cannot retrieve bytes."""
+
+
+def _download_url(url: str, *, timeout_seconds: float = 15.0) -> bytes:
+    req = request.Request(url, headers={"Accept": "application/octet-stream"}, method="GET")
+    try:
+        with request.urlopen(req, timeout=timeout_seconds) as response:
+            return response.read()
+    except (OSError, error.HTTPError) as exc:
+        raise ArtifactDownloadError(f"artifact download failed for {url}: {exc}") from exc
+
+
+def _select_artifact(payload: dict[str, Any], version: str | None) -> dict[str, str] | None:
+    info = payload.get("info")
+    info = info if isinstance(info, dict) else {}
+    release_version = version or _string_or_none(info.get("version"))
+    releases = payload.get("releases")
+    if not isinstance(releases, dict) or release_version is None:
+        return None
+    files = releases.get(release_version)
+    if not isinstance(files, list):
+        return None
+    candidates: list[dict[str, str]] = []
+    for file_info in files:
+        if not isinstance(file_info, dict):
+            continue
+        filename = _string_or_none(file_info.get("filename"))
+        url = _string_or_none(file_info.get("url"))
+        if filename is None or url is None:
+            continue
+        packagetype = _string_or_none(file_info.get("packagetype")) or "unknown"
+        if packagetype not in {"bdist_wheel", "sdist"} and not filename.endswith((".whl", ".tar.gz", ".zip")):
+            continue
+        digests = file_info.get("digests")
+        digests = digests if isinstance(digests, dict) else {}
+        candidates.append(
+            {
+                "filename": filename,
+                "url": url,
+                "packagetype": packagetype,
+                "sha256": _string_or_none(digests.get("sha256")) or "",
+            }
+        )
+    if not candidates:
+        return None
+    return sorted(candidates, key=lambda item: (0 if item["packagetype"] == "bdist_wheel" else 1, item["filename"]))[0]
+
+
+def _sha256_status(data: bytes, expected: str | None) -> str:
+    if not expected:
+        return "not_available"
+    actual = hashlib.sha256(data).hexdigest()
+    return "verified" if actual == expected else "mismatch"
+
+
+def _extract_artifact(artifact_path: Path, extract_root: Path) -> list[Path]:
+    if artifact_path.suffix == ".whl" or artifact_path.suffix == ".zip":
+        return _extract_zip(artifact_path, extract_root)
+    if artifact_path.name.endswith((".tar.gz", ".tgz")):
+        return _extract_tar(artifact_path, extract_root)
+    raise ValueError(f"unsupported artifact type for static inspection: {artifact_path.name}")
+
+
+def _extract_zip(artifact_path: Path, extract_root: Path) -> list[Path]:
+    with zipfile.ZipFile(artifact_path) as archive:
+        members = []
+        for member in archive.infolist():
+            if member.is_dir():
+                continue
+            target = (extract_root / member.filename).resolve()
+            if not target.is_relative_to(extract_root.resolve()):
+                raise ValueError(f"unsafe archive path: {member.filename}")
+            archive.extract(member, extract_root)
+            members.append(target)
+    return members
+
+
+def _extract_tar(artifact_path: Path, extract_root: Path) -> list[Path]:
+    with tarfile.open(artifact_path) as archive:
+        members = []
+        for member in archive.getmembers():
+            if not member.isfile():
+                continue
+            target = (extract_root / member.name).resolve()
+            if not target.is_relative_to(extract_root.resolve()):
+                raise ValueError(f"unsafe archive path: {member.name}")
+            archive.extract(member, extract_root, filter="data")
+            members.append(target)
+    return members
+
+
+def _inspection_from_metadata_without_artifact(metadata: PackageMetadata) -> PackageInspection:
+    return PackageInspection(
+        metadata=metadata,
+        source_availability=SourceAvailability.SOURCE_AVAILABILITY_UNKNOWN,
+        readability=ReadabilityStatus.NOT_ENOUGH_SOURCE_AVAILABLE,
+        size=measure_distribution_size(None),
+        package_paths=[],
+        detected_capabilities=[],
+        warnings=["Artifact static inspection did not produce file evidence."],
+        evidence=["Did not install, import, or execute package artifacts."],
+        file_analysis=FileStaticAnalysis(),
+    )
+
+
+def _inspection_from_artifact_paths(metadata: PackageMetadata, paths: list[Path]) -> PackageInspection:
+    file_analysis = analyze_file_signals(paths, metadata.entry_points)
+    python_analysis = analyze_python_files(paths)
+    capabilities = sorted(set(file_analysis.detected_capabilities) | set(python_analysis.detected_capabilities))
+    evidence = [
+        "Statically inspected downloaded package artifact files.",
+        f"Statically parsed {python_analysis.files_scanned} Python files with AST.",
+        "Did not install, import, or execute downloaded artifact code.",
+    ]
+    evidence.extend(file_analysis.evidence)
+    evidence.extend(python_analysis.evidence)
+    warnings = list(file_analysis.warnings)
+    warnings.extend(python_analysis.warnings)
+    rule_evidence = list(file_analysis.rule_evidence)
+    rule_evidence.extend(python_analysis.rule_evidence)
+    return PackageInspection(
+        metadata=metadata,
+        source_availability=SourceAvailability.ARTIFACT_SOURCE_PRESENT,
+        readability=infer_readability(paths, file_analysis),
+        size=_measure_paths(paths),
+        package_paths=[Path(path) for path in paths[:20]],
+        detected_capabilities=capabilities,
+        warnings=warnings,
+        evidence=evidence,
+        rule_evidence=rule_evidence,
+        file_analysis=file_analysis,
+    )
+
+
+def _measure_paths(paths: list[Path]) -> PackageSize:
+    python_bytes = 0
+    native_bytes = 0
+    javascript_bytes = 0
+    other_bytes = 0
+    largest = []
+    for path in paths:
+        try:
+            size = path.stat().st_size
+        except OSError:
+            continue
+        suffix = path.suffix.lower()
+        if suffix == ".py":
+            python_bytes += size
+        elif suffix in {".so", ".pyd", ".dll", ".dylib", ".exe"}:
+            native_bytes += size
+        elif suffix == ".js":
+            javascript_bytes += size
+        else:
+            other_bytes += size
+        largest.append((str(path), size))
+    largest_files = [
+        {"path": path, "size_bytes": size}
+        for path, size in sorted(largest, key=lambda item: item[1], reverse=True)[:5]
+    ]
+    return PackageSize(
+        total_bytes=python_bytes + native_bytes + javascript_bytes + other_bytes,
+        python_bytes=python_bytes,
+        native_binary_bytes=native_bytes,
+        javascript_bytes=javascript_bytes,
+        other_bytes=other_bytes,
+        file_count=len(paths),
+        largest_files=largest_files,
     )
 
 
