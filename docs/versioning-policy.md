@@ -1,19 +1,21 @@
 # Versioning Policy
 
-`pkgwhy` is in local `1.0.0rc1` review. Public JSON schemas and rule IDs are release-candidate stability surfaces; incompatible changes require changelog coverage and may require a schema or catalog version bump.
+`pkgwhy` is in the `1.0.0` release line. Public JSON schemas and rule IDs are compatibility surfaces; incompatible changes require changelog coverage and may require a schema or catalog version bump.
 
 ## Package Versions
 
 - Use PEP 440 versions.
-- Use `aN` versions for local pre-alpha milestone candidates, such as `0.9.0a0`.
+- Use `aN` versions for local pre-alpha milestone builds, such as `0.9.0a0`.
 - Use `rcN` versions only when the release-candidate checklist has passed locally for that candidate.
+- Use final versions only after the full release checklist and artifact validation pass locally.
 - Do not tag or publish a version without explicit approval.
 
 ## Milestone Meaning
 
 - `0.9.0a0`: dynamic-analysis decision is explicit. Dynamic analysis is experimental and out of scope for `1.0.0` production security guarantees unless a later commit safely implements a sandbox backend.
-- `0.9.5a0`: release/process hardening candidate.
-- `1.0.0rc1`: local release-candidate review candidate, only if the full release-candidate checklist passes locally.
+- `0.9.5a0`: release/process hardening milestone.
+- `1.0.0rc1`: prior local release-candidate review candidate, only if the full release-candidate checklist passed locally.
+- `1.0.0`: stable release for the current package-intelligence, conservative static security signal, vulnerability/provenance foundation, agent JSON, local registry/runner, and dynamic-analysis safe-fail surface.
 
 ## JSON Schemas
 
@@ -33,7 +35,7 @@ Rule IDs should not be renamed, reused for different semantics, or removed silen
 
 ## Changelog Discipline
 
-Every milestone candidate should document:
+Every milestone should document:
 
 - security and truthfulness boundary changes;
 - user-facing CLI or JSON contract changes;

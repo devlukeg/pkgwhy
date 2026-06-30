@@ -6,15 +6,15 @@ Know why a package exists before you or your agent trusts it.
 
 ## Status
 
-`pkgwhy` is in local release-candidate readiness review for the `1.0.0rc1` candidate. It is useful for local package inspection, conservative static package review, agent decision-support prototypes, and feedback on the CLI, policy, vulnerability, provenance, dynamic-analysis boundary, release process, and local private-registry shape.
+`pkgwhy` 1.0.0 is a Python supply-chain security decision-support tool for developers and AI agents. It is useful for local package inspection, conservative static package review, agent-readable JSON, vulnerability and provenance foundations, policy checks, and the local private-registry and runner MVP.
 
 It is not a production security scanner, not malware-detection certainty, and not a full sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
 
-Current packaged version candidate: `1.0.0rc1`.
+Current packaged version: `1.0.0`.
 
 ## What Works Now
 
-The current candidate includes installed package intelligence:
+The current release includes installed package intelligence:
 
 ```bash
 pkgwhy scan
@@ -113,6 +113,12 @@ These are roadmap items, not current features:
 
 ## Install
 
+Install from PyPI after the release is published:
+
+```bash
+python -m pip install pkgwhy
+```
+
 For local development from this repository:
 
 ```bash
@@ -124,12 +130,6 @@ Install directly from GitHub after the repository is public, or from an authoriz
 
 ```bash
 python -m pip install "pkgwhy @ git+https://github.com/devlukeg/pkgwhy.git"
-```
-
-Future PyPI install command, once a release is published:
-
-```bash
-python -m pip install pkgwhy
 ```
 
 Runtime dependencies are intentionally small:
@@ -536,11 +536,11 @@ Agent decisions:
 
 The current risk engine is deliberately conservative and early. Treat it as decision support for humans and agents, not a final verdict.
 
-Risk rule output includes `risk_model_version` and per-rule `rule_id`, category, severity, confidence, message, evidence, optional file path, optional line number, optional symbol, and false-positive notes. These rule IDs are a release-candidate stability surface; incompatible changes require changelog coverage and may require a schema or catalog version bump.
+Risk rule output includes `risk_model_version` and per-rule `rule_id`, category, severity, confidence, message, evidence, optional file path, optional line number, optional symbol, and false-positive notes. These rule IDs are a 1.0.0 compatibility surface; incompatible changes require changelog coverage and may require a schema or catalog version bump.
 
 Detailed rule categories, corpus strategy, compatibility expectations, and false-positive/false-negative limitations are documented in [`docs/static-rule-corpus.md`](docs/static-rule-corpus.md).
 
-Current release-candidate rule IDs:
+Current 1.0.0 rule IDs:
 
 - `PKGWHY-VULN-001`: known vulnerability advisory match.
 - `PKGWHY-RISK-001`: possible typosquatting similarity.
@@ -591,9 +591,9 @@ pkgwhy tool judge local/my_tool --json
 pkgwhy run local/my_tool
 ```
 
-The runner executes only tools resolved from the configured local registry. It does not run arbitrary public package code, does not install tool dependencies in the MVP, and blocks execution if the stored bundle hash does not verify. Local registry entries are file-backed records under the configured registry path; no cloud registry, account, upload, pull, or remote sync is implemented in this candidate.
+The runner executes only tools resolved from the configured local registry. It does not run arbitrary public package code, does not install tool dependencies in the MVP, and blocks execution if the stored bundle hash does not verify. Local registry entries are file-backed records under the configured registry path; no cloud registry, account, upload, pull, or remote sync is implemented in this release.
 
-The `1.0.0rc1` candidate includes policy-as-code foundations for agents:
+The `1.0.0` release includes policy-as-code foundations for agents:
 
 - `pkgwhy agent policy` shows conservative default policy.
 - `pkgwhy agent precheck <package> --json` applies policy to package judgement JSON.
@@ -613,7 +613,7 @@ Signing is also not implemented yet, so JSON judgement reports `signature_status
 
 The local/free product will remain offline-first: metadata inspection, AST scanning, capability signals, local risk rules, and local JSON judgement.
 
-A future paid cloud/model-backed review layer may add deeper review over retrieved package evidence, review IDs, cached results, richer policy decisions, usage logs, privacy controls, and enterprise/private deployment options. Billing and cloud review are not implemented in this candidate.
+A future paid cloud/model-backed review layer may add deeper review over retrieved package evidence, review IDs, cached results, richer policy decisions, usage logs, privacy controls, and enterprise/private deployment options. Billing and cloud review are not implemented in this release.
 
 ## Development
 
@@ -630,19 +630,18 @@ Release and process references:
 - [Release Checklist](docs/release-checklist.md)
 - [Versioning Policy](docs/versioning-policy.md)
 - [JSON Schema Compatibility](docs/json-schema-compatibility.md)
-- [Release Candidate Feature Surface](docs/release-candidate-surface.md)
+- [1.0.0 Feature Surface](docs/release-candidate-surface.md)
 - [Threat Model](docs/threat-model.md)
 - [Production Readiness Blockers](docs/production-readiness.md)
 
 ## Roadmap
 
-1. Complete public release review and packaging for the current package-intelligence, agent-policy, registry, tool-judgement, dynamic-skeleton, and runner MVP.
-2. Expand agent policy validation, tool-specific agent judgement, and decision explanation.
-3. Broader optional PyPI/source lookup and cache.
-4. Tool dependency installation in the runner.
-5. Tool bundle signing and signature verification.
-6. Cloud/private remote registry backends.
-7. Cloud/model-backed review as an optional future service.
+1. Expand agent policy validation, tool-specific agent judgement, and decision explanation.
+2. Broader optional PyPI/source lookup and cache.
+3. Tool dependency installation in the runner.
+4. Tool bundle signing and signature verification.
+5. Cloud/private remote registry backends.
+6. Cloud/model-backed review as an optional future service.
 
 ## License
 

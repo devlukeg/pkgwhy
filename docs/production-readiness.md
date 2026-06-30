@@ -1,10 +1,10 @@
-# Production Readiness Blockers
+# Production Readiness Posture
 
-This document tracks remaining work before `pkgwhy` can be described as production-ready security decision-support tooling.
+This document tracks the 1.0.0 release posture and the remaining work before `pkgwhy` can make stronger production security claims.
 
-`pkgwhy` should not claim final `1.0.0` production readiness until every required item is complete and locally validated.
+`pkgwhy` 1.0.0 is stable Python supply-chain security decision-support tooling. It should not be described as a production malware scanner, proof of package safety, or a full sandbox.
 
-## Complete For Current Local Candidate
+## Complete For `1.0.0`
 
 - Source-attributed vulnerability matching with offline-safe local fixtures, optional OSV.dev lookup, and stale-cache fallback.
 - Conservative PyPI provenance lookup with `unknown` or `not_implemented` attestation and trusted-publishing fields.
@@ -15,13 +15,18 @@ This document tracks remaining work before `pkgwhy` can be described as producti
 - Local registry and runner hardening for corrupt indexes, duplicate publishes, symlinks, bounded registry paths, missing bundles, hash mismatch, unsupported entrypoints, and explicit non-sandboxing warnings.
 - Dynamic analysis Option B: experimental and out of scope for `1.0.0` production security guarantees.
 
-## Remaining Before Final `1.0.0`
+## Release Operations Requiring Luke Approval
 
 - Luke review and explicit approval for any push, PR, tag, or publish action.
 - Remote CI status after an approved push/PR flow.
-- Final security posture review after external review and local checks.
 - Confirmation that public responsible disclosure guidance is acceptable for the public repository.
-- Final release-candidate validation from a clean checkout or fresh environment.
+
+## Future Production-Security Hardening
+
+- Final security posture review after external review and public launch feedback.
+- Clean-checkout validation on each supported release platform before broader production-security positioning.
+- Broader vulnerability database coverage and transitive vulnerability analysis.
+- Trusted Publishing, attestation verification, and source distribution versus wheel comparison if implemented with source-attributed evidence.
 
 ## Explicit Non-Goals For `1.0.0`
 
