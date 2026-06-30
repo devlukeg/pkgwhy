@@ -177,6 +177,13 @@ def build_package_precheck(
     known_vulnerabilities = match_vulnerabilities(parsed.package, version, vulnerability_records)
     judgement = judge_inspection(inspection, known_vulnerabilities=known_vulnerabilities, provenance=provenance)
     policy_result = evaluate_package_policy(judgement, non_interactive=True)
+    decision = policy_result.decision
+    risk_level = policy_result.risk_level
+    policy_reasons = list(policy_result.reasons)
+    if artifact_summary.sha256_status == "mismatch":
+        decision = AgentDecision.BLOCK
+        risk_level = RiskLevel.CRITICAL
+        policy_reasons.append("Downloaded artifact hash did not match PyPI metadata.")
     warnings.extend(judgement.warnings)
     warnings.extend(policy_result.warnings)
     evidence.extend(judgement.evidence)
@@ -198,11 +205,12 @@ def build_package_precheck(
         lookup_status=lookup_status,
         network_requested=pypi or osv or download_artifacts,
         artifacts_downloaded=artifact_summary.status in {"inspected", "kept"},
-        decision=policy_result.decision,
-        risk_level=policy_result.risk_level,
+        decision=decision,
+        exit_code=_exit_code_for_precheck(decision, lookup_status, artifact_summary.status),
+        risk_level=risk_level,
         confidence=policy_result.confidence,
-        policy_decision=policy_result.decision,
-        policy_reasons=policy_result.reasons,
+        policy_decision=decision,
+        policy_reasons=policy_reasons,
         summary=judgement.summary,
         recommendation=policy_result.recommendation,
         warnings=sorted(set(warnings)),
@@ -326,6 +334,7 @@ def _build_batch_precheck(
         source=source,
         package_count=len(results),
         decision=_strictest_decision([result.decision for result in results]),
+        exit_code=_batch_exit_code(results),
         risk_level=_highest_risk([result.risk_level for result in results]),
         confidence=_lowest_confidence([result.confidence for result in results]),
         warnings=sorted(set(warnings)),
@@ -396,6 +405,23 @@ def _strictest_decision(decisions: list[AgentDecision]) -> AgentDecision:
         AgentDecision.BLOCK: 4,
     }
     return max(decisions, key=lambda decision: order[decision])
+
+
+def _exit_code_for_precheck(decision: AgentDecision, lookup_status: str, artifact_status: str) -> int:
+    if lookup_status == "online_metadata_unavailable" or artifact_status == "failed":
+        return 4
+    if decision in {AgentDecision.BLOCK, AgentDecision.SANDBOX_ONLY}:
+        return 2
+    if decision in {AgentDecision.ALLOW_WITH_CAUTION, AgentDecision.REVIEW_MANUALLY}:
+        return 1
+    return 0
+
+
+def _batch_exit_code(results: list[PreInstallPackagePrecheckResult]) -> int:
+    if not results:
+        return 4
+    order = {0: 0, 1: 1, 2: 2, 4: 3}
+    return max((result.exit_code for result in results), key=lambda code: order.get(code, code))
 
 
 def _highest_risk(risks: list[RiskLevel]) -> RiskLevel:

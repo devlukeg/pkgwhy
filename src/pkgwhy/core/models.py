@@ -413,6 +413,7 @@ class PreInstallPackagePrecheckResult(BaseModel):
     network_requested: bool = False
     artifacts_downloaded: bool = False
     decision: AgentDecision
+    exit_code: int = Field(default=0, ge=0)
     risk_level: RiskLevel
     confidence: Confidence
     policy_decision: AgentDecision
@@ -437,6 +438,7 @@ class PrecheckBatchResult(BaseModel):
     source: str
     package_count: int = Field(default=0, ge=0)
     decision: AgentDecision
+    exit_code: int = Field(default=0, ge=0)
     risk_level: RiskLevel
     confidence: Confidence
     warnings: list[str] = Field(default_factory=list)

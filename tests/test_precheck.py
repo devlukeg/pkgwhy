@@ -35,6 +35,7 @@ def test_precheck_missing_package_offline_does_not_install_or_fetch() -> None:
     assert result.artifacts_downloaded is False
     assert result.risk_level == "unknown"
     assert result.decision == "block"
+    assert result.exit_code == 2
     assert result.vulnerability_summary.status == "not_requested"
     assert any("Did not install, import, or execute" in item for item in result.evidence)
     assert get_installed_package(package_name) is None
@@ -132,6 +133,7 @@ def test_precheck_cli_requirements_file_json(tmp_path: Path) -> None:
         "definitely-not-installed-pkgwhy-precheck-req-1==1.0.0",
     ]
     assert data["decision"] == "block"
+    assert data["exit_code"] == 2
 
 
 def test_precheck_cli_pyproject_json(tmp_path: Path) -> None:
@@ -155,6 +157,7 @@ dev = ["definitely-not-installed-pkgwhy-precheck-pyproject-1==2.0.0"]
     assert data["schema_version"] == "pkgwhy.precheck_batch.v1"
     assert data["target_type"] == "pyproject"
     assert data["package_count"] == 2
+    assert data["exit_code"] == 2
     assert data["results"][0]["requested"] == "typer"
     assert data["results"][1]["requested"] == "definitely-not-installed-pkgwhy-precheck-pyproject-1==2.0.0"
 
@@ -193,7 +196,17 @@ def test_precheck_download_artifact_static_inspection_with_mocked_pypi(monkeypat
     assert result.artifact_summary.filename == artifact.name
     assert result.artifact_summary.sha256_status == "mismatch"
     assert result.artifact_summary.extracted_file_count == 1
+    assert result.exit_code == 2
     assert result.static_summary.status == "downloaded_artifact_static_analysis"
     assert result.package_judgement.source_availability == "artifact_source_present"
     assert any("Did not install, import, or execute" in item for item in result.evidence)
     assert any("--download-artifacts requires artifact metadata" in item for item in result.evidence)
+
+
+def test_precheck_cli_enforce_exit_code_returns_gate_code() -> None:
+    package_name = "definitely-not-installed-pkgwhy-precheck-enforce-1"
+    result = runner.invoke(app, ["precheck", package_name, "--json", "--enforce-exit-code"])
+
+    assert result.exit_code == 2
+    data = json.loads(result.output)
+    assert data["exit_code"] == 2

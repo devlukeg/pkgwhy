@@ -350,6 +350,10 @@ def precheck(
         Path | None,
         typer.Option(help="Directory for kept artifact review files. Only used with --keep-artifacts."),
     ] = None,
+    enforce_exit_code: Annotated[
+        bool,
+        typer.Option("--enforce-exit-code", help="Return the mapped gate exit code instead of always exiting 0."),
+    ] = False,
 ) -> None:
     """Check a package before installation without installing, importing, or executing it."""
     try:
@@ -395,8 +399,12 @@ def precheck(
 
     if isinstance(result, PrecheckBatchResult):
         _emit_precheck_batch(result, as_json=as_json)
+        if enforce_exit_code:
+            raise typer.Exit(result.exit_code)
         return
     _emit_precheck_package(result, as_json=as_json)
+    if enforce_exit_code:
+        raise typer.Exit(result.exit_code)
 
 
 @app.command()
@@ -738,6 +746,7 @@ def _emit_agent_package_precheck(
         return
     console.print(f"[bold]{result.package}[/bold]")
     console.print(f"Decision: {result.decision.value}")
+    console.print(f"Exit code: {result.exit_code}")
     console.print(f"Risk level: {result.risk_level.value}")
     console.print(f"Confidence: {result.confidence.value}")
     console.print(f"Policy source: {result.policy_decision_source}")
@@ -761,6 +770,7 @@ def _emit_precheck_package(result: PreInstallPackagePrecheckResult, *, as_json: 
     console.print(f"[bold]{result.requested}[/bold]")
     console.print("Before pip install, ask why.")
     console.print(f"Decision: {result.decision.value}")
+    console.print(f"Exit code: {result.exit_code}")
     console.print(f"Risk level: {result.risk_level.value}")
     console.print(f"Confidence: {result.confidence.value}")
     console.print(f"Metadata source: {result.metadata_source}")
