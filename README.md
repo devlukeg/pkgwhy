@@ -6,11 +6,11 @@ Know why a package exists before you or your agent trusts it.
 
 ## Status
 
-`pkgwhy` 1.4.0 is a Python supply-chain security decision-support tool and local pip/CI install gate for developers and AI agents. It is useful for local package inspection, conservative static package review, agent-readable JSON, vulnerability and provenance foundations, policy checks, artifact precheck, guarded pip installs, CI package-gate templates, local registry trust states, and the local private-registry and runner MVP.
+`pkgwhy` 1.5.0 is a Python supply-chain security decision-support tool and local pip/CI install gate for developers and AI agents. It is useful for local package inspection, conservative static package review, agent-readable JSON, vulnerability and provenance foundations, policy checks, artifact precheck, guarded pip installs, CI package-gate templates, local registry trust states, commercial/agent platform planning, and the local private-registry and runner MVP.
 
 It is not a production security scanner, not malware-detection certainty, and not a full sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
 
-Current packaged version: `1.4.0`.
+Current packaged version: `1.5.0`.
 
 ## What Works Now
 
@@ -64,6 +64,7 @@ Implemented capabilities include:
 - Guarded pip install flow via `pkgwhy pip install`, with precheck first, stable exit codes, explicit overrides, and compact local decision logs.
 - Reusable GitHub Actions package-gate template with advisory, strict, and agent modes.
 - Local registry trust states for private tools: `trusted`, `reviewed`, `quarantined`, `blocked`, and `unknown`.
+- Commercial and agent platform architecture documentation for future local policy packs, team review, hosted evidence cache, shared organization policy, and agent install gateway.
 - Stable JSON output for agent workflows.
 - Schema-versioned agent policy and package precheck output.
 - Conservative non-interactive agent defaults that block unknown or high-risk package use until a human reviews the evidence.
@@ -703,6 +704,7 @@ Release and process references:
 - [1.0.0 Feature Surface](docs/release-candidate-surface.md)
 - [Threat Model](docs/threat-model.md)
 - [Production Readiness Blockers](docs/production-readiness.md)
+- [Commercial And Agent Platform Direction](docs/commercial-agent-platform.md)
 
 ## Roadmap
 

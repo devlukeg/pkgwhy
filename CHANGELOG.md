@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.0 - 2026-06-30
+
+- Add `docs/commercial-agent-platform.md` to describe the future commercial and agent platform direction without implementing cloud services, billing, hosted review, API keys, or secrets.
+- Document the product habit around `pkgwhy precheck`, `pkgwhy pip install`, and `pkgwhy agent precheck`.
+- Document future tiers for the free local CLI, Pro local policy packs, team review dashboard, hosted package review cache, shared organization policy, and agent install gateway.
+- Add explicit hosted-review boundaries so the current local CLI does not imply active cloud review or definitive malware detection.
+- Add tests that keep the commercial platform design doc future-only and boundary-aware.
+
 ## 1.4.0 - 2026-06-30
 
 - Add local registry trust states: `trusted`, `reviewed`, `quarantined`, `blocked`, and `unknown`.

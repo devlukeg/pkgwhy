@@ -2,7 +2,7 @@
 
 ## Supported Status
 
-`pkgwhy` 1.4.0 includes static evidence hardening, vulnerability/provenance foundations, static rule corpus/schema hardening, release/process hardening, a safe-fail experimental dynamic command skeleton, agent policy foundations, local pre-install and pip install gates, reusable CI package-gate templates, local registry trust states, and local registry/runner hardening. It is not a production malware scanner and should not be treated as a definitive malware detector or full sandbox.
+`pkgwhy` 1.5.0 includes static evidence hardening, vulnerability/provenance foundations, static rule corpus/schema hardening, release/process hardening, a safe-fail experimental dynamic command skeleton, agent policy foundations, local pre-install and pip install gates, reusable CI package-gate templates, local registry trust states, commercial/agent platform planning, and local registry/runner hardening. It is not a production malware scanner and should not be treated as a definitive malware detector or full sandbox.
 
 ## Reporting Security Issues
 
@@ -43,6 +43,8 @@ Pre-install package gate commands are decision support. `pkgwhy precheck <packag
 Pip install gate commands are also decision support. `pkgwhy pip install <package>` and `pkgwhy pip install -r requirements.txt` run precheck before invoking pip. Pip is invoked only when policy allows or when a human uses an explicit override flag. The gate logs compact local decision summaries when possible, but those logs are not tamper-proof audit records. The pip gate does not sandbox pip, installed package code, build backends, or install-time behavior.
 
 CI templates are local workflow scaffolding. They install and run the local `pkgwhy` CLI, write reports, and optionally fail jobs based on configured mode. They do not contact a hosted `pkgwhy` service, provide a cloud review, or require secrets for basic use.
+
+Commercial and agent platform documentation is roadmap-only. The current release does not configure hosted review, billing, payment providers, API keys, cloud services, remote policy enforcement, or shared accounts.
 
 Agent policy commands are decision support. `pkgwhy agent precheck <package> --json` applies conservative policy to package judgement JSON and defaults to blocking unknown or high-risk package use in non-interactive mode until a human reviews the evidence. Agent decision logs are local compact summaries, best-effort when the config directory is writable, and intentionally omit full package evidence. They are not a tamper-proof audit system.
 
