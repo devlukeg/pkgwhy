@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Sequence
 
+ERROR_SCHEMA_VERSION = "pkgwhy.error.v1"
+
 EXIT_CODE_MEANINGS: dict[int, str] = {
     0: "allowed or completed successfully",
     1: "review or caution required before proceeding",
@@ -138,3 +140,26 @@ def source_freshness_for_precheck(*, metadata_source: str, lookup_status: str, n
     if metadata_source == "unavailable":
         return "no_current_source_available"
     return f"{metadata_source}:{lookup_status}"
+
+
+def build_json_error(
+    *,
+    command: str,
+    message: str,
+    target: str | None = None,
+    target_type: str | None = None,
+    error_type: str = "user_error",
+    suggested_fix: str | None = None,
+    exit_code: int = 3,
+) -> dict[str, object]:
+    return {
+        "schema_version": ERROR_SCHEMA_VERSION,
+        "command": command,
+        "target": target,
+        "target_type": target_type,
+        "error_type": error_type,
+        "message": message,
+        "exit_code": exit_code,
+        "exit_code_meaning": exit_code_meaning(exit_code),
+        "suggested_fix": suggested_fix,
+    }

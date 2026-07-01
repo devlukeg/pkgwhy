@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tomllib
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
@@ -12,6 +13,7 @@ from rich.table import Table
 
 from pkgwhy.agent.judge import inspect_installed_package, judge_installed_package
 from pkgwhy.core.constants import CAPABILITY_EXPOSURE_NOTE
+from pkgwhy.core.decision_contract import build_json_error
 from pkgwhy.core.models import (
     AgentPackagePrecheckResult,
     PackageMetadata,
@@ -383,7 +385,7 @@ def precheck(
                 keep_artifacts=keep_artifacts,
                 artifact_dir=artifact_dir,
             )
-        elif package is not None and Path(package).name == "pyproject.toml":
+        elif package is not None and _should_route_precheck_as_pyproject(package):
             result = build_pyproject_precheck(
                 Path(package),
                 pypi=pypi,
@@ -408,6 +410,16 @@ def precheck(
         else:
             raise PrecheckTargetError("precheck requires a package target, pyproject.toml, or -r/--requirement file")
     except (PrecheckTargetError, PrecheckFileError) as exc:
+        if as_json:
+            _emit_json_error(
+                command="pkgwhy precheck",
+                target=package or str(requirements) if requirements is not None else package,
+                target_type=_precheck_error_target_type(package, requirements),
+                error_type=exc.__class__.__name__,
+                message=str(exc),
+                suggested_fix=_precheck_suggested_fix(package=package, requirements=requirements),
+            )
+            raise typer.Exit(3) from exc
         raise typer.BadParameter(str(exc)) from exc
 
     if isinstance(result, PrecheckBatchResult):
@@ -493,6 +505,16 @@ def pip_install(
             dry_run=dry_run,
         )
     except PipInstallGateError as exc:
+        if as_json:
+            _emit_json_error(
+                command="pkgwhy pip install",
+                target=str(requirements) if requirements is not None else " ".join(packages or []) or None,
+                target_type="requirements" if requirements is not None else "package",
+                error_type=exc.__class__.__name__,
+                message=str(exc),
+                suggested_fix="Pass exactly one package requirement or use -r/--requirement with a supported requirements file.",
+            )
+            raise typer.Exit(3) from exc
         raise typer.BadParameter(str(exc)) from exc
 
     _emit_pip_install_gate(result, as_json=as_json)
@@ -803,6 +825,74 @@ def _set_registry_trust_state(reference: str, state: ToolTrustState) -> None:
         console.print(str(exc))
         raise typer.Exit(1) from exc
     console.print(f"{entry.owner}/{entry.name} {entry.version}: {entry.trust_state.value}")
+
+
+def _emit_json_error(
+    *,
+    command: str,
+    message: str,
+    target: str | None,
+    target_type: str | None,
+    error_type: str,
+    suggested_fix: str,
+) -> None:
+    print(
+        json.dumps(
+            build_json_error(
+                command=command,
+                target=target,
+                target_type=target_type,
+                error_type=error_type,
+                message=message,
+                suggested_fix=suggested_fix,
+            ),
+            indent=2,
+            sort_keys=True,
+        )
+    )
+
+
+def _should_route_precheck_as_pyproject(target: str) -> bool:
+    path = Path(target)
+    if path.name == "pyproject.toml":
+        return True
+    if path.suffix.lower() != ".toml":
+        return False
+    if not path.exists():
+        return True
+    if _toml_has_project_table(path):
+        return True
+    raise PrecheckFileError(f"TOML file is not a pyproject dependency file: {path}")
+
+
+def _toml_has_project_table(path: Path) -> bool:
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        raise PrecheckFileError(f"could not read TOML file {path}: {exc}") from exc
+    return isinstance(data.get("project"), dict)
+
+
+def _precheck_error_target_type(package: str | None, requirements: Path | None) -> str | None:
+    if requirements is not None:
+        return "requirements"
+    if package is None:
+        return None
+    if Path(package).suffix.lower() == ".toml" or Path(package).name == "pyproject.toml":
+        return "pyproject"
+    return "package"
+
+
+def _precheck_suggested_fix(*, package: str | None, requirements: Path | None) -> str:
+    if requirements is not None and package is not None:
+        return "Use either a package target or -r/--requirement, not both."
+    if requirements is not None:
+        return "Pass a readable requirements file with supported package requirement lines."
+    if package is None:
+        return "Pass a package requirement, -r/--requirement FILE, or a pyproject-style TOML file."
+    if Path(package).suffix.lower() == ".toml" or Path(package).name == "pyproject.toml":
+        return "Pass a readable pyproject-style TOML file with a [project] table."
+    return "Pass a valid package requirement such as 'requests' or 'requests==2.32.0'."
 
 
 def _emit_registry_trust_table(title: str, entries: list) -> None:

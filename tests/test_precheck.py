@@ -262,8 +262,23 @@ def test_precheck_cli_rejects_malformed_vulnerability_file(tmp_path: Path) -> No
         ["precheck", "demo-precheck-vuln==1.0.0", "--vulnerability-file", str(vuln_file), "--json"],
     )
 
-    assert result.exit_code == 2
-    assert "could not load vulnerability file" in result.output
+    assert result.exit_code == 3
+    data = json.loads(result.output)
+    assert data["message"].startswith(f"could not load vulnerability file {vuln_file}:")
+    assert "Could not read vulnerability data" in data["message"]
+    assert str(vuln_file) in data["message"]
+    data["message"] = "<parser-specific message>"
+    assert data == {
+        "schema_version": "pkgwhy.error.v1",
+        "command": "pkgwhy precheck",
+        "target": "demo-precheck-vuln==1.0.0",
+        "target_type": "package",
+        "error_type": "PrecheckFileError",
+        "message": "<parser-specific message>",
+        "exit_code": 3,
+        "exit_code_meaning": "tool, configuration, or user input error",
+        "suggested_fix": "Pass a valid package requirement such as 'requests' or 'requests==2.32.0'.",
+    }
 
 
 def test_precheck_cli_requirements_file_json(tmp_path: Path) -> None:
@@ -344,6 +359,67 @@ dev = ["definitely-not-installed-pkgwhy-precheck-pyproject-1==2.0.0"]
     assert data["exit_code"] == 2
     assert data["results"][0]["requested"] == "typer"
     assert data["results"][1]["requested"] == "definitely-not-installed-pkgwhy-precheck-pyproject-1==2.0.0"
+
+
+def test_precheck_cli_accepts_renamed_pyproject_toml(tmp_path: Path) -> None:
+    pyproject = tmp_path / "safe-pyproject.toml"
+    pyproject.write_text(
+        """
+[project]
+dependencies = ["typer"]
+""",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["precheck", str(pyproject), "--json"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    PrecheckBatchResult.model_validate(data)
+    assert data["schema_version"] == "pkgwhy.precheck_batch.v1"
+    assert data["target_type"] == "pyproject"
+    assert data["source"] == str(pyproject)
+    assert data["target"] == str(pyproject)
+    assert data["results"][0]["requested"] == "typer"
+
+
+def test_precheck_cli_json_error_for_unrecognized_toml(tmp_path: Path) -> None:
+    config = tmp_path / "settings.toml"
+    config.write_text("[tool.demo]\nname = 'not a pyproject dependency file'\n", encoding="utf-8")
+
+    result = runner.invoke(app, ["precheck", str(config), "--json"])
+
+    assert result.exit_code == 3
+    data = json.loads(result.output)
+    assert data == {
+        "schema_version": "pkgwhy.error.v1",
+        "command": "pkgwhy precheck",
+        "target": str(config),
+        "target_type": "pyproject",
+        "error_type": "PrecheckFileError",
+        "message": f"TOML file is not a pyproject dependency file: {config}",
+        "exit_code": 3,
+        "exit_code_meaning": "tool, configuration, or user input error",
+        "suggested_fix": "Pass a readable pyproject-style TOML file with a [project] table.",
+    }
+
+
+def test_precheck_cli_json_error_when_target_missing() -> None:
+    result = runner.invoke(app, ["precheck", "--json"])
+
+    assert result.exit_code == 3
+    data = json.loads(result.output)
+    assert data == {
+        "schema_version": "pkgwhy.error.v1",
+        "command": "pkgwhy precheck",
+        "target": None,
+        "target_type": None,
+        "error_type": "PrecheckTargetError",
+        "message": "precheck requires a package target, pyproject.toml, or -r/--requirement file",
+        "exit_code": 3,
+        "exit_code_meaning": "tool, configuration, or user input error",
+        "suggested_fix": "Pass a package requirement, -r/--requirement FILE, or a pyproject-style TOML file.",
+    }
 
 
 def test_precheck_download_artifact_static_inspection_with_mocked_pypi(monkeypatch, tmp_path: Path) -> None:
