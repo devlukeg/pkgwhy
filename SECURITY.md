@@ -2,7 +2,7 @@
 
 ## Supported Status
 
-`pkgwhy` 1.5.0 includes static evidence hardening, vulnerability/provenance foundations, static rule corpus/schema hardening, release/process hardening, a safe-fail experimental dynamic command skeleton, agent policy foundations, local pre-install and pip install gates, reusable CI package-gate templates, local registry trust states, commercial/agent platform planning, and local registry/runner hardening. It is not a production malware scanner and should not be treated as a definitive malware detector or full sandbox.
+`pkgwhy` 1.6.0 includes static evidence hardening, vulnerability/provenance foundations, static rule corpus/schema hardening, release/process hardening, a safe-fail experimental dynamic command skeleton, agent policy foundations, local pre-install and pip install gates, reusable CI package-gate templates, local registry trust states, local tool validation, agent check dispatching, and local registry/runner hardening. It is not a production malware scanner and should not be treated as a definitive malware detector or full sandbox.
 
 ## Reporting Security Issues
 
@@ -36,7 +36,9 @@ The local runner blocks missing or hash-mismatched bundles, corrupt registry ind
 
 Local registry publishing blocks duplicate owner/name/version records and rejects symlinks in tool bundles. Registry-stored manifest and bundle paths must resolve inside the registry root.
 
-Local registry trust states are local policy labels. New tools default to `unknown`. `trusted` and `reviewed` are human-maintained labels, not cryptographic verification. `quarantined` and `blocked` tools are refused by the local runner before execution.
+Local registry trust states are local policy labels. New tools default to `unknown`. `trusted` and `reviewed` are human-maintained labels, not cryptographic verification. They do not override hash mismatch, unsigned-tool warnings, manifest approval requirements, or static capability signals. `quarantined` and `blocked` tools return blocking tool judgements and are refused by the local runner before execution.
+
+`pkgwhy tool validate <path>` is a non-executing local validation command for private-tool authors. It reads local manifests and files, checks entrypoint path boundaries, reports unsupported paths such as symlinks, validates declared permission labels, and runs static capability analysis. It does not write to a registry and does not execute tool code.
 
 Pre-install package gate commands are decision support. `pkgwhy precheck <package> --json` checks package requirements before installation and can optionally query PyPI/OSV or download artifacts only when explicit flags request that work. Artifact precheck downloads to a temporary review directory, verifies SHA-256 when PyPI metadata provides it, statically inspects files, and deletes temporary files by default. It does not install, import, or execute inspected package code.
 
@@ -46,7 +48,7 @@ CI templates are local workflow scaffolding. They install and run the local `pkg
 
 Commercial and agent platform documentation is roadmap-only. The current release does not configure hosted review, billing, payment providers, API keys, cloud services, remote policy enforcement, or shared accounts.
 
-Agent policy commands are decision support. `pkgwhy agent precheck <package> --json` applies conservative policy to package judgement JSON and defaults to blocking unknown or high-risk package use in non-interactive mode until a human reviews the evidence. Agent decision logs are local compact summaries, best-effort when the config directory is writable, and intentionally omit full package evidence. They are not a tamper-proof audit system.
+Agent policy commands are decision support. `pkgwhy agent precheck <package> --json` applies conservative policy to package judgement JSON and defaults to blocking unknown or high-risk package use in non-interactive mode until a human reviews the evidence. `pkgwhy agent check <target> --json` dispatches package specs, requirements files, pyproject-style TOML files, and local tool folders/scripts to existing local checks and returns one normalized decision envelope. Agent decision logs are local compact summaries, best-effort when the config directory is writable, and intentionally omit full package evidence. They are not a tamper-proof audit system.
 
 Runner warning:
 
@@ -67,7 +69,7 @@ Dynamic analysis is a separate experimental roadmap area and is not part of the 
 - No tool lock/verify commands or registry export/import yet.
 - No tamper-proof audit log, remote attestation, or signed decision record yet.
 - No sandboxed pip execution; `pkgwhy pip install` is a policy gate before pip, not an installer sandbox.
-- No tool-specific agent judgement beyond the current package precheck alias yet.
+- No full tool-specific agent judgement beyond local tool validation and registry tool judgement yet.
 - No cloud registry, remote pull, hosted review API, or account-based registry auth yet.
 - Typosquatting detection is heuristic and conservative. It can miss risky names and can surface false positives.
 - Static URL/domain and credential-pattern extraction is heuristic. It can miss references and can surface documentation, examples, tests, or placeholders.
