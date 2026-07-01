@@ -32,6 +32,12 @@ Run CLI smokes:
 .venv/bin/python -m pkgwhy judge typer --json
 .venv/bin/python -m pkgwhy risk typer
 .venv/bin/python -m pkgwhy audit --limit 2 --json
+.venv/bin/python -m pkgwhy precheck typer --json
+.venv/bin/python -m pkgwhy precheck -r tests/fixtures/precheck/requirements.txt --json
+.venv/bin/python -m pkgwhy precheck pyproject.toml --json
+.venv/bin/python -m pkgwhy pip --help
+.venv/bin/python -m pkgwhy pip install --help
+.venv/bin/python -m pkgwhy pip install typer --dry-run --json
 .venv/bin/python -m pkgwhy typos requests pandas-stubs
 .venv/bin/python -m pkgwhy agent --help
 .venv/bin/python -m pkgwhy agent precheck typer --json

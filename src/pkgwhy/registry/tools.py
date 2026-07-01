@@ -62,6 +62,7 @@ def judge_tool(reference: str) -> ToolJudgement:
         declared_permissions=manifest.declared_permissions,
         detected_capabilities=detected_capabilities,
         hash_status=hash_status,
+        trust_state=entry.trust_state,
         warnings=warnings,
         recommendation=recommendation,
     )

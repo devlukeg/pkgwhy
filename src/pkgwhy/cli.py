@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
@@ -11,7 +12,16 @@ from rich.table import Table
 
 from pkgwhy.agent.judge import inspect_installed_package, judge_installed_package
 from pkgwhy.core.constants import CAPABILITY_EXPOSURE_NOTE
-from pkgwhy.core.models import AgentPackagePrecheckResult, PackageMetadata, RiskRuleEvidence, VulnerabilityMatch
+from pkgwhy.core.models import (
+    AgentPackagePrecheckResult,
+    PackageMetadata,
+    PipInstallGateResult,
+    PrecheckBatchResult,
+    PreInstallPackagePrecheckResult,
+    RiskRuleEvidence,
+    ToolTrustState,
+    VulnerabilityMatch,
+)
 from pkgwhy.dependencies.reason import explain_dependency_reason
 from pkgwhy.dynamic.analysis import build_unavailable_dynamic_result
 from pkgwhy.explanations.explain import explain_package
@@ -20,18 +30,34 @@ from pkgwhy.metadata.pypi import PyPIMetadataError, fetch_pypi_project, provenan
 from pkgwhy.metadata.installed import get_installed_package, list_installed_packages
 from pkgwhy.policy.audit_log import write_agent_package_decision_log
 from pkgwhy.policy.agent_policy import default_agent_policy, evaluate_package_policy
+from pkgwhy.pip_gate import PipInstallGateError, run_pip_install_gate
+from pkgwhy.precheck import (
+    PrecheckFileError,
+    PrecheckTargetError,
+    build_package_precheck,
+    build_pyproject_precheck,
+    build_requirements_precheck,
+)
 from pkgwhy.registry.local import add_registry, init_local_registry, list_registries, use_registry
 from pkgwhy.registry.publish import publish_local_tool
 from pkgwhy.registry.run import RUNNER_ISOLATION_WARNING, run_local_tool
 from pkgwhy.registry.tools import judge_tool
+from pkgwhy.registry.trust import list_tools_by_trust_state, set_tool_trust_state
 from pkgwhy.reports.audit import build_audit_report, render_audit_markdown
 from pkgwhy.typosquat.detector import detect_typosquats
 from pkgwhy.vulnerabilities.matching import match_vulnerabilities
 from pkgwhy.vulnerabilities.osv import load_osv_records, query_osv_cached
 
+
+class PipPolicyOption(StrEnum):
+    STANDARD = "standard"
+    STRICT = "strict"
+
+
 app = typer.Typer(no_args_is_help=True, help="Explain, inspect, judge packages, and run local private tools.")
 registry_app = typer.Typer(no_args_is_help=True, help="Manage local private registries.")
 tool_app = typer.Typer(no_args_is_help=True, help="Inspect and judge local private tools.")
+pip_app = typer.Typer(no_args_is_help=True, help="Run pip through pkgwhy's pre-install package gate.")
 dynamic_app = typer.Typer(
     no_args_is_help=True,
     help="Experimental dynamic analysis; not part of the stable security decision surface in this release.",
@@ -39,6 +65,7 @@ dynamic_app = typer.Typer(
 agent_app = typer.Typer(no_args_is_help=True, help="Agent-facing policy and package precheck commands.")
 app.add_typer(registry_app, name="registry")
 app.add_typer(tool_app, name="tool")
+app.add_typer(pip_app, name="pip")
 app.add_typer(dynamic_app, name="dynamic")
 app.add_typer(agent_app, name="agent")
 console = Console()
@@ -295,6 +322,184 @@ def audit(
 
 
 @app.command()
+def precheck(
+    package: Annotated[
+        str | None,
+        typer.Argument(help="Package requirement or pyproject.toml to check before installation."),
+    ] = None,
+    requirements: Annotated[
+        Path | None,
+        typer.Option("-r", "--requirement", help="Requirements file to check before installation."),
+    ] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Emit schema-versioned precheck JSON.")] = False,
+    pypi: Annotated[
+        bool,
+        typer.Option("--pypi", help="Explicitly query PyPI metadata. Network is never used unless this is set."),
+    ] = False,
+    osv: Annotated[
+        bool,
+        typer.Option("--osv", help="Explicitly query OSV.dev. Network is never used unless this is set."),
+    ] = False,
+    osv_cache_dir: Annotated[
+        Path | None,
+        typer.Option(help="Optional OSV.dev cache directory. Defaults to the pkgwhy user cache."),
+    ] = None,
+    vulnerability_file: Annotated[
+        Path | None,
+        typer.Option(help="Optional local OSV-like JSON file with vulnerability data. No network is used."),
+    ] = None,
+    download_artifacts: Annotated[
+        bool,
+        typer.Option(
+            "--download-artifacts",
+            help="Explicitly download a PyPI wheel or sdist to inspect statically. Network is used only with this flag.",
+        ),
+    ] = False,
+    keep_artifacts: Annotated[
+        bool,
+        typer.Option("--keep-artifacts", help="Keep downloaded artifact review files instead of deleting them."),
+    ] = False,
+    artifact_dir: Annotated[
+        Path | None,
+        typer.Option(help="Directory for kept artifact review files. Only used with --keep-artifacts."),
+    ] = None,
+    enforce_exit_code: Annotated[
+        bool,
+        typer.Option("--enforce-exit-code", help="Return the mapped gate exit code instead of always exiting 0."),
+    ] = False,
+) -> None:
+    """Check a package before installation without installing, importing, or executing it."""
+    try:
+        if requirements is not None:
+            if package is not None:
+                raise PrecheckFileError("use either a package target or -r/--requirement, not both")
+            result = build_requirements_precheck(
+                requirements,
+                pypi=pypi,
+                osv=osv,
+                osv_cache_dir=osv_cache_dir,
+                vulnerability_file=vulnerability_file,
+                download_artifacts=download_artifacts,
+                keep_artifacts=keep_artifacts,
+                artifact_dir=artifact_dir,
+            )
+        elif package is not None and Path(package).name == "pyproject.toml":
+            result = build_pyproject_precheck(
+                Path(package),
+                pypi=pypi,
+                osv=osv,
+                osv_cache_dir=osv_cache_dir,
+                vulnerability_file=vulnerability_file,
+                download_artifacts=download_artifacts,
+                keep_artifacts=keep_artifacts,
+                artifact_dir=artifact_dir,
+            )
+        elif package is not None:
+            result = build_package_precheck(
+                package,
+                pypi=pypi,
+                osv=osv,
+                osv_cache_dir=osv_cache_dir,
+                vulnerability_file=vulnerability_file,
+                download_artifacts=download_artifacts,
+                keep_artifacts=keep_artifacts,
+                artifact_dir=artifact_dir,
+            )
+        else:
+            raise PrecheckTargetError("precheck requires a package target, pyproject.toml, or -r/--requirement file")
+    except (PrecheckTargetError, PrecheckFileError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    if isinstance(result, PrecheckBatchResult):
+        _emit_precheck_batch(result, as_json=as_json)
+        if enforce_exit_code:
+            raise typer.Exit(result.exit_code)
+        return
+    _emit_precheck_package(result, as_json=as_json)
+    if enforce_exit_code:
+        raise typer.Exit(result.exit_code)
+
+
+@pip_app.command("install")
+def pip_install(
+    packages: Annotated[
+        list[str] | None,
+        typer.Argument(help="Package requirement to check and install. Multiple package targets are not supported yet."),
+    ] = None,
+    requirements: Annotated[
+        Path | None,
+        typer.Option("-r", "--requirement", help="Requirements file to check and install through pip."),
+    ] = None,
+    policy: Annotated[
+        PipPolicyOption,
+        typer.Option("--policy", help="Install policy: standard or strict."),
+    ] = PipPolicyOption.STANDARD,
+    as_json: Annotated[bool, typer.Option("--json", help="Emit schema-versioned pip gate JSON.")] = False,
+    pypi: Annotated[
+        bool,
+        typer.Option("--pypi", help="Explicitly query PyPI metadata during precheck. Network is used only with this flag."),
+    ] = False,
+    osv: Annotated[
+        bool,
+        typer.Option("--osv", help="Explicitly query OSV.dev during precheck. Network is used only with this flag."),
+    ] = False,
+    osv_cache_dir: Annotated[
+        Path | None,
+        typer.Option(help="Optional OSV.dev cache directory. Defaults to the pkgwhy user cache."),
+    ] = None,
+    vulnerability_file: Annotated[
+        Path | None,
+        typer.Option(help="Optional local OSV-like JSON file with vulnerability data. No network is used."),
+    ] = None,
+    download_artifacts: Annotated[
+        bool,
+        typer.Option(
+            "--download-artifacts",
+            help="Explicitly download a PyPI wheel or sdist for static precheck before pip install.",
+        ),
+    ] = False,
+    override_review: Annotated[
+        bool,
+        typer.Option("--override-review", help="Explicitly allow pip when precheck requires caution or manual review."),
+    ] = False,
+    override_block: Annotated[
+        bool,
+        typer.Option("--override-block", help="Explicitly allow pip when precheck blocks or requires sandbox-only use."),
+    ] = False,
+    override_reason: Annotated[
+        str | None,
+        typer.Option("--override-reason", help="Human-readable reason stored in the local pip gate log."),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Run precheck and policy evaluation without invoking pip."),
+    ] = False,
+) -> None:
+    """Run precheck before pip install and invoke pip only when policy allows."""
+
+    try:
+        result = run_pip_install_gate(
+            packages=packages,
+            requirement_file=requirements,
+            policy=policy.value,
+            pypi=pypi,
+            osv=osv,
+            osv_cache_dir=osv_cache_dir,
+            vulnerability_file=vulnerability_file,
+            download_artifacts=download_artifacts,
+            override_review=override_review,
+            override_block=override_block,
+            override_reason=override_reason,
+            dry_run=dry_run,
+        )
+    except PipInstallGateError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    _emit_pip_install_gate(result, as_json=as_json)
+    raise typer.Exit(result.exit_code)
+
+
+@app.command()
 def typos(packages: Annotated[list[str] | None, typer.Argument(help="Package names to check. Omit to scan installed packages.")] = None) -> None:
     """Detect conservative typosquatting similarity signals."""
     names = packages if packages else [package.identity.name for package in list_installed_packages()]
@@ -459,6 +664,7 @@ def tool_inspect(reference: Annotated[str, typer.Argument(help="Tool name or own
     console.print(f"Artifact type: {judgement.manifest.artifact_type.value}")
     console.print(f"Entrypoint: {judgement.manifest.entrypoint}")
     console.print(f"Hash status: {judgement.hash_status.value}")
+    console.print(f"Trust state: {judgement.trust_state.value}")
     console.print(f"Signature status: {judgement.signature_status}")
     console.print(f"Risk level: {judgement.risk_level.value}")
     console.print(f"Decision: {judgement.decision.value}")
@@ -491,6 +697,7 @@ def tool_judge(
     console.print(f"Decision: {judgement.decision.value}")
     console.print(f"Risk level: {judgement.risk_level.value}")
     console.print(f"Hash status: {judgement.hash_status.value}")
+    console.print(f"Trust state: {judgement.trust_state.value}")
     console.print(f"Recommendation: {judgement.recommendation}")
 
 
@@ -553,6 +760,62 @@ def registry_list() -> None:
             str(entry.path),
             "present" if entry.index_exists else "missing",
         )
+    console.print(table)
+
+
+@registry_app.command("trust")
+def registry_trust(reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to mark trusted.")]) -> None:
+    """Mark a local registry tool as trusted."""
+    _set_registry_trust_state(reference, ToolTrustState.TRUSTED)
+
+
+@registry_app.command("review")
+def registry_review(reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to mark reviewed.")]) -> None:
+    """Mark a local registry tool as reviewed."""
+    _set_registry_trust_state(reference, ToolTrustState.REVIEWED)
+
+
+@registry_app.command("quarantine")
+def registry_quarantine(
+    reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to quarantine.")]
+) -> None:
+    """Mark a local registry tool as quarantined."""
+    _set_registry_trust_state(reference, ToolTrustState.QUARANTINED)
+
+
+@registry_app.command("blocked")
+def registry_blocked() -> None:
+    """List tools marked blocked in the current registry."""
+    entries = list_tools_by_trust_state(ToolTrustState.BLOCKED)
+    _emit_registry_trust_table("Blocked tools", entries)
+
+
+@registry_app.command("block")
+def registry_block(reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to block.")]) -> None:
+    """Mark a local registry tool as blocked."""
+    _set_registry_trust_state(reference, ToolTrustState.BLOCKED)
+
+
+def _set_registry_trust_state(reference: str, state: ToolTrustState) -> None:
+    try:
+        entry = set_tool_trust_state(reference, state)
+    except ValueError as exc:
+        console.print(str(exc))
+        raise typer.Exit(1) from exc
+    console.print(f"{entry.owner}/{entry.name} {entry.version}: {entry.trust_state.value}")
+
+
+def _emit_registry_trust_table(title: str, entries: list) -> None:
+    if not entries:
+        console.print("No tools found.")
+        return
+    table = Table(title=title)
+    table.add_column("Owner")
+    table.add_column("Name")
+    table.add_column("Version")
+    table.add_column("Trust")
+    for entry in entries:
+        table.add_row(entry.owner, entry.name, entry.version, entry.trust_state.value)
     console.print(table)
 
 
@@ -633,6 +896,7 @@ def _emit_agent_package_precheck(
         return
     console.print(f"[bold]{result.package}[/bold]")
     console.print(f"Decision: {result.decision.value}")
+    console.print(f"Exit code: {result.exit_code}")
     console.print(f"Risk level: {result.risk_level.value}")
     console.print(f"Confidence: {result.confidence.value}")
     console.print(f"Policy source: {result.policy_decision_source}")
@@ -647,6 +911,100 @@ def _emit_agent_package_precheck(
         console.print("Warnings:")
         for warning in result.warnings:
             console.print(f"  - {warning}")
+
+
+def _emit_precheck_package(result: PreInstallPackagePrecheckResult, *, as_json: bool) -> None:
+    if as_json:
+        print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
+        return
+    console.print(f"[bold]{result.requested}[/bold]")
+    console.print("Before pip install, ask why.")
+    console.print(f"Decision: {result.decision.value}")
+    console.print(f"Exit code: {result.exit_code}")
+    console.print(f"Risk level: {result.risk_level.value}")
+    console.print(f"Confidence: {result.confidence.value}")
+    console.print(f"Metadata source: {result.metadata_source}")
+    console.print(f"Lookup status: {result.lookup_status}")
+    console.print(f"Artifacts downloaded: {str(result.artifacts_downloaded).lower()}")
+    console.print(f"Recommendation: {result.recommendation}")
+    console.print(f"Vulnerability summary: {result.vulnerability_summary.status}")
+    console.print(f"Provenance summary: {result.provenance_summary.status}")
+    console.print(f"Typosquat summary: {result.typosquat_summary.status}")
+    console.print(f"Static summary: {result.static_summary.status}")
+    console.print(f"Artifact summary: {result.artifact_summary.status}")
+    if result.policy_reasons:
+        console.print("Policy reasons:")
+        for reason in result.policy_reasons:
+            console.print(f"  - {reason}")
+    if result.warnings:
+        console.print("Warnings:")
+        for warning in result.warnings[:10]:
+            console.print(f"  - {warning}")
+        if len(result.warnings) > 10:
+            console.print(f"  ... and {len(result.warnings) - 10} more")
+
+
+def _emit_precheck_batch(result: PrecheckBatchResult, *, as_json: bool) -> None:
+    if as_json:
+        print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
+        return
+    console.print(f"[bold]{result.source}[/bold]")
+    console.print("Before pip install, ask why.")
+    console.print(f"Packages checked: {result.package_count}")
+    console.print(f"Decision: {result.decision.value}")
+    console.print(f"Exit code: {result.exit_code}")
+    console.print(f"Risk level: {result.risk_level.value}")
+    console.print(f"Confidence: {result.confidence.value}")
+    table = Table(title="Precheck results")
+    table.add_column("Package")
+    table.add_column("Version")
+    table.add_column("Risk")
+    table.add_column("Decision")
+    table.add_column("Lookup")
+    for item in result.results:
+        table.add_row(
+            item.requested,
+            item.version or "unknown",
+            item.risk_level.value,
+            item.decision.value,
+            item.lookup_status,
+        )
+    console.print(table)
+    if result.warnings:
+        console.print("Warnings:")
+        for warning in result.warnings[:10]:
+            console.print(f"  - {warning}")
+        if len(result.warnings) > 10:
+            console.print(f"  ... and {len(result.warnings) - 10} more")
+
+
+def _emit_pip_install_gate(result: PipInstallGateResult, *, as_json: bool) -> None:
+    if as_json:
+        print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
+        return
+    target = result.requirement_file or " ".join(result.requested)
+    console.print(f"[bold]{target}[/bold]")
+    console.print("Before pip install, ask why.")
+    console.print(f"Policy: {result.policy}")
+    console.print(f"Decision: {result.decision.value}")
+    console.print(f"Exit code: {result.exit_code}")
+    console.print(f"Risk level: {result.risk_level.value}")
+    console.print(f"Precheck exit code: {result.precheck_exit_code}")
+    console.print(f"Pip invoked: {str(result.pip_invoked).lower()}")
+    if result.pip_command:
+        console.print(f"Pip command: {' '.join(result.pip_command)}")
+    if result.log_path:
+        console.print(f"Decision log: {result.log_path}")
+    if result.reasons:
+        console.print("Reasons:")
+        for reason in result.reasons:
+            console.print(f"  - {reason}")
+    if result.warnings:
+        console.print("Warnings:")
+        for warning in result.warnings[:10]:
+            console.print(f"  - {warning}")
+        if len(result.warnings) > 10:
+            console.print(f"  ... and {len(result.warnings) - 10} more")
 
 
 def _dedupe_vulnerability_matches(matches: list[VulnerabilityMatch]) -> list[VulnerabilityMatch]:

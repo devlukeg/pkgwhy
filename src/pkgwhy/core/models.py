@@ -5,7 +5,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from pkgwhy.core.constants import (
     AGENT_PACKAGE_PRECHECK_SCHEMA_VERSION,
@@ -13,10 +13,16 @@ from pkgwhy.core.constants import (
     CAPABILITY_EXPOSURE_NOTE,
     DYNAMIC_ANALYSIS_SCHEMA_VERSION,
     PACKAGE_JUDGEMENT_SCHEMA_VERSION,
+    PIP_INSTALL_GATE_SCHEMA_VERSION,
+    PRECHECK_BATCH_SCHEMA_VERSION,
+    PRECHECK_SCHEMA_VERSION,
     RISK_MODEL_VERSION,
 )
 
 RiskModelVersion = Literal["pkgwhy.risk_model.v1"]
+PrecheckSchemaVersion = Literal["pkgwhy.precheck.v1"]
+PrecheckBatchSchemaVersion = Literal["pkgwhy.precheck_batch.v1"]
+PipInstallGateSchemaVersion = Literal["pkgwhy.pip_install_gate.v1"]
 
 
 class RiskLevel(StrEnum):
@@ -74,6 +80,14 @@ class ToolRunStatus(StrEnum):
     BLOCKED = "blocked"
 
 
+class ToolTrustState(StrEnum):
+    TRUSTED = "trusted"
+    REVIEWED = "reviewed"
+    QUARANTINED = "quarantined"
+    BLOCKED = "blocked"
+    UNKNOWN = "unknown"
+
+
 class DynamicAnalysisStatus(StrEnum):
     BLOCKED = "blocked"
     BACKEND_UNAVAILABLE = "backend_unavailable"
@@ -123,6 +137,7 @@ class DependencyStatus(StrEnum):
 
 class SourceAvailability(StrEnum):
     INSTALLED_SOURCE_PRESENT = "installed_source_present"
+    ARTIFACT_SOURCE_PRESENT = "artifact_source_present"
     INSTALLED_METADATA_ONLY = "installed_metadata_only"
     SOURCE_AVAILABILITY_UNKNOWN = "source_availability_unknown"
     NOT_INSTALLED = "not_installed"
@@ -368,6 +383,111 @@ class AgentPackagePrecheckResult(BaseModel):
     package_judgement: PackageJudgement
 
 
+class PrecheckSignalSummary(BaseModel):
+    """Compact summary of one evidence source used by pre-install precheck."""
+
+    status: str
+    sources: list[str] = Field(default_factory=list)
+    match_count: int = Field(default=0, ge=0)
+    warning_count: int = Field(default=0, ge=0)
+    warnings: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
+
+
+class PrecheckArtifactSummary(BaseModel):
+    """Summary of optional downloaded artifact inspection."""
+
+    status: str = "not_requested"
+    filename: str | None = None
+    package_type: str | None = None
+    url: str | None = None
+    sha256_status: str = "not_checked"
+    size_bytes: int = Field(default=0, ge=0)
+    extracted_file_count: int = Field(default=0, ge=0)
+    kept_path: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
+
+
+class PreInstallPackagePrecheckResult(BaseModel):
+    """Schema-versioned pre-install package gate result."""
+
+    schema_version: PrecheckSchemaVersion = PRECHECK_SCHEMA_VERSION
+    target_type: Literal["package"] = "package"
+    requested: str
+    package: str
+    normalized_package: str
+    requested_specifier: str | None = None
+    requested_version: str | None = None
+    version: str | None = None
+    metadata_source: str
+    lookup_status: str
+    network_requested: bool = False
+    artifacts_downloaded: bool = False
+    decision: AgentDecision
+    exit_code: int = Field(default=0, ge=0)
+    risk_level: RiskLevel
+    confidence: Confidence
+    policy_decision: AgentDecision
+    policy_reasons: list[str] = Field(default_factory=list)
+    summary: str
+    recommendation: str
+    warnings: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
+    vulnerability_summary: PrecheckSignalSummary
+    provenance_summary: PrecheckSignalSummary
+    typosquat_summary: PrecheckSignalSummary
+    static_summary: PrecheckSignalSummary
+    artifact_summary: PrecheckArtifactSummary = Field(default_factory=PrecheckArtifactSummary)
+    package_judgement: PackageJudgement
+
+
+class PrecheckBatchResult(BaseModel):
+    """Schema-versioned pre-install gate result for dependency declaration files."""
+
+    schema_version: PrecheckBatchSchemaVersion = PRECHECK_BATCH_SCHEMA_VERSION
+    target_type: Literal["requirements", "pyproject"]
+    source: str
+    package_count: int = Field(ge=0)
+    decision: AgentDecision
+    exit_code: int = Field(default=0, ge=0)
+    risk_level: RiskLevel
+    confidence: Confidence
+    warnings: list[str] = Field(default_factory=list)
+    results: list[PreInstallPackagePrecheckResult] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_package_count(self) -> PrecheckBatchResult:
+        if self.package_count != len(self.results):
+            raise ValueError("package_count must match number of precheck results")
+        return self
+
+
+class PipInstallGateResult(BaseModel):
+    """Schema-versioned result for the pip install gate."""
+
+    schema_version: PipInstallGateSchemaVersion = PIP_INSTALL_GATE_SCHEMA_VERSION
+    target_type: Literal["package", "requirements"]
+    requested: list[str] = Field(default_factory=list)
+    requirement_file: str | None = None
+    policy: Literal["standard", "strict"] = "standard"
+    decision: AgentDecision
+    risk_level: RiskLevel
+    confidence: Confidence
+    precheck_exit_code: int = Field(ge=0)
+    exit_code: int = Field(ge=0)
+    pip_invoked: bool = False
+    pip_command: list[str] = Field(default_factory=list)
+    pip_returncode: int | None = None
+    dry_run: bool = False
+    override_used: bool = False
+    override_reason: str | None = None
+    log_path: str | None = None
+    reasons: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    precheck: PreInstallPackagePrecheckResult | PrecheckBatchResult
+
+
 class DynamicProcessEvent(BaseModel):
     """Observed process event from a dynamic backend."""
 
@@ -473,6 +593,7 @@ class RegistryToolEntry(BaseModel):
     sha256: str
     manifest_path: str
     published_at: str
+    trust_state: ToolTrustState = ToolTrustState.UNKNOWN
 
 
 class RegistryIndex(BaseModel):
@@ -578,6 +699,7 @@ class ToolJudgement(BaseModel):
     declared_permissions: list[str] = Field(default_factory=list)
     detected_capabilities: list[str] = Field(default_factory=list)
     hash_status: HashStatus
+    trust_state: ToolTrustState = ToolTrustState.UNKNOWN
     signature_status: str = "not_implemented"
     warnings: list[str] = Field(default_factory=list)
     recommendation: str

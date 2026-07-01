@@ -1,6 +1,6 @@
 # Versioning Policy
 
-`pkgwhy` is in the `1.0.0` release line. Public JSON schemas and rule IDs are compatibility surfaces; incompatible changes require changelog coverage and may require a schema or catalog version bump.
+`pkgwhy` is in the `1.5.0` release line. Public JSON schemas and rule IDs are compatibility surfaces; incompatible changes require changelog coverage and may require a schema or catalog version bump.
 
 ## Package Versions
 
@@ -16,6 +16,11 @@
 - `0.9.5a0`: release/process hardening milestone.
 - `1.0.0rc1`: prior local release-candidate review candidate, only if the full release-candidate checklist passed locally.
 - `1.0.0`: stable release for the current package-intelligence, conservative static security signal, vulnerability/provenance foundation, agent JSON, local registry/runner, and dynamic-analysis safe-fail surface.
+- `1.1.0`: local pre-install package gate with metadata-only precheck, requirements/pyproject batch precheck, explicit artifact-download static inspection, and enforceable gate exit codes.
+- `1.2.0`: local pip install gate that runs precheck before pip, supports requirements files, strict policy mode, explicit overrides, stable gate exit codes, and compact local decision logs.
+- `1.3.0`: reusable GitHub Actions package-gate template with advisory, strict, and agent modes plus report artifact guidance, without requiring cloud services or secrets.
+- `1.4.0`: local registry trust states, trust/quarantine/block commands, tool judgement trust output, and runner enforcement for quarantined or blocked private tools.
+- `1.5.0`: commercial and agent platform architecture docs for future local policy packs, team review, hosted package review cache, shared organization policy, and agent install gateway without implementing cloud, billing, API keys, or secrets.
 
 ## JSON Schemas
 

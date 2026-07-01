@@ -1,5 +1,52 @@
 # Changelog
 
+## 1.5.0 - 2026-06-30
+
+- Add `docs/commercial-agent-platform.md` to describe the future commercial and agent platform direction without implementing cloud services, billing, hosted review, API keys, or secrets.
+- Document the product habit around `pkgwhy precheck`, `pkgwhy pip install`, and `pkgwhy agent precheck`.
+- Document future tiers for the free local CLI, Pro local policy packs, team review dashboard, hosted package review cache, shared organization policy, and agent install gateway.
+- Add explicit hosted-review boundaries so the current local CLI does not imply active cloud review or definitive malware detection.
+- Add tests that keep the commercial platform design doc future-only and boundary-aware.
+- Harden precheck and pip-gate follow-up review items: direct-reference handling, hash-locked requirements parsing, PyPI specifier release selection, Python 3.11-compatible tar extraction, private pip decision log paths/permissions, and CI pyproject gate coverage.
+- Harden second-pass review items: sanitized artifact URLs, stable-release preference for PyPI specifiers, safer keep-artifact failure handling, advisory-mode CI audit behavior, quarantine CLI coverage, and stricter pip requirements snapshot boundaries.
+
+## 1.4.0 - 2026-06-30
+
+- Add local registry trust states: `trusted`, `reviewed`, `quarantined`, `blocked`, and `unknown`.
+- Add trust-state storage to registry index entries and include trust state in tool judgement JSON and human output.
+- Add `pkgwhy registry trust <tool>`, `pkgwhy registry review <tool>`, `pkgwhy registry quarantine <tool>`, `pkgwhy registry block <tool>`, and `pkgwhy registry blocked`.
+- Enforce registry trust state in the local runner policy: `quarantined` and `blocked` tools are refused before execution.
+- Keep newly published local tools at `unknown` trust until a human marks them.
+- Keep tool lock/verify and registry export/import deferred rather than inventing incomplete trust guarantees.
+
+## 1.3.0 - 2026-06-30
+
+- Add a reusable GitHub Actions package-gate template at `examples/github-actions/pkgwhy-package-gate.yml`.
+- Document CI advisory, strict, and agent modes in `docs/ci-templates.md`.
+- The CI template installs `pkgwhy`, runs requirements precheck, emits JSON and Markdown audit reports, optionally runs agent precheck, uploads reports, and fails only in strict or agent mode.
+- Keep CI package-gate usage local and secret-free by default; no cloud service, hosted review, billing, or credentials are required.
+- Add static validation tests for the CI template and documentation boundaries.
+
+## 1.2.0 - 2026-06-30
+
+- Add `pkgwhy pip install <package>` as a local pip install gate over `pkgwhy precheck`.
+- Add `pkgwhy pip install -r requirements.txt` for requirements-file gate checks before pip is invoked.
+- Add schema-versioned `pkgwhy.pip_install_gate.v1` JSON with precheck decision, gate exit code, pip invocation status, override status, warnings, reasons, and embedded precheck output.
+- Add `--policy strict`, `--dry-run`, `--override-review`, `--override-block`, and `--override-reason` for explicit install-gate workflows.
+- Add best-effort compact local pip gate decision logs that omit full precheck evidence.
+- Keep tests deterministic by using fake pip runners and dry-run paths; tests do not install arbitrary public packages.
+- Keep the pip gate conservative: pip is called only after precheck allows it or an explicit override is used, and unavailable or incomplete precheck evidence exits without invoking pip.
+
+## 1.1.0 - 2026-06-30
+
+- Add top-level `pkgwhy precheck` as a local pre-install package gate for humans, CI, and agents.
+- Add schema-versioned `pkgwhy.precheck.v1` JSON for single package requirements, including decision, risk, confidence, evidence summaries, vulnerability/provenance/typosquat/static summaries, and embedded package judgement.
+- Add schema-versioned `pkgwhy.precheck_batch.v1` JSON for `pkgwhy precheck -r requirements.txt` and `pkgwhy precheck pyproject.toml`.
+- Add explicit `--download-artifacts` support that queries PyPI, downloads one wheel or source artifact to a temporary review directory, verifies SHA-256 when PyPI metadata provides it, extracts safely, statically inspects files, and deletes temporary files unless `--keep-artifacts` is set.
+- Add optional `--pypi`, `--osv`, and local `--vulnerability-file` enrichment boundaries to precheck without enabling network by default.
+- Add `--enforce-exit-code` for gate usage while keeping default JSON and human precheck commands easy to inspect interactively.
+- Keep precheck static-first: it does not install, import, or execute inspected package code.
+
 ## 1.0.0 - 2026-06-30
 
 - Promote the `1.0.0rc1` release-candidate surface to the final 1.0.0 tracked codebase after local release-prep review.

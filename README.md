@@ -6,11 +6,11 @@ Know why a package exists before you or your agent trusts it.
 
 ## Status
 
-`pkgwhy` 1.0.0 is a Python supply-chain security decision-support tool for developers and AI agents. It is useful for local package inspection, conservative static package review, agent-readable JSON, vulnerability and provenance foundations, policy checks, and the local private-registry and runner MVP.
+`pkgwhy` 1.5.0 is a Python supply-chain security decision-support tool and local pip/CI install gate for developers and AI agents. It is useful for local package inspection, conservative static package review, agent-readable JSON, vulnerability and provenance foundations, policy checks, artifact precheck, guarded pip installs, CI package-gate templates, local registry trust states, commercial/agent platform planning, and the local private-registry and runner MVP.
 
 It is not a production security scanner, not malware-detection certainty, and not a full sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
 
-Current packaged version: `1.0.0`.
+Current packaged version: `1.5.0`.
 
 ## What Works Now
 
@@ -22,6 +22,13 @@ pkgwhy explain typer
 pkgwhy why typer
 pkgwhy inspect typer
 pkgwhy judge typer --json
+pkgwhy precheck typer --json
+pkgwhy precheck "typer==0.12.5" --json
+pkgwhy precheck -r requirements.txt --json
+pkgwhy precheck pyproject.toml --json
+pkgwhy precheck annotated-doc==0.0.4 --download-artifacts --json
+pkgwhy pip install typer --dry-run
+pkgwhy pip install -r requirements.txt --dry-run
 pkgwhy agent policy --json
 pkgwhy agent precheck typer --json
 pkgwhy risk typer
@@ -51,6 +58,13 @@ Implemented capabilities include:
 - Metadata-derived provenance/source-trust fields from installed metadata and optional PyPI JSON, with unsupported attestation and trusted-publishing checks marked as unknown or not implemented.
 - Conservative risk level, decision, warning, recommendation, evidence, confidence, risk model version, and rule-ID output.
 - Human `inspect`, `risk`, and `judge` reports that show compact rule-evidence summaries, while JSON reports include structured rule details.
+- Pre-install package precheck for package requirements, requirements files, and `pyproject.toml` dependencies.
+- Explicit artifact-download precheck that downloads a PyPI wheel or source artifact to a temporary review directory, verifies SHA-256 when available, extracts safely, statically inspects files, and deletes temporary files by default.
+- Optional gate exit codes via `pkgwhy precheck --enforce-exit-code`.
+- Guarded pip install flow via `pkgwhy pip install`, with precheck first, stable exit codes, explicit overrides, and compact local decision logs.
+- Reusable GitHub Actions package-gate template with advisory, strict, and agent modes.
+- Local registry trust states for private tools: `trusted`, `reviewed`, `quarantined`, `blocked`, and `unknown`.
+- Commercial and agent platform architecture documentation for future local policy packs, team review, hosted evidence cache, shared organization policy, and agent install gateway.
 - Stable JSON output for agent workflows.
 - Schema-versioned agent policy and package precheck output.
 - Conservative non-interactive agent defaults that block unknown or high-risk package use until a human reviews the evidence.
@@ -64,6 +78,9 @@ pkgwhy registry list
 pkgwhy registry add local-copy ~/.pkgwhy/registry
 pkgwhy registry use local
 pkgwhy publish ./my_tool.py
+pkgwhy registry trust local/my_tool
+pkgwhy registry quarantine local/my_tool
+pkgwhy registry blocked
 pkgwhy tool inspect local/my_tool
 pkgwhy tool judge local/my_tool --json
 pkgwhy run local/my_tool
@@ -85,6 +102,7 @@ Current runner policy is intentionally conservative:
 - Corrupt registry indexes fail closed for publish and tool-judgement paths.
 - Symlinks are not bundled, and stored registry paths must remain inside the registry root.
 - Bundle hash mismatch or a missing bundle blocks execution.
+- Quarantined or blocked registry trust states block execution.
 - `sandbox_only` and `block` tool judgements block execution.
 - Non-interactive execution is blocked unless both the judgement and manifest agent policy allow it.
 - Tools with declared dependencies are not run yet because dependency installation is not implemented.
@@ -98,11 +116,12 @@ These are roadmap items, not current features:
 
 - Complete vulnerability database coverage, transitive vulnerability analysis, or guaranteed advisory freshness.
 - Default online vulnerability lookup. Network access is only used when explicitly requested.
-- Cached PyPI/source lookup beyond the current OSV response cache.
+- Persistent cached PyPI/source lookup beyond the current OSV response cache.
 - Cloud/private remote registry backends.
 - `pull`, mirroring, and remote synchronization.
 - Tool dependency installation in the runner.
 - Tool bundle signing and signature verification.
+- Tool lock/verify commands and registry export/import.
 - Dynamic sandbox analysis for arbitrary packages.
 - Tool-specific `pkgwhy agent judge` expansion beyond the current package precheck path.
 - `pkgwhy agent explain-decision <review-id>`.
@@ -160,6 +179,58 @@ Emit machine-readable judgement JSON:
 ```bash
 pkgwhy judge typer --json
 ```
+
+Before installing a package, run a local precheck:
+
+```bash
+pkgwhy precheck typer --json
+pkgwhy precheck "typer==0.12.5" --json
+pkgwhy precheck -r requirements.txt --json
+pkgwhy precheck pyproject.toml --json
+```
+
+By default, `pkgwhy precheck` uses local installed metadata when available and does not use the network. Add `--pypi` or `--osv` only when you want explicit online enrichment. Add `--download-artifacts` to query PyPI, download one wheel or source artifact, verify its SHA-256 when PyPI metadata provides it, extract it to a temporary review directory, inspect it statically, and delete the temporary files. The command does not install, import, or execute inspected package code.
+
+For CI or install-gate usage, add `--enforce-exit-code`:
+
+```bash
+pkgwhy precheck typer --json --enforce-exit-code
+```
+
+Exit codes are:
+
+- `0`: allow.
+- `1`: allow with caution or manual review.
+- `2`: block or sandbox-only.
+- `4`: requested online/artifact lookup was unavailable or failed.
+
+To gate an install, use `pkgwhy pip install` instead of raw `pip install`:
+
+```bash
+pkgwhy pip install typer
+pkgwhy pip install typer --policy strict
+pkgwhy pip install -r requirements.txt
+pkgwhy pip install typer --dry-run --json
+```
+
+The pip gate always runs precheck first. It invokes pip only when the precheck policy allows the install, or when a human uses an explicit override flag. Review/caution results exit `1`, block/sandbox-only results exit `2`, tool/config errors exit `3`, and unavailable or incomplete requested evidence exits `4`. `--dry-run` evaluates the gate and writes the local decision log without invoking pip.
+
+Overrides are explicit:
+
+```bash
+pkgwhy pip install typer --override-review --override-reason "reviewed local evidence"
+pkgwhy pip install suspicious-name --override-block --override-reason "temporary isolated test"
+```
+
+Agents and automated workflows should use `pkgwhy pip install` when dependency policy is required, not raw `pip install`. The command is still decision support: it does not prove a package is safe and it does not sandbox pip or installed package code.
+
+For CI package gates, start from the reusable GitHub Actions template:
+
+```text
+examples/github-actions/pkgwhy-package-gate.yml
+```
+
+See [CI Templates](docs/ci-templates.md) for advisory, strict, and agent-mode usage. The template does not require secrets or a hosted `pkgwhy` service.
 
 Inspect the default agent policy and run a conservative agent precheck:
 
@@ -633,6 +704,7 @@ Release and process references:
 - [1.0.0 Feature Surface](docs/release-candidate-surface.md)
 - [Threat Model](docs/threat-model.md)
 - [Production Readiness Blockers](docs/production-readiness.md)
+- [Commercial And Agent Platform Direction](docs/commercial-agent-platform.md)
 
 ## Roadmap
 

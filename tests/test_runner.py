@@ -8,9 +8,11 @@ import pytest
 from typer.testing import CliRunner
 
 from pkgwhy.cli import app
+from pkgwhy.core.models import ToolTrustState
 from pkgwhy.registry.local import init_local_registry, load_registry_index, save_registry_index
 from pkgwhy.registry.publish import publish_local_tool
 from pkgwhy.registry.run import RUNNER_ISOLATION_WARNING, run_local_tool
+from pkgwhy.registry.trust import set_tool_trust_state
 
 runner = CliRunner()
 
@@ -92,6 +94,18 @@ def test_run_local_tool_blocks_hash_mismatch(tmp_path: Path, monkeypatch: pytest
 
     with pytest.raises(ValueError, match="hash is not verified"):
         run_local_tool("local/tampered_runner")
+
+
+def test_run_local_tool_blocks_quarantined_tool(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PKGWHY_CONFIG_HOME", str(tmp_path / "config"))
+    init_local_registry(tmp_path / "registry")
+    script = tmp_path / "quarantined_runner.py"
+    script.write_text("print('should not run')\n", encoding="utf-8")
+    publish_local_tool(script)
+    set_tool_trust_state("local/quarantined_runner", ToolTrustState.QUARANTINED)
+
+    with pytest.raises(ValueError, match="trust state blocks execution"):
+        run_local_tool("local/quarantined_runner")
 
 
 def test_run_local_tool_rejects_missing_registry_entry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
