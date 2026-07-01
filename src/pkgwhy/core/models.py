@@ -18,6 +18,13 @@ from pkgwhy.core.constants import (
     PRECHECK_SCHEMA_VERSION,
     RISK_MODEL_VERSION,
 )
+from pkgwhy.core.decision_contract import (
+    compact_evidence_summary,
+    exit_code_for_decision,
+    exit_code_meaning,
+    recommended_next_action,
+    source_freshness_for_precheck,
+)
 
 RiskModelVersion = Literal["pkgwhy.risk_model.v1"]
 PrecheckSchemaVersion = Literal["pkgwhy.precheck.v1"]
@@ -345,6 +352,9 @@ class PackageJudgement(BaseModel):
     """Agent-readable conservative judgement for an inspected package."""
 
     schema_version: str = PACKAGE_JUDGEMENT_SCHEMA_VERSION
+    command: str = "pkgwhy judge"
+    target: str | None = None
+    target_type: Literal["package"] = "package"
     risk_model_version: RiskModelVersion = RISK_MODEL_VERSION
     package: str
     version: str | None = None
@@ -357,17 +367,39 @@ class PackageJudgement(BaseModel):
     detected_capabilities: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     recommendation: str
+    recommended_next_action: str | None = None
+    exit_code: int | None = Field(default=None, ge=0)
+    exit_code_meaning: str | None = None
     evidence: list[str] = Field(default_factory=list)
+    evidence_summary: dict[str, object] = Field(default_factory=dict)
+    source_freshness: str = "installed_distribution_metadata"
     risk_rules: list[RiskRuleEvidence] = Field(default_factory=list)
     known_vulnerabilities: list[VulnerabilityMatch] = Field(default_factory=list)
     provenance: PackageProvenance | None = None
     capability_exposure_note: str = CAPABILITY_EXPOSURE_NOTE
+
+    @model_validator(mode="after")
+    def populate_decision_contract(self) -> PackageJudgement:
+        self.target = self.target or self.package
+        self.recommended_next_action = recommended_next_action(self.decision, self.recommendation)
+        self.exit_code = self.exit_code if self.exit_code is not None else exit_code_for_decision(self.decision)
+        self.exit_code_meaning = exit_code_meaning(self.exit_code)
+        self.evidence_summary = compact_evidence_summary(
+            evidence=self.evidence,
+            warnings=self.warnings,
+            risk_rules=self.risk_rules,
+        )
+        if self.provenance is not None and self.provenance.metadata_source:
+            self.source_freshness = self.provenance.metadata_source
+        return self
 
 
 class AgentPackagePrecheckResult(BaseModel):
     """Schema-versioned agent policy decision for one package judgement."""
 
     schema_version: str = AGENT_PACKAGE_PRECHECK_SCHEMA_VERSION
+    command: str = "pkgwhy agent precheck"
+    target: str | None = None
     policy_schema_version: str = AGENT_POLICY_SCHEMA_VERSION
     package: str
     version: str | None = None
@@ -380,7 +412,36 @@ class AgentPackagePrecheckResult(BaseModel):
     reasons: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     recommendation: str
+    recommended_next_action: str | None = None
+    exit_code: int | None = Field(default=None, ge=0)
+    exit_code_meaning: str | None = None
+    evidence: list[str] = Field(default_factory=list)
+    evidence_summary: dict[str, object] = Field(default_factory=dict)
+    source_freshness: str = "installed_distribution_metadata"
+    policy: dict[str, object] = Field(default_factory=dict)
     package_judgement: PackageJudgement
+
+    @model_validator(mode="after")
+    def populate_decision_contract(self) -> AgentPackagePrecheckResult:
+        self.target = self.target or self.package
+        self.recommended_next_action = recommended_next_action(self.decision, self.recommendation)
+        self.exit_code = self.exit_code if self.exit_code is not None else exit_code_for_decision(self.decision)
+        self.exit_code_meaning = exit_code_meaning(self.exit_code)
+        if not self.evidence:
+            self.evidence = list(self.reasons)
+        self.evidence_summary = compact_evidence_summary(
+            evidence=[*self.evidence, *self.package_judgement.evidence],
+            warnings=self.warnings,
+            risk_rules=self.package_judgement.risk_rules,
+        )
+        self.source_freshness = self.package_judgement.source_freshness
+        if not self.policy:
+            self.policy = {
+                "schema_version": self.policy_schema_version,
+                "decision_source": self.policy_decision_source,
+                "non_interactive": self.non_interactive,
+            }
+        return self
 
 
 class PrecheckSignalSummary(BaseModel):
@@ -413,6 +474,8 @@ class PreInstallPackagePrecheckResult(BaseModel):
     """Schema-versioned pre-install package gate result."""
 
     schema_version: PrecheckSchemaVersion = PRECHECK_SCHEMA_VERSION
+    command: str = "pkgwhy precheck"
+    target: str | None = None
     target_type: Literal["package"] = "package"
     requested: str
     package: str
@@ -430,10 +493,15 @@ class PreInstallPackagePrecheckResult(BaseModel):
     confidence: Confidence
     policy_decision: AgentDecision
     policy_reasons: list[str] = Field(default_factory=list)
+    policy: dict[str, object] = Field(default_factory=dict)
     summary: str
     recommendation: str
+    recommended_next_action: str | None = None
     warnings: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
+    evidence_summary: dict[str, object] = Field(default_factory=dict)
+    exit_code_meaning: str | None = None
+    source_freshness: str | None = None
     vulnerability_summary: PrecheckSignalSummary
     provenance_summary: PrecheckSignalSummary
     typosquat_summary: PrecheckSignalSummary
@@ -441,25 +509,69 @@ class PreInstallPackagePrecheckResult(BaseModel):
     artifact_summary: PrecheckArtifactSummary = Field(default_factory=PrecheckArtifactSummary)
     package_judgement: PackageJudgement
 
+    @model_validator(mode="after")
+    def populate_decision_contract(self) -> PreInstallPackagePrecheckResult:
+        self.target = self.target or self.requested
+        self.recommended_next_action = recommended_next_action(self.decision, self.recommendation)
+        self.exit_code_meaning = exit_code_meaning(self.exit_code)
+        self.evidence_summary = compact_evidence_summary(
+            evidence=self.evidence,
+            warnings=self.warnings,
+            risk_rules=self.package_judgement.risk_rules,
+        )
+        self.source_freshness = source_freshness_for_precheck(
+            metadata_source=self.metadata_source,
+            lookup_status=self.lookup_status,
+            network_requested=self.network_requested,
+        )
+        if not self.policy:
+            self.policy = {
+                "decision": self.policy_decision.value,
+                "reasons": list(self.policy_reasons),
+            }
+        return self
+
 
 class PrecheckBatchResult(BaseModel):
     """Schema-versioned pre-install gate result for dependency declaration files."""
 
     schema_version: PrecheckBatchSchemaVersion = PRECHECK_BATCH_SCHEMA_VERSION
+    command: str = "pkgwhy precheck"
+    target: str | None = None
     target_type: Literal["requirements", "pyproject"]
     source: str
     package_count: int = Field(ge=0)
     decision: AgentDecision
     exit_code: int = Field(default=0, ge=0)
+    exit_code_meaning: str | None = None
     risk_level: RiskLevel
     confidence: Confidence
+    recommendation: str | None = None
+    recommended_next_action: str | None = None
     warnings: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
+    evidence_summary: dict[str, object] = Field(default_factory=dict)
+    source_freshness: str = "dependency_file_snapshot"
     results: list[PreInstallPackagePrecheckResult] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_package_count(self) -> PrecheckBatchResult:
         if self.package_count != len(self.results):
             raise ValueError("package_count must match number of precheck results")
+        self.target = self.target or self.source
+        self.exit_code_meaning = exit_code_meaning(self.exit_code)
+        self.recommendation = self.recommendation or recommended_next_action(self.decision)
+        self.recommended_next_action = self.recommended_next_action or self.recommendation
+        if not self.evidence:
+            self.evidence = [
+                f"Read dependency declarations from {self.source}.",
+                f"Evaluated {self.package_count} package requirement(s) without installing dependencies.",
+            ]
+        self.evidence_summary = compact_evidence_summary(
+            evidence=[*self.evidence, *(item for result in self.results for item in result.evidence)],
+            warnings=self.warnings,
+            risk_rules=[rule for result in self.results for rule in result.package_judgement.risk_rules],
+        )
         return self
 
 
@@ -467,6 +579,8 @@ class PipInstallGateResult(BaseModel):
     """Schema-versioned result for the pip install gate."""
 
     schema_version: PipInstallGateSchemaVersion = PIP_INSTALL_GATE_SCHEMA_VERSION
+    command: str = "pkgwhy pip install"
+    target: str | None = None
     target_type: Literal["package", "requirements"]
     requested: list[str] = Field(default_factory=list)
     requirement_file: str | None = None
@@ -476,6 +590,7 @@ class PipInstallGateResult(BaseModel):
     confidence: Confidence
     precheck_exit_code: int = Field(ge=0)
     exit_code: int = Field(ge=0)
+    exit_code_meaning: str | None = None
     pip_invoked: bool = False
     pip_command: list[str] = Field(default_factory=list)
     pip_returncode: int | None = None
@@ -485,7 +600,31 @@ class PipInstallGateResult(BaseModel):
     log_path: str | None = None
     reasons: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
+    evidence_summary: dict[str, object] = Field(default_factory=dict)
+    recommended_next_action: str | None = None
+    source_freshness: str | None = None
     precheck: PreInstallPackagePrecheckResult | PrecheckBatchResult
+
+    @model_validator(mode="after")
+    def populate_decision_contract(self) -> PipInstallGateResult:
+        self.target = self.target or self.requirement_file or " ".join(self.requested)
+        self.exit_code_meaning = exit_code_meaning(self.exit_code)
+        self.recommended_next_action = recommended_next_action(self.decision)
+        if not self.evidence:
+            self.evidence = list(self.reasons)
+        risk_rules = (
+            self.precheck.package_judgement.risk_rules
+            if isinstance(self.precheck, PreInstallPackagePrecheckResult)
+            else [rule for result in self.precheck.results for rule in result.package_judgement.risk_rules]
+        )
+        self.evidence_summary = compact_evidence_summary(
+            evidence=[*self.evidence, *self.precheck.evidence],
+            warnings=self.warnings,
+            risk_rules=risk_rules,
+        )
+        self.source_freshness = getattr(self.precheck, "source_freshness", None)
+        return self
 
 
 class DynamicProcessEvent(BaseModel):
@@ -686,6 +825,9 @@ class ToolJudgement(BaseModel):
     """Agent-readable conservative judgement for a private registry tool."""
 
     schema_version: str = "pkgwhy.tool_judgement.v1"
+    command: str = "pkgwhy tool judge"
+    target: str | None = None
+    target_type: Literal["tool"] = "tool"
     tool: str
     owner: str
     name: str
@@ -703,6 +845,23 @@ class ToolJudgement(BaseModel):
     signature_status: str = "not_implemented"
     warnings: list[str] = Field(default_factory=list)
     recommendation: str
+    recommended_next_action: str | None = None
+    exit_code: int | None = Field(default=None, ge=0)
+    exit_code_meaning: str | None = None
+    evidence: list[str] = Field(default_factory=list)
+    evidence_summary: dict[str, object] = Field(default_factory=dict)
+    source_freshness: str = "local_registry_snapshot"
+
+    @model_validator(mode="after")
+    def populate_decision_contract(self) -> ToolJudgement:
+        self.target = self.target or self.tool
+        self.recommended_next_action = recommended_next_action(self.decision, self.recommendation)
+        self.exit_code = self.exit_code if self.exit_code is not None else exit_code_for_decision(self.decision)
+        self.exit_code_meaning = exit_code_meaning(self.exit_code)
+        if not self.evidence:
+            self.evidence = [self.reason]
+        self.evidence_summary = compact_evidence_summary(evidence=self.evidence, warnings=self.warnings)
+        return self
 
 
 class ToolRunResult(BaseModel):

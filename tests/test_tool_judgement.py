@@ -24,10 +24,18 @@ def test_judge_tool_reports_verified_hash(tmp_path: Path, monkeypatch: pytest.Mo
     judgement = judge_tool("local/hello_tool")
 
     assert judgement.schema_version == "pkgwhy.tool_judgement.v1"
+    assert judgement.command == "pkgwhy tool judge"
+    assert judgement.target == "local/hello_tool"
+    assert judgement.target_type == "tool"
     assert judgement.hash_status == HashStatus.VERIFIED
     assert judgement.signature_status == "not_implemented"
     assert judgement.trust_state == ToolTrustState.UNKNOWN
     assert judgement.decision == AgentDecision.REVIEW_MANUALLY
+    assert judgement.exit_code == 1
+    assert judgement.exit_code_meaning == "review or caution required before proceeding"
+    assert judgement.recommended_next_action
+    assert judgement.evidence_summary["evidence_count"] >= len(judgement.evidence)
+    assert judgement.source_freshness == "local_registry_snapshot"
     assert judgement.manifest.name == "hello_tool"
 
 
@@ -123,9 +131,15 @@ def test_tool_cli_inspect_and_judge_json(tmp_path: Path) -> None:
     assert judge_result.exit_code == 0
     data = json.loads(judge_result.output)
     assert data["schema_version"] == "pkgwhy.tool_judgement.v1"
+    assert data["command"] == "pkgwhy tool judge"
+    assert data["target"] == "local/hello_tool"
+    assert data["target_type"] == "tool"
     assert data["hash_status"] == "verified"
     assert data["trust_state"] == "unknown"
     assert data["signature_status"] == "not_implemented"
+    assert data["exit_code_meaning"] == "review or caution required before proceeding"
+    assert data["recommended_next_action"]
+    assert data["evidence_summary"]["evidence_count"] >= len(data["evidence"])
 
 
 def test_registry_trust_commands_mark_and_list_tools(tmp_path: Path) -> None:

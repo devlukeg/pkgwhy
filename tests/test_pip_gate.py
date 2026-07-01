@@ -339,7 +339,13 @@ def test_pip_gate_cli_json_dry_run_uses_precheck_and_never_pip(monkeypatch, tmp_
     assert result.exit_code == 0
     data = json.loads(result.output)
     assert data["schema_version"] == "pkgwhy.pip_install_gate.v1"
+    assert data["command"] == "pkgwhy pip install"
+    assert data["target"] == "demo-package"
     assert data["dry_run"] is True
     assert data["pip_invoked"] is False
     assert data["exit_code"] == 0
+    assert data["exit_code_meaning"] == "allowed or completed successfully"
+    assert data["recommended_next_action"]
+    assert data["evidence_summary"]["evidence_count"] >= len(data["evidence"])
+    assert data["source_freshness"] == "test_fixture:metadata_found"
     assert list((tmp_path / "config" / "pip-install-decisions").rglob("*.json"))

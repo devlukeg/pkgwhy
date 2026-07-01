@@ -209,6 +209,12 @@ def test_precheck_cli_json_for_installed_package() -> None:
     data = json.loads(result.output)
     PreInstallPackagePrecheckResult.model_validate(data)
     assert data["schema_version"] == "pkgwhy.precheck.v1"
+    assert data["command"] == "pkgwhy precheck"
+    assert data["target"] == "typer"
+    assert data["exit_code_meaning"] == "blocked by policy or risk decision"
+    assert data["recommended_next_action"]
+    assert data["evidence_summary"]["evidence_count"] == len(data["evidence"])
+    assert data["source_freshness"] == "local_installed_distribution_metadata"
     assert data["package"] == "typer"
     assert data["metadata_source"] == "installed_distribution_metadata"
     assert data["artifacts_downloaded"] is False
@@ -273,6 +279,12 @@ def test_precheck_cli_requirements_file_json(tmp_path: Path) -> None:
     data = json.loads(result.output)
     PrecheckBatchResult.model_validate(data)
     assert data["schema_version"] == "pkgwhy.precheck_batch.v1"
+    assert data["command"] == "pkgwhy precheck"
+    assert data["target"] == str(requirements)
+    assert data["exit_code_meaning"] == "blocked by policy or risk decision"
+    assert data["recommended_next_action"]
+    assert data["evidence_summary"]["evidence_count"] >= len(data["evidence"])
+    assert data["source_freshness"] == "dependency_file_snapshot"
     assert data["target_type"] == "requirements"
     assert data["package_count"] == 2
     assert [item["requested"] for item in data["results"]] == [
@@ -321,6 +333,12 @@ dev = ["definitely-not-installed-pkgwhy-precheck-pyproject-1==2.0.0"]
     data = json.loads(result.output)
     PrecheckBatchResult.model_validate(data)
     assert data["schema_version"] == "pkgwhy.precheck_batch.v1"
+    assert data["command"] == "pkgwhy precheck"
+    assert data["target"] == str(pyproject)
+    assert data["exit_code_meaning"] == "blocked by policy or risk decision"
+    assert data["recommended_next_action"]
+    assert data["evidence_summary"]["evidence_count"] >= len(data["evidence"])
+    assert data["source_freshness"] == "dependency_file_snapshot"
     assert data["target_type"] == "pyproject"
     assert data["package_count"] == 2
     assert data["exit_code"] == 2
