@@ -209,6 +209,12 @@ def test_precheck_cli_json_for_installed_package() -> None:
     data = json.loads(result.output)
     PreInstallPackagePrecheckResult.model_validate(data)
     assert data["schema_version"] == "pkgwhy.precheck.v1"
+    assert data["command"] == "pkgwhy precheck"
+    assert data["target"] == "typer"
+    assert data["exit_code_meaning"] == "blocked by policy or risk decision"
+    assert data["recommended_next_action"]
+    assert data["evidence_summary"]["evidence_count"] == len(data["evidence"])
+    assert data["source_freshness"] == "local_installed_distribution_metadata"
     assert data["package"] == "typer"
     assert data["metadata_source"] == "installed_distribution_metadata"
     assert data["artifacts_downloaded"] is False
@@ -256,8 +262,23 @@ def test_precheck_cli_rejects_malformed_vulnerability_file(tmp_path: Path) -> No
         ["precheck", "demo-precheck-vuln==1.0.0", "--vulnerability-file", str(vuln_file), "--json"],
     )
 
-    assert result.exit_code == 2
-    assert "could not load vulnerability file" in result.output
+    assert result.exit_code == 3
+    data = json.loads(result.output)
+    assert data["message"].startswith(f"could not load vulnerability file {vuln_file}:")
+    assert "Could not read vulnerability data" in data["message"]
+    assert str(vuln_file) in data["message"]
+    data["message"] = "<parser-specific message>"
+    assert data == {
+        "schema_version": "pkgwhy.error.v1",
+        "command": "pkgwhy precheck",
+        "target": "demo-precheck-vuln==1.0.0",
+        "target_type": "package",
+        "error_type": "PrecheckFileError",
+        "message": "<parser-specific message>",
+        "exit_code": 3,
+        "exit_code_meaning": "tool, configuration, or user input error",
+        "suggested_fix": "Pass a valid package requirement such as 'requests' or 'requests==2.32.0'.",
+    }
 
 
 def test_precheck_cli_requirements_file_json(tmp_path: Path) -> None:
@@ -273,8 +294,27 @@ def test_precheck_cli_requirements_file_json(tmp_path: Path) -> None:
     data = json.loads(result.output)
     PrecheckBatchResult.model_validate(data)
     assert data["schema_version"] == "pkgwhy.precheck_batch.v1"
+    assert data["command"] == "pkgwhy precheck"
+    assert data["target"] == str(requirements)
+    assert data["exit_code_meaning"] == "blocked by policy or risk decision"
+    assert data["recommended_next_action"]
+    assert data["evidence_summary"]["evidence_count"] >= len(data["evidence"])
+    assert data["source_freshness"] == "dependency_file_snapshot"
     assert data["target_type"] == "requirements"
     assert data["package_count"] == 2
+    assert data["aggregate_recommendation"] == data["recommended_next_action"]
+    assert [item["requested"] for item in data["blocking_targets"]] == [
+        "typer",
+        "definitely-not-installed-pkgwhy-precheck-req-1==1.0.0",
+    ]
+    assert data["blocking_targets"][0]["source"] == str(requirements)
+    assert data["blocking_targets"][0]["source_line"] == 1
+    assert data["blocking_targets"][0]["source_index"] == 1
+    assert data["blocking_targets"][0]["source_section"] == "requirements"
+    assert data["blocking_targets"][0]["reason"]
+    assert data["blocking_targets"][1]["source_line"] == 4
+    assert data["review_targets"] == []
+    assert data["allowed_targets"] == []
     assert [item["requested"] for item in data["results"]] == [
         "typer",
         "definitely-not-installed-pkgwhy-precheck-req-1==1.0.0",
@@ -282,6 +322,22 @@ def test_precheck_cli_requirements_file_json(tmp_path: Path) -> None:
     assert data["decision"] == "block"
     assert data["exit_code"] == 2
     assert any("recursive include is not evaluated" in warning for warning in data["warnings"])
+
+
+def test_precheck_cli_json_error_for_conflicting_package_and_requirements(tmp_path: Path) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("typer\n", encoding="utf-8")
+
+    result = runner.invoke(app, ["precheck", "typer", "-r", str(requirements), "--json"])
+
+    assert result.exit_code == 3
+    data = json.loads(result.output)
+    assert data["schema_version"] == "pkgwhy.error.v1"
+    assert data["command"] == "pkgwhy precheck"
+    assert data["target"] == str(requirements)
+    assert data["target_type"] == "requirements"
+    assert data["error_type"] == "PrecheckTargetError"
+    assert data["exit_code_meaning"] == "tool, configuration, or user input error"
 
 
 def test_precheck_requirements_normalizes_hash_locked_lines_and_skips_direct_references(tmp_path: Path) -> None:
@@ -321,11 +377,91 @@ dev = ["definitely-not-installed-pkgwhy-precheck-pyproject-1==2.0.0"]
     data = json.loads(result.output)
     PrecheckBatchResult.model_validate(data)
     assert data["schema_version"] == "pkgwhy.precheck_batch.v1"
+    assert data["command"] == "pkgwhy precheck"
+    assert data["target"] == str(pyproject)
+    assert data["exit_code_meaning"] == "blocked by policy or risk decision"
+    assert data["recommended_next_action"]
+    assert data["evidence_summary"]["evidence_count"] >= len(data["evidence"])
+    assert data["source_freshness"] == "dependency_file_snapshot"
     assert data["target_type"] == "pyproject"
     assert data["package_count"] == 2
+    assert data["aggregate_recommendation"] == data["recommended_next_action"]
+    assert [item["requested"] for item in data["blocking_targets"]] == [
+        "typer",
+        "definitely-not-installed-pkgwhy-precheck-pyproject-1==2.0.0",
+    ]
+    assert data["blocking_targets"][0]["source"] == str(pyproject)
+    assert data["blocking_targets"][0]["source_line"] is None
+    assert data["blocking_targets"][0]["source_index"] == 1
+    assert data["blocking_targets"][0]["source_section"] == "project.dependencies"
+    assert data["blocking_targets"][0]["reason"]
+    assert data["blocking_targets"][1]["source_section"] == "project.optional-dependencies.dev"
+    assert data["review_targets"] == []
+    assert data["allowed_targets"] == []
     assert data["exit_code"] == 2
     assert data["results"][0]["requested"] == "typer"
     assert data["results"][1]["requested"] == "definitely-not-installed-pkgwhy-precheck-pyproject-1==2.0.0"
+
+
+def test_precheck_cli_accepts_renamed_pyproject_toml(tmp_path: Path) -> None:
+    pyproject = tmp_path / "safe-pyproject.toml"
+    pyproject.write_text(
+        """
+[project]
+dependencies = ["typer"]
+""",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["precheck", str(pyproject), "--json"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    PrecheckBatchResult.model_validate(data)
+    assert data["schema_version"] == "pkgwhy.precheck_batch.v1"
+    assert data["target_type"] == "pyproject"
+    assert data["source"] == str(pyproject)
+    assert data["target"] == str(pyproject)
+    assert data["results"][0]["requested"] == "typer"
+
+
+def test_precheck_cli_json_error_for_unrecognized_toml(tmp_path: Path) -> None:
+    config = tmp_path / "settings.toml"
+    config.write_text("[tool.demo]\nname = 'not a pyproject dependency file'\n", encoding="utf-8")
+
+    result = runner.invoke(app, ["precheck", str(config), "--json"])
+
+    assert result.exit_code == 3
+    data = json.loads(result.output)
+    assert data == {
+        "schema_version": "pkgwhy.error.v1",
+        "command": "pkgwhy precheck",
+        "target": str(config),
+        "target_type": "pyproject",
+        "error_type": "PrecheckFileError",
+        "message": f"TOML file is not a pyproject dependency file: {config}",
+        "exit_code": 3,
+        "exit_code_meaning": "tool, configuration, or user input error",
+        "suggested_fix": "Pass a readable pyproject-style TOML file with a [project] table.",
+    }
+
+
+def test_precheck_cli_json_error_when_target_missing() -> None:
+    result = runner.invoke(app, ["precheck", "--json"])
+
+    assert result.exit_code == 3
+    data = json.loads(result.output)
+    assert data == {
+        "schema_version": "pkgwhy.error.v1",
+        "command": "pkgwhy precheck",
+        "target": None,
+        "target_type": None,
+        "error_type": "PrecheckTargetError",
+        "message": "precheck requires a package target, pyproject.toml, or -r/--requirement file",
+        "exit_code": 3,
+        "exit_code_meaning": "tool, configuration, or user input error",
+        "suggested_fix": "Pass a package requirement, -r/--requirement FILE, or a pyproject-style TOML file.",
+    }
 
 
 def test_precheck_download_artifact_static_inspection_with_mocked_pypi(monkeypatch, tmp_path: Path) -> None:

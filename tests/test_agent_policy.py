@@ -52,8 +52,19 @@ def test_non_interactive_unknown_package_is_blocked() -> None:
 
     AgentPackagePrecheckResult.model_validate(result.model_dump(mode="json"))
     assert result.schema_version == "pkgwhy.agent_package_precheck.v1"
+    assert result.command == "pkgwhy agent precheck"
+    assert result.target == "demo-package"
     assert result.policy_schema_version == "pkgwhy.agent_policy.v1"
     assert result.decision == AgentDecision.BLOCK
+    assert result.exit_code == 2
+    assert result.exit_code_meaning == "blocked by policy or risk decision"
+    assert result.recommended_next_action == "Block non-interactive package use until a human reviews the judgement evidence."
+    assert result.evidence_summary["evidence_count"] >= len(result.evidence)
+    assert result.policy == {
+        "schema_version": "pkgwhy.agent_policy.v1",
+        "decision_source": "agent_policy",
+        "non_interactive": True,
+    }
     assert result.policy_decision_source == "agent_policy"
     assert any("unknown-risk" in reason for reason in result.reasons)
     assert any("Non-interactive package use" in reason for reason in result.reasons)

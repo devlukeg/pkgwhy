@@ -339,7 +339,52 @@ def test_pip_gate_cli_json_dry_run_uses_precheck_and_never_pip(monkeypatch, tmp_
     assert result.exit_code == 0
     data = json.loads(result.output)
     assert data["schema_version"] == "pkgwhy.pip_install_gate.v1"
+    assert data["command"] == "pkgwhy pip install"
+    assert data["target"] == "demo-package"
     assert data["dry_run"] is True
     assert data["pip_invoked"] is False
     assert data["exit_code"] == 0
+    assert data["exit_code_meaning"] == "allowed or completed successfully"
+    assert data["recommended_next_action"]
+    assert data["evidence_summary"]["evidence_count"] >= len(data["evidence"])
+    assert data["source_freshness"] == "test_fixture:metadata_found"
     assert list((tmp_path / "config" / "pip-install-decisions").rglob("*.json"))
+
+
+def test_pip_gate_cli_json_error_when_target_missing(tmp_path: Path) -> None:
+    env = {"PKGWHY_CONFIG_HOME": str(tmp_path / "config")}
+
+    result = runner.invoke(app, ["pip", "install", "--json"], env=env)
+
+    assert result.exit_code == 3
+    data = json.loads(result.output)
+    assert data == {
+        "schema_version": "pkgwhy.error.v1",
+        "command": "pkgwhy pip install",
+        "target": None,
+        "target_type": None,
+        "error_type": "PipInstallGateError",
+        "message": "pip install gate requires a package target or -r/--requirement file",
+        "exit_code": 3,
+        "exit_code_meaning": "tool, configuration, or user input error",
+        "suggested_fix": "Pass exactly one package requirement or use -r/--requirement with a supported requirements file.",
+    }
+
+
+def test_pip_gate_cli_json_error_for_conflicting_targets(tmp_path: Path) -> None:
+    env = {"PKGWHY_CONFIG_HOME": str(tmp_path / "config")}
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("typer\n", encoding="utf-8")
+
+    result = runner.invoke(app, ["pip", "install", "typer", "-r", str(requirements), "--json"], env=env)
+
+    assert result.exit_code == 3
+    data = json.loads(result.output)
+    assert data["schema_version"] == "pkgwhy.error.v1"
+    assert data["command"] == "pkgwhy pip install"
+    assert data["target"] == str(requirements)
+    assert data["target_type"] == "requirements"
+    assert data["error_type"] == "PipInstallGateError"
+    assert data["message"] == "use either package targets or -r/--requirement, not both"
+    assert data["exit_code"] == 3
+    assert data["exit_code_meaning"] == "tool, configuration, or user input error"

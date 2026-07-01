@@ -41,6 +41,9 @@ Run CLI smokes:
 .venv/bin/python -m pkgwhy typos requests pandas-stubs
 .venv/bin/python -m pkgwhy agent --help
 .venv/bin/python -m pkgwhy agent precheck typer --json
+.venv/bin/python -m pkgwhy agent check typer --json
+.venv/bin/python -m pkgwhy tool validate tests/fixtures/private-tools/hello-tool --json
+.venv/bin/python -m pkgwhy registry blocked --json
 .venv/bin/python -m pkgwhy dynamic --help
 .venv/bin/python -m pkgwhy dynamic inspect --help
 ```

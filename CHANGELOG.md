@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.6.0 - 2026-07-01
+
+- Improve agent JSON consistency across decision commands with shared top-level fields for command, target, recommended next action, exit code, exit-code meaning, evidence summary, source freshness, and policy where available.
+- Add `pkgwhy.error.v1` JSON error objects for handled `--json` user/configuration errors in agent-facing gates.
+- Improve pyproject precheck routing for explicitly passed TOML files that contain a `[project]` table.
+- Add batch precheck summaries: `blocking_targets`, `review_targets`, `allowed_targets`, and `aggregate_recommendation`.
+- Add JSON output for registry trust-state commands: `trust`, `review`, `quarantine`, `block`, and `blocked`.
+- Make local registry `blocked` and `quarantined` trust states produce blocking `pkgwhy tool judge` decisions without weakening hash, signature, manifest, or static-analysis cautions.
+- Add non-executing `pkgwhy tool validate <path> --json` for local private-tool source validation.
+- Add static capability analysis for verified local tool bundles during `pkgwhy tool judge`.
+- Add `pkgwhy agent check <target> --json` as a safe dispatcher for package specs, requirements files, pyproject-style TOML files, and local tool folders/scripts.
+- Document the public agent integration contract, exit-code meanings, batch summary interpretation, pip gate safety model, and registry trust-state effects.
+- No cloud services, billing, hosted review, secrets, publishing, or OS-level sandboxing claims were added.
+
 ## 1.5.0 - 2026-06-30
 
 - Add `docs/commercial-agent-platform.md` to describe the future commercial and agent platform direction without implementing cloud services, billing, hosted review, API keys, or secrets.

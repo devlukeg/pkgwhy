@@ -8,11 +8,11 @@ Know why a package exists before you or your agent trusts it.
 
 ## Status
 
-`pkgwhy` 1.5.0 is a Python supply-chain security decision-support tool and local pip/CI install gate for developers and AI agents. It is useful for local package inspection, conservative static package review, agent-readable JSON, vulnerability and provenance foundations, policy checks, artifact precheck, guarded pip installs, CI package-gate templates, local registry trust states, commercial/agent platform planning, and the local private-registry and runner MVP.
+`pkgwhy` 1.6.0 is a Python supply-chain security decision-support tool and local pip/CI install gate for developers and AI agents. It is useful for local package inspection, conservative static package review, agent-readable JSON, vulnerability and provenance foundations, policy checks, artifact precheck, guarded pip installs, CI package-gate templates, local registry trust states, local tool validation, agent check dispatching, and the local private-registry and runner MVP.
 
 It is not a production security scanner, not malware-detection certainty, and not a full sandbox. Results are evidence and signals for review, not proof that a package is safe or malicious.
 
-Current packaged version: `1.5.0`.
+Current packaged version: `1.6.0`.
 
 ## What Works Now
 
@@ -33,6 +33,7 @@ pkgwhy pip install typer --dry-run
 pkgwhy pip install -r requirements.txt --dry-run
 pkgwhy agent policy --json
 pkgwhy agent precheck typer --json
+pkgwhy agent check typer --json
 pkgwhy risk typer
 pkgwhy audit --limit 5 --json
 pkgwhy audit --limit 5 --json --vulnerability-file ./osv-fixture.json
@@ -66,6 +67,8 @@ Implemented capabilities include:
 - Guarded pip install flow via `pkgwhy pip install`, with precheck first, stable exit codes, explicit overrides, and compact local decision logs.
 - Reusable GitHub Actions package-gate template with advisory, strict, and agent modes.
 - Local registry trust states for private tools: `trusted`, `reviewed`, `quarantined`, `blocked`, and `unknown`.
+- Local private-tool source validation with `pkgwhy tool validate <path> --json`.
+- Agent check dispatching with `pkgwhy agent check <target> --json` for package specs, dependency files, pyproject-style TOML, and local tool folders/scripts.
 - Commercial and agent platform architecture documentation for future local policy packs, team review, hosted evidence cache, shared organization policy, and agent install gateway.
 - Stable JSON output for agent workflows.
 - Schema-versioned agent policy and package precheck output.
@@ -85,6 +88,7 @@ pkgwhy registry quarantine local/my_tool
 pkgwhy registry blocked
 pkgwhy tool inspect local/my_tool
 pkgwhy tool judge local/my_tool --json
+pkgwhy tool validate ./my-tool-folder --json
 pkgwhy run local/my_tool
 pkgwhy run local/my_tool --non-interactive
 ```
@@ -240,9 +244,12 @@ Inspect the default agent policy and run a conservative agent precheck:
 pkgwhy agent policy --json
 pkgwhy agent precheck typer --json
 pkgwhy agent judge typer --json
+pkgwhy agent check typer --json
+pkgwhy agent check requirements.txt --json
+pkgwhy agent check ./my-tool-folder --json
 ```
 
-`pkgwhy agent precheck` applies policy to the package judgement. In the default non-interactive mode, unknown and high-risk package decisions are blocked until a human reviews the judgement evidence. The command writes a compact local decision log under the user config directory when that directory is writable and does not install, import, or execute the package.
+`pkgwhy agent precheck` applies policy to the package judgement. In the default non-interactive mode, unknown and high-risk package decisions are blocked until a human reviews the judgement evidence. `pkgwhy agent check` dispatches the target to the safest matching local check and returns one normalized decision envelope. These commands do not install, import, or execute inspected package code. Agent precheck writes a compact local decision log under the user config directory when that directory is writable.
 
 Run a conservative risk report:
 
@@ -351,9 +358,35 @@ Apply the stricter non-interactive runner policy:
 pkgwhy run local/my_tool --non-interactive
 ```
 
-## Agent JSON Contracts
+## Agent Integration Contract
 
 Compatibility policy: [docs/json-schema-compatibility.md](docs/json-schema-compatibility.md).
+
+Decision-oriented JSON commands expose a shared top-level contract where the field applies: `schema_version`, `command`, `target`, `target_type`, `decision`, `risk_level`, `confidence`, `recommended_next_action`, `exit_code`, `exit_code_meaning`, `warnings`, `evidence`, `evidence_summary`, `source_freshness`, `policy`, and `errors` for JSON error objects. Existing command-specific fields remain available.
+
+Exit code meanings are stable for agent consumers:
+
+- `0`: allowed or completed successfully.
+- `1`: review or caution required before proceeding.
+- `2`: blocked by policy or risk decision.
+- `3`: tool, configuration, or user input error.
+- `4`: external data unavailable or evidence incomplete.
+
+Decision meanings:
+
+- `allow`: proceed under normal review practices.
+- `allow_with_caution`: proceed only after reviewing warnings and evidence.
+- `review_manually`: ask a human to review before proceeding.
+- `sandbox_only`: use only inside a real sandbox; a Python virtual environment is not a full OS sandbox.
+- `block`: do not install, import, or run unless a human approves a policy exception.
+
+When `--json` is set and a handled user/configuration error occurs, commands emit `pkgwhy.error.v1` with `error_type`, `message`, `exit_code`, `exit_code_meaning`, `suggested_fix`, `command`, `target`, and `target_type` where available.
+
+Batch precheck JSON includes top-level `blocking_targets`, `review_targets`, `allowed_targets`, and `aggregate_recommendation` so automation can see the package-level reason without walking every nested result. Full evidence remains available, and `evidence_summary` gives compact counts, top evidence, top warnings, and top rule IDs for agents that need a smaller decision surface.
+
+The pip gate safety model is unchanged: `pkgwhy pip install` runs precheck before pip and does not invoke pip in dry-run mode, for blocked decisions, or when required evidence is unavailable. It does not sandbox pip or installed package code.
+
+Local registry trust state now affects tool judgement. `blocked` and `quarantined` tools return blocking `tool judge` decisions. `trusted` and `reviewed` are local human labels; they do not override hash mismatch, signature status, manifest approval requirements, or static capability warnings.
 
 Package judgement schema version: `pkgwhy.package_judgement.v1`.
 
@@ -494,12 +527,67 @@ Field shape for `pkgwhy tool judge <tool> --json`:
   "hash_status": "verified",
   "signature_status": "not_implemented",
   "warnings": [
-    "Signature verification is not implemented yet.",
-    "Static capability detection for tool bundles is not implemented yet."
+    "Signature verification is not implemented yet."
   ],
   "recommendation": "Review declared permissions and manifest metadata before running this private tool."
 }
 ```
+
+Tool validation schema version: `pkgwhy.tool_validation.v1`.
+
+Field shape for `pkgwhy tool validate ./folder --json`:
+
+```json
+{
+  "schema_version": "pkgwhy.tool_validation.v1",
+  "command": "pkgwhy tool validate",
+  "target": "./folder",
+  "target_type": "tool_folder",
+  "valid": true,
+  "decision": "allow",
+  "risk_level": "low",
+  "confidence": "high",
+  "entrypoint": "main.py",
+  "declared_permissions": [],
+  "detected_capabilities": [],
+  "issues": [],
+  "errors": [],
+  "warnings": [],
+  "policy": {
+    "executes_tool_code": false,
+    "writes_to_registry": false,
+    "symlinks_supported": false
+  }
+}
+```
+
+Tool validation reads local files and manifests, checks path boundaries and entrypoints, and statically analyzes files. It does not publish to a registry and does not execute tool code.
+
+Agent check schema version: `pkgwhy.agent_check.v1`.
+
+Field shape for `pkgwhy agent check <target> --json`:
+
+```json
+{
+  "schema_version": "pkgwhy.agent_check.v1",
+  "command": "pkgwhy agent check",
+  "target": "requirements.txt",
+  "target_type": "requirements",
+  "decision": "block",
+  "risk_level": "high",
+  "confidence": "medium",
+  "recommended_next_action": "conservative next action text",
+  "exit_code": 2,
+  "exit_code_meaning": "blocked by policy or risk decision",
+  "evidence_summary": {},
+  "result_schema_version": "pkgwhy.precheck_batch.v1",
+  "result": {
+    "schema_version": "pkgwhy.precheck_batch.v1"
+  }
+}
+```
+
+`pkgwhy agent check` currently dispatches package specs to package precheck, requirements files and pyproject-style TOML files to batch precheck, and local tool folders/scripts to tool validation.
 
 Supported package and tool decision values are:
 

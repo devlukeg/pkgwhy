@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tomllib
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
@@ -12,12 +13,14 @@ from rich.table import Table
 
 from pkgwhy.agent.judge import inspect_installed_package, judge_installed_package
 from pkgwhy.core.constants import CAPABILITY_EXPOSURE_NOTE
+from pkgwhy.core.decision_contract import build_json_error, exit_code_meaning
 from pkgwhy.core.models import (
     AgentPackagePrecheckResult,
     PackageMetadata,
     PipInstallGateResult,
     PrecheckBatchResult,
     PreInstallPackagePrecheckResult,
+    RegistryToolEntry,
     RiskRuleEvidence,
     ToolTrustState,
     VulnerabilityMatch,
@@ -43,6 +46,7 @@ from pkgwhy.registry.publish import publish_local_tool
 from pkgwhy.registry.run import RUNNER_ISOLATION_WARNING, run_local_tool
 from pkgwhy.registry.tools import judge_tool
 from pkgwhy.registry.trust import list_tools_by_trust_state, set_tool_trust_state
+from pkgwhy.registry.validate import validate_tool_source
 from pkgwhy.reports.audit import build_audit_report, render_audit_markdown
 from pkgwhy.typosquat.detector import detect_typosquats
 from pkgwhy.vulnerabilities.matching import match_vulnerabilities
@@ -372,7 +376,7 @@ def precheck(
     try:
         if requirements is not None:
             if package is not None:
-                raise PrecheckFileError("use either a package target or -r/--requirement, not both")
+                raise PrecheckTargetError("use either a package target or -r/--requirement, not both")
             result = build_requirements_precheck(
                 requirements,
                 pypi=pypi,
@@ -383,7 +387,7 @@ def precheck(
                 keep_artifacts=keep_artifacts,
                 artifact_dir=artifact_dir,
             )
-        elif package is not None and Path(package).name == "pyproject.toml":
+        elif package is not None and _should_route_precheck_as_pyproject(package):
             result = build_pyproject_precheck(
                 Path(package),
                 pypi=pypi,
@@ -408,6 +412,16 @@ def precheck(
         else:
             raise PrecheckTargetError("precheck requires a package target, pyproject.toml, or -r/--requirement file")
     except (PrecheckTargetError, PrecheckFileError) as exc:
+        if as_json:
+            _emit_json_error(
+                command="pkgwhy precheck",
+                target=str(requirements) if requirements is not None else package,
+                target_type=_precheck_error_target_type(package, requirements),
+                error_type=exc.__class__.__name__,
+                message=str(exc),
+                suggested_fix=_precheck_suggested_fix(package=package, requirements=requirements),
+            )
+            raise typer.Exit(3) from exc
         raise typer.BadParameter(str(exc)) from exc
 
     if isinstance(result, PrecheckBatchResult):
@@ -493,6 +507,18 @@ def pip_install(
             dry_run=dry_run,
         )
     except PipInstallGateError as exc:
+        if as_json:
+            target = str(requirements) if requirements is not None else " ".join(packages or []) or None
+            target_type = "requirements" if requirements is not None else ("package" if packages else None)
+            _emit_json_error(
+                command="pkgwhy pip install",
+                target=target,
+                target_type=target_type,
+                error_type=exc.__class__.__name__,
+                message=str(exc),
+                suggested_fix="Pass exactly one package requirement or use -r/--requirement with a supported requirements file.",
+            )
+            raise typer.Exit(3) from exc
         raise typer.BadParameter(str(exc)) from exc
 
     _emit_pip_install_gate(result, as_json=as_json)
@@ -621,6 +647,39 @@ def agent_judge(
     _emit_agent_package_precheck(result, as_json=as_json, log_path=log_path)
 
 
+@agent_app.command("check")
+def agent_check(
+    target: Annotated[str, typer.Argument(help="Package spec, dependency file, or local tool path to check.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Emit normalized agent decision JSON.")] = False,
+) -> None:
+    """Dispatch a target to the safest matching agent-facing check."""
+    try:
+        payload = _build_agent_check_payload(target)
+    except (PrecheckTargetError, PrecheckFileError, ValueError) as exc:
+        if as_json:
+            _emit_json_error(
+                command="pkgwhy agent check",
+                message=str(exc),
+                target=target,
+                target_type=_agent_check_target_type_hint(target),
+                error_type="agent_check_error",
+                suggested_fix="Pass a package spec, requirements file, pyproject-style TOML file, or local tool folder.",
+            )
+            raise typer.Exit(3) from exc
+        console.print(str(exc))
+        raise typer.Exit(1) from exc
+
+    if as_json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        raise typer.Exit(int(payload["exit_code"]))
+
+    console.print(f"Target: {payload['target']}")
+    console.print(f"Target type: {payload['target_type']}")
+    console.print(f"Decision: {payload['decision']}")
+    console.print(f"Recommendation: {payload['recommended_next_action']}")
+    raise typer.Exit(int(payload["exit_code"]))
+
+
 @dynamic_app.command("inspect")
 def dynamic_inspect(
     target: Annotated[str, typer.Argument(help="Target package or artifact reference to analyze dynamically.")],
@@ -687,6 +746,16 @@ def tool_judge(
     try:
         judgement = judge_tool(reference)
     except ValueError as exc:
+        if as_json:
+            _emit_json_error(
+                command="pkgwhy tool judge",
+                message=str(exc),
+                target=reference,
+                target_type="tool",
+                error_type="tool_lookup_error",
+                suggested_fix="Initialize or select a local registry and publish the tool before judging it.",
+            )
+            raise typer.Exit(3) from exc
         console.print(str(exc))
         raise typer.Exit(1) from exc
 
@@ -699,6 +768,33 @@ def tool_judge(
     console.print(f"Hash status: {judgement.hash_status.value}")
     console.print(f"Trust state: {judgement.trust_state.value}")
     console.print(f"Recommendation: {judgement.recommendation}")
+
+
+@tool_app.command("validate")
+def tool_validate(
+    path: Annotated[Path, typer.Argument(help="Local .py file or folder with pkgwhy.toml to validate.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Emit machine-readable JSON output.")] = False,
+) -> None:
+    """Validate a local private tool source without publishing or executing it."""
+    result = validate_tool_source(path)
+    if as_json:
+        print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
+        raise typer.Exit(result.exit_code or 0)
+
+    status = "valid" if result.valid else "invalid"
+    console.print(f"Tool source is {status}: {result.target}")
+    console.print(f"Decision: {result.decision.value}")
+    console.print(f"Recommendation: {result.recommended_next_action}")
+    if result.detected_capabilities:
+        console.print("Detected capability signals:")
+        for capability in result.detected_capabilities:
+            console.print(f"  - {capability}")
+    if result.issues:
+        console.print("Validation findings:")
+        for issue in result.issues:
+            location = f" ({issue.path})" if issue.path else ""
+            console.print(f"  - {issue.severity}: {issue.code}{location}: {issue.message}")
+    raise typer.Exit(result.exit_code or 0)
 
 
 @registry_app.command("init")
@@ -764,45 +860,268 @@ def registry_list() -> None:
 
 
 @registry_app.command("trust")
-def registry_trust(reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to mark trusted.")]) -> None:
+def registry_trust(
+    reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to mark trusted.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Emit machine-readable JSON output.")] = False,
+) -> None:
     """Mark a local registry tool as trusted."""
-    _set_registry_trust_state(reference, ToolTrustState.TRUSTED)
+    _set_registry_trust_state(reference, ToolTrustState.TRUSTED, command="pkgwhy registry trust", as_json=as_json)
 
 
 @registry_app.command("review")
-def registry_review(reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to mark reviewed.")]) -> None:
+def registry_review(
+    reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to mark reviewed.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Emit machine-readable JSON output.")] = False,
+) -> None:
     """Mark a local registry tool as reviewed."""
-    _set_registry_trust_state(reference, ToolTrustState.REVIEWED)
+    _set_registry_trust_state(reference, ToolTrustState.REVIEWED, command="pkgwhy registry review", as_json=as_json)
 
 
 @registry_app.command("quarantine")
 def registry_quarantine(
-    reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to quarantine.")]
+    reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to quarantine.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Emit machine-readable JSON output.")] = False,
 ) -> None:
     """Mark a local registry tool as quarantined."""
-    _set_registry_trust_state(reference, ToolTrustState.QUARANTINED)
+    _set_registry_trust_state(reference, ToolTrustState.QUARANTINED, command="pkgwhy registry quarantine", as_json=as_json)
 
 
 @registry_app.command("blocked")
-def registry_blocked() -> None:
+def registry_blocked(
+    as_json: Annotated[bool, typer.Option("--json", help="Emit machine-readable JSON output.")] = False,
+) -> None:
     """List tools marked blocked in the current registry."""
-    entries = list_tools_by_trust_state(ToolTrustState.BLOCKED)
+    try:
+        entries = list_tools_by_trust_state(ToolTrustState.BLOCKED)
+    except ValueError as exc:
+        if as_json:
+            _emit_json_error(
+                command="pkgwhy registry blocked",
+                message=str(exc),
+                target="blocked",
+                target_type="registry_trust_state",
+                error_type="registry_configuration_error",
+                suggested_fix="Run 'pkgwhy registry init <path>' or select a configured registry first.",
+            )
+            raise typer.Exit(3) from exc
+        console.print(str(exc))
+        raise typer.Exit(1) from exc
+    if as_json:
+        print(json.dumps(_registry_blocked_payload(entries), indent=2, sort_keys=True))
+        return
     _emit_registry_trust_table("Blocked tools", entries)
 
 
 @registry_app.command("block")
-def registry_block(reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to block.")]) -> None:
+def registry_block(
+    reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to block.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Emit machine-readable JSON output.")] = False,
+) -> None:
     """Mark a local registry tool as blocked."""
-    _set_registry_trust_state(reference, ToolTrustState.BLOCKED)
+    _set_registry_trust_state(reference, ToolTrustState.BLOCKED, command="pkgwhy registry block", as_json=as_json)
 
 
-def _set_registry_trust_state(reference: str, state: ToolTrustState) -> None:
+def _set_registry_trust_state(reference: str, state: ToolTrustState, *, command: str, as_json: bool) -> None:
     try:
         entry = set_tool_trust_state(reference, state)
     except ValueError as exc:
+        if as_json:
+            _emit_json_error(
+                command=command,
+                message=str(exc),
+                target=reference,
+                target_type="tool",
+                error_type="registry_configuration_error",
+                suggested_fix="Initialize or select a local registry and publish the tool before changing trust state.",
+            )
+            raise typer.Exit(3) from exc
         console.print(str(exc))
         raise typer.Exit(1) from exc
+    if as_json:
+        print(json.dumps(_registry_trust_state_payload(command, entry), indent=2, sort_keys=True))
+        return
     console.print(f"{entry.owner}/{entry.name} {entry.version}: {entry.trust_state.value}")
+
+
+def _registry_trust_state_payload(command: str, entry: RegistryToolEntry) -> dict[str, object]:
+    tool = f"{entry.owner}/{entry.name}"
+    return {
+        "schema_version": "pkgwhy.registry_trust_state.v1",
+        "command": command,
+        "target": tool,
+        "target_type": "tool",
+        "tool": tool,
+        "owner": entry.owner,
+        "name": entry.name,
+        "version": entry.version,
+        "trust_state": entry.trust_state.value,
+        "exit_code": 0,
+        "exit_code_meaning": exit_code_meaning(0),
+        "message": f"{tool} {entry.version}: {entry.trust_state.value}",
+        "evidence": [f"Local registry trust state is {entry.trust_state.value}."],
+    }
+
+
+def _registry_blocked_payload(entries: list[RegistryToolEntry]) -> dict[str, object]:
+    tools = [
+        {
+            "target": f"{entry.owner}/{entry.name}",
+            "tool": f"{entry.owner}/{entry.name}",
+            "owner": entry.owner,
+            "name": entry.name,
+            "version": entry.version,
+            "trust_state": entry.trust_state.value,
+        }
+        for entry in entries
+    ]
+    return {
+        "schema_version": "pkgwhy.registry_blocked.v1",
+        "command": "pkgwhy registry blocked",
+        "target": "blocked",
+        "target_type": "registry_trust_state",
+        "trust_state": ToolTrustState.BLOCKED.value,
+        "blocked_count": len(entries),
+        "tools": tools,
+        "exit_code": 0,
+        "exit_code_meaning": exit_code_meaning(0),
+        "evidence": [f"{len(entries)} local registry tools are blocked."],
+    }
+
+
+def _build_agent_check_payload(target: str) -> dict[str, object]:
+    result = _agent_check_result(target)
+    result_payload = result.model_dump(mode="json")
+    target_type = _agent_check_result_target_type(result_payload)
+    evidence = list(result_payload.get("evidence", []))
+    warnings = list(result_payload.get("warnings", []))
+    return {
+        "schema_version": "pkgwhy.agent_check.v1",
+        "command": "pkgwhy agent check",
+        "target": result_payload.get("target") or target,
+        "target_type": target_type,
+        "decision": result_payload["decision"],
+        "risk_level": result_payload["risk_level"],
+        "confidence": result_payload.get("confidence", "medium"),
+        "recommended_next_action": result_payload.get("recommended_next_action"),
+        "exit_code": result_payload["exit_code"],
+        "exit_code_meaning": result_payload["exit_code_meaning"],
+        "warnings": warnings,
+        "evidence": evidence,
+        "evidence_summary": result_payload.get("evidence_summary", {}),
+        "source_freshness": result_payload.get("source_freshness"),
+        "policy": result_payload.get("policy", {}),
+        "result_schema_version": result_payload["schema_version"],
+        "result": result_payload,
+    }
+
+
+def _agent_check_result(target: str):
+    path = Path(target)
+    if path.exists():
+        if path.is_dir():
+            return validate_tool_source(path)
+        if path.is_file() and path.suffix == ".py":
+            return validate_tool_source(path)
+        if path.is_file() and _should_route_precheck_as_pyproject(target):
+            return build_pyproject_precheck(path)
+        if path.is_file():
+            return build_requirements_precheck(path)
+    elif _looks_like_file_target(path):
+        raise ValueError(f"Target file or folder does not exist: {target}")
+    return build_package_precheck(target)
+
+
+def _agent_check_result_target_type(result_payload: dict[str, object]) -> str:
+    schema_version = result_payload.get("schema_version")
+    if schema_version == "pkgwhy.tool_validation.v1":
+        return "tool"
+    target_type = result_payload.get("target_type")
+    if isinstance(target_type, str):
+        return target_type
+    return "package"
+
+
+def _agent_check_target_type_hint(target: str) -> str | None:
+    path = Path(target)
+    if path.suffix.lower() == ".toml" or path.name == "pyproject.toml":
+        return "pyproject"
+    if path.suffix.lower() in {".txt", ".in"}:
+        return "requirements"
+    if path.suffix.lower() == ".py" or "/" in target:
+        return "tool"
+    return "package"
+
+
+def _looks_like_file_target(path: Path) -> bool:
+    return "/" in str(path) or path.name == "pyproject.toml" or path.suffix.lower() in {".toml", ".txt", ".in", ".py"}
+
+
+def _emit_json_error(
+    *,
+    command: str,
+    message: str,
+    target: str | None,
+    target_type: str | None,
+    error_type: str,
+    suggested_fix: str,
+) -> None:
+    print(
+        json.dumps(
+            build_json_error(
+                command=command,
+                target=target,
+                target_type=target_type,
+                error_type=error_type,
+                message=message,
+                suggested_fix=suggested_fix,
+            ),
+            indent=2,
+            sort_keys=True,
+        )
+    )
+
+
+def _should_route_precheck_as_pyproject(target: str) -> bool:
+    path = Path(target)
+    if path.name == "pyproject.toml":
+        return True
+    if path.suffix.lower() != ".toml":
+        return False
+    if not path.exists():
+        return True
+    if _toml_has_project_table(path):
+        return True
+    raise PrecheckFileError(f"TOML file is not a pyproject dependency file: {path}")
+
+
+def _toml_has_project_table(path: Path) -> bool:
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        raise PrecheckFileError(f"could not read TOML file {path}: {exc}") from exc
+    return isinstance(data.get("project"), dict)
+
+
+def _precheck_error_target_type(package: str | None, requirements: Path | None) -> str | None:
+    if requirements is not None:
+        return "requirements"
+    if package is None:
+        return None
+    if Path(package).suffix.lower() == ".toml" or Path(package).name == "pyproject.toml":
+        return "pyproject"
+    return "package"
+
+
+def _precheck_suggested_fix(*, package: str | None, requirements: Path | None) -> str:
+    if requirements is not None and package is not None:
+        return "Use either a package target or -r/--requirement, not both."
+    if requirements is not None:
+        return "Pass a readable requirements file with supported package requirement lines."
+    if package is None:
+        return "Pass a package requirement, -r/--requirement FILE, or a pyproject-style TOML file."
+    if Path(package).suffix.lower() == ".toml" or Path(package).name == "pyproject.toml":
+        return "Pass a readable pyproject-style TOML file with a [project] table."
+    return "Pass a valid package requirement such as 'requests' or 'requests==2.32.0'."
 
 
 def _emit_registry_trust_table(title: str, entries: list) -> None:

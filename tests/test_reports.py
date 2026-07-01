@@ -68,6 +68,14 @@ def test_audit_command_outputs_schema_versioned_json() -> None:
     assert result.exit_code == 0
     data = json.loads(result.output)
     assert data["schema_version"] == AUDIT_SCHEMA_VERSION
+    assert data["command"] == "pkgwhy audit"
+    assert data["target"] == "active_python_environment"
+    assert data["target_type"] == "environment"
+    assert data["decision"] in {"allow", "allow_with_caution", "review_manually", "sandbox_only", "block"}
+    assert data["exit_code_meaning"]
+    assert data["recommended_next_action"]
+    assert data["evidence_summary"]["evidence_count"] >= len(data["evidence"])
+    assert data["source_freshness"] == "installed_environment_snapshot"
     assert data["package_count"] == 1
     assert len(data["packages"]) == 1
     assert data["packages"][0]["schema_version"] == "pkgwhy.package_judgement.v1"
