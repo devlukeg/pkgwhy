@@ -1,5 +1,7 @@
 # pkgwhy
 
+pip install pkgwhy
+
 Know why a package exists before you or your agent trusts it.
 
 `pkgwhy` is an offline-first Python package intelligence, agent policy, and local private-tool CLI. It explains installed packages, inspects local package files without importing them, reports conservative vulnerability, provenance, and static security signals, produces agent-readable JSON judgements, and can publish and run local private Python tools from a local registry.
