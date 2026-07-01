@@ -532,6 +532,28 @@ class PreInstallPackagePrecheckResult(BaseModel):
         return self
 
 
+class PrecheckBatchTargetSummary(BaseModel):
+    """Compact source-linked summary for one target in a batch precheck."""
+
+    target: str
+    package: str
+    requested: str
+    decision: AgentDecision
+    risk_level: RiskLevel
+    exit_code: int = Field(ge=0)
+    exit_code_meaning: str | None = None
+    reason: str
+    source: str
+    source_line: int | None = Field(default=None, ge=1)
+    source_index: int | None = Field(default=None, ge=1)
+    source_section: str | None = None
+
+    @model_validator(mode="after")
+    def populate_exit_code_meaning(self) -> PrecheckBatchTargetSummary:
+        self.exit_code_meaning = exit_code_meaning(self.exit_code)
+        return self
+
+
 class PrecheckBatchResult(BaseModel):
     """Schema-versioned pre-install gate result for dependency declaration files."""
 
@@ -547,11 +569,15 @@ class PrecheckBatchResult(BaseModel):
     risk_level: RiskLevel
     confidence: Confidence
     recommendation: str | None = None
+    aggregate_recommendation: str | None = None
     recommended_next_action: str | None = None
     warnings: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
     evidence_summary: dict[str, object] = Field(default_factory=dict)
     source_freshness: str = "dependency_file_snapshot"
+    blocking_targets: list[PrecheckBatchTargetSummary] = Field(default_factory=list)
+    review_targets: list[PrecheckBatchTargetSummary] = Field(default_factory=list)
+    allowed_targets: list[PrecheckBatchTargetSummary] = Field(default_factory=list)
     results: list[PreInstallPackagePrecheckResult] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -561,18 +587,58 @@ class PrecheckBatchResult(BaseModel):
         self.target = self.target or self.source
         self.exit_code_meaning = exit_code_meaning(self.exit_code)
         self.recommendation = self.recommendation or recommended_next_action(self.decision)
+        self.aggregate_recommendation = self.aggregate_recommendation or self.recommendation
         self.recommended_next_action = self.recommended_next_action or self.recommendation
         if not self.evidence:
             self.evidence = [
                 f"Read dependency declarations from {self.source}.",
                 f"Evaluated {self.package_count} package requirement(s) without installing dependencies.",
             ]
+        if not (self.blocking_targets or self.review_targets or self.allowed_targets):
+            summaries = [
+                _precheck_batch_summary_from_result(result, source=self.source, source_index=index)
+                for index, result in enumerate(self.results, start=1)
+            ]
+            self.blocking_targets = [item for item in summaries if item.exit_code == 2]
+            self.review_targets = [item for item in summaries if item.exit_code in {1, 4}]
+            self.allowed_targets = [item for item in summaries if item.exit_code == 0]
         self.evidence_summary = compact_evidence_summary(
             evidence=[*self.evidence, *(item for result in self.results for item in result.evidence)],
             warnings=self.warnings,
             risk_rules=[rule for result in self.results for rule in result.package_judgement.risk_rules],
         )
         return self
+
+
+def _precheck_batch_summary_from_result(
+    result: PreInstallPackagePrecheckResult,
+    *,
+    source: str,
+    source_line: int | None = None,
+    source_index: int | None = None,
+    source_section: str | None = None,
+) -> PrecheckBatchTargetSummary:
+    return PrecheckBatchTargetSummary(
+        target=result.requested,
+        package=result.package,
+        requested=result.requested,
+        decision=result.decision,
+        risk_level=result.risk_level,
+        exit_code=result.exit_code,
+        reason=_precheck_batch_summary_reason(result),
+        source=source,
+        source_line=source_line,
+        source_index=source_index,
+        source_section=source_section,
+    )
+
+
+def _precheck_batch_summary_reason(result: PreInstallPackagePrecheckResult) -> str:
+    if result.policy_reasons:
+        return result.policy_reasons[0]
+    if result.warnings:
+        return result.warnings[0]
+    return result.recommendation
 
 
 class PipInstallGateResult(BaseModel):

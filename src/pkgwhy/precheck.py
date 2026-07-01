@@ -29,6 +29,7 @@ from pkgwhy.core.models import (
     PackageSize,
     PrecheckArtifactSummary,
     PrecheckBatchResult,
+    PrecheckBatchTargetSummary,
     PreInstallPackagePrecheckResult,
     PrecheckSignalSummary,
     ProjectUrls,
@@ -72,9 +73,21 @@ class PrecheckFileError(ValueError):
 
 
 @dataclass(frozen=True)
+class DependencyDeclaration:
+    requirement: str
+    source_line: int | None = None
+    source_index: int | None = None
+    source_section: str | None = None
+
+
+@dataclass(frozen=True)
 class DependencyDeclarations:
-    requirements: list[str]
+    entries: list[DependencyDeclaration]
     warnings: list[str]
+
+    @property
+    def requirements(self) -> list[str]:
+        return [entry.requirement for entry in self.entries]
 
 
 def build_package_precheck(
@@ -269,7 +282,7 @@ def build_requirements_precheck(
     return _build_batch_precheck(
         target_type="requirements",
         source=str(path),
-        requirements=declarations.requirements,
+        declarations=declarations.entries,
         input_warnings=declarations.warnings,
         pypi=pypi,
         osv=osv,
@@ -298,7 +311,7 @@ def build_pyproject_precheck(
     return _build_batch_precheck(
         target_type="pyproject",
         source=str(path),
-        requirements=declarations.requirements,
+        declarations=declarations.entries,
         input_warnings=declarations.warnings,
         pypi=pypi,
         osv=osv,
@@ -335,7 +348,7 @@ def _build_batch_precheck(
     *,
     target_type: str,
     source: str,
-    requirements: list[str],
+    declarations: list[DependencyDeclaration],
     input_warnings: list[str] | None,
     pypi: bool,
     osv: bool,
@@ -347,7 +360,7 @@ def _build_batch_precheck(
 ) -> PrecheckBatchResult:
     results = [
         build_package_precheck(
-            requirement,
+            declaration.requirement,
             pypi=pypi,
             osv=osv,
             osv_cache_dir=osv_cache_dir,
@@ -356,13 +369,14 @@ def _build_batch_precheck(
             keep_artifacts=keep_artifacts,
             artifact_dir=artifact_dir,
         )
-        for requirement in requirements
+        for declaration in declarations
     ]
     warnings: list[str] = []
     warnings.extend(input_warnings or [])
-    if not requirements:
+    if not declarations:
         warnings.append(f"No supported package requirements found in {source}.")
     warnings.extend(warning for result in results for warning in result.warnings)
+    summaries = _batch_target_summaries(source, declarations, results)
     return PrecheckBatchResult(
         target_type=target_type,
         source=source,
@@ -372,8 +386,45 @@ def _build_batch_precheck(
         risk_level=_highest_risk([result.risk_level for result in results]),
         confidence=_lowest_confidence([result.confidence for result in results]),
         warnings=sorted(set(warnings)),
+        blocking_targets=[item for item in summaries if item.exit_code == 2],
+        review_targets=[item for item in summaries if item.exit_code in {1, 4}],
+        allowed_targets=[item for item in summaries if item.exit_code == 0],
         results=results,
     )
+
+
+def _batch_target_summaries(
+    source: str,
+    declarations: list[DependencyDeclaration],
+    results: list[PreInstallPackagePrecheckResult],
+) -> list[PrecheckBatchTargetSummary]:
+    summaries: list[PrecheckBatchTargetSummary] = []
+    for index, result in enumerate(results):
+        declaration = declarations[index] if index < len(declarations) else DependencyDeclaration(result.requested)
+        summaries.append(
+            PrecheckBatchTargetSummary(
+                target=result.requested,
+                package=result.package,
+                requested=result.requested,
+                decision=result.decision,
+                risk_level=result.risk_level,
+                exit_code=result.exit_code,
+                reason=_batch_target_reason(result),
+                source=source,
+                source_line=declaration.source_line,
+                source_index=declaration.source_index or index + 1,
+                source_section=declaration.source_section,
+            )
+        )
+    return summaries
+
+
+def _batch_target_reason(result: PreInstallPackagePrecheckResult) -> str:
+    if result.policy_reasons:
+        return result.policy_reasons[0]
+    if result.warnings:
+        return result.warnings[0]
+    return result.recommendation
 
 
 def _requirements_from_file(path: Path) -> DependencyDeclarations:
@@ -383,7 +434,7 @@ def _requirements_from_file(path: Path) -> DependencyDeclarations:
         lines = path.read_text(encoding="utf-8").splitlines()
     except OSError as exc:
         raise PrecheckFileError(f"could not read requirements file {path}: {exc}") from exc
-    requirements: list[str] = []
+    entries: list[DependencyDeclaration] = []
     warnings: list[str] = []
     for line_number, line in _logical_requirement_lines(lines):
         cleaned = line.split("#", 1)[0].strip()
@@ -415,8 +466,15 @@ def _requirements_from_file(path: Path) -> DependencyDeclarations:
                 f"Skipped requirements line {line_number}: URL, VCS, or file requirement is not evaluated by precheck."
             )
             continue
-        requirements.append(normalized)
-    return DependencyDeclarations(requirements=requirements, warnings=warnings)
+        entries.append(
+            DependencyDeclaration(
+                requirement=normalized,
+                source_line=line_number,
+                source_index=len(entries) + 1,
+                source_section="requirements",
+            )
+        )
+    return DependencyDeclarations(entries=entries, warnings=warnings)
 
 
 def _requirements_from_pyproject(path: Path) -> DependencyDeclarations:
@@ -428,7 +486,7 @@ def _requirements_from_pyproject(path: Path) -> DependencyDeclarations:
         raise PrecheckFileError(f"could not read pyproject dependencies from {path}: {exc}") from exc
     project = data.get("project")
     project = project if isinstance(project, dict) else {}
-    requirements: list[str] = []
+    entries: list[DependencyDeclaration] = []
     warnings: list[str] = []
     dependencies = project.get("dependencies", [])
     if dependencies is not None and not isinstance(dependencies, list):
@@ -438,7 +496,13 @@ def _requirements_from_pyproject(path: Path) -> DependencyDeclarations:
         if not isinstance(dependency, str):
             warnings.append(f"Skipped project.dependencies entry {index}: dependency is not a string.")
         elif _is_valid_requirement(dependency):
-            requirements.append(dependency)
+            entries.append(
+                DependencyDeclaration(
+                    requirement=dependency,
+                    source_index=index,
+                    source_section="project.dependencies",
+                )
+            )
         else:
             warnings.append(f"Skipped project.dependencies entry {index}: malformed package requirement.")
     optional = project.get("optional-dependencies")
@@ -453,12 +517,18 @@ def _requirements_from_pyproject(path: Path) -> DependencyDeclarations:
                         f"Skipped project.optional-dependencies.{group} entry {index}: dependency is not a string."
                     )
                 elif _is_valid_requirement(dependency):
-                    requirements.append(dependency)
+                    entries.append(
+                        DependencyDeclaration(
+                            requirement=dependency,
+                            source_index=index,
+                            source_section=f"project.optional-dependencies.{group}",
+                        )
+                    )
                 else:
                     warnings.append(
                         f"Skipped project.optional-dependencies.{group} entry {index}: malformed package requirement."
                     )
-    return DependencyDeclarations(requirements=requirements, warnings=warnings)
+    return DependencyDeclarations(entries=entries, warnings=warnings)
 
 
 def _is_valid_requirement(value: str) -> bool:

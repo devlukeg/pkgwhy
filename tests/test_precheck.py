@@ -302,6 +302,19 @@ def test_precheck_cli_requirements_file_json(tmp_path: Path) -> None:
     assert data["source_freshness"] == "dependency_file_snapshot"
     assert data["target_type"] == "requirements"
     assert data["package_count"] == 2
+    assert data["aggregate_recommendation"] == data["recommended_next_action"]
+    assert [item["requested"] for item in data["blocking_targets"]] == [
+        "typer",
+        "definitely-not-installed-pkgwhy-precheck-req-1==1.0.0",
+    ]
+    assert data["blocking_targets"][0]["source"] == str(requirements)
+    assert data["blocking_targets"][0]["source_line"] == 1
+    assert data["blocking_targets"][0]["source_index"] == 1
+    assert data["blocking_targets"][0]["source_section"] == "requirements"
+    assert data["blocking_targets"][0]["reason"]
+    assert data["blocking_targets"][1]["source_line"] == 4
+    assert data["review_targets"] == []
+    assert data["allowed_targets"] == []
     assert [item["requested"] for item in data["results"]] == [
         "typer",
         "definitely-not-installed-pkgwhy-precheck-req-1==1.0.0",
@@ -356,6 +369,19 @@ dev = ["definitely-not-installed-pkgwhy-precheck-pyproject-1==2.0.0"]
     assert data["source_freshness"] == "dependency_file_snapshot"
     assert data["target_type"] == "pyproject"
     assert data["package_count"] == 2
+    assert data["aggregate_recommendation"] == data["recommended_next_action"]
+    assert [item["requested"] for item in data["blocking_targets"]] == [
+        "typer",
+        "definitely-not-installed-pkgwhy-precheck-pyproject-1==2.0.0",
+    ]
+    assert data["blocking_targets"][0]["source"] == str(pyproject)
+    assert data["blocking_targets"][0]["source_line"] is None
+    assert data["blocking_targets"][0]["source_index"] == 1
+    assert data["blocking_targets"][0]["source_section"] == "project.dependencies"
+    assert data["blocking_targets"][0]["reason"]
+    assert data["blocking_targets"][1]["source_section"] == "project.optional-dependencies.dev"
+    assert data["review_targets"] == []
+    assert data["allowed_targets"] == []
     assert data["exit_code"] == 2
     assert data["results"][0]["requested"] == "typer"
     assert data["results"][1]["requested"] == "definitely-not-installed-pkgwhy-precheck-pyproject-1==2.0.0"
