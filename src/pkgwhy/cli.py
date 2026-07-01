@@ -645,6 +645,39 @@ def agent_judge(
     _emit_agent_package_precheck(result, as_json=as_json, log_path=log_path)
 
 
+@agent_app.command("check")
+def agent_check(
+    target: Annotated[str, typer.Argument(help="Package spec, dependency file, or local tool path to check.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Emit normalized agent decision JSON.")] = False,
+) -> None:
+    """Dispatch a target to the safest matching agent-facing check."""
+    try:
+        payload = _build_agent_check_payload(target)
+    except (PrecheckTargetError, PrecheckFileError, ValueError) as exc:
+        if as_json:
+            _emit_json_error(
+                command="pkgwhy agent check",
+                message=str(exc),
+                target=target,
+                target_type=_agent_check_target_type_hint(target),
+                error_type="agent_check_error",
+                suggested_fix="Pass a package spec, requirements file, pyproject-style TOML file, or local tool folder.",
+            )
+            raise typer.Exit(3) from exc
+        console.print(str(exc))
+        raise typer.Exit(1) from exc
+
+    if as_json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        raise typer.Exit(int(payload["exit_code"]))
+
+    console.print(f"Target: {payload['target']}")
+    console.print(f"Target type: {payload['target_type']}")
+    console.print(f"Decision: {payload['decision']}")
+    console.print(f"Recommendation: {payload['recommended_next_action']}")
+    raise typer.Exit(int(payload["exit_code"]))
+
+
 @dynamic_app.command("inspect")
 def dynamic_inspect(
     target: Annotated[str, typer.Argument(help="Target package or artifact reference to analyze dynamically.")],
@@ -951,6 +984,74 @@ def _registry_blocked_payload(entries: list[RegistryToolEntry]) -> dict[str, obj
         "exit_code_meaning": exit_code_meaning(0),
         "evidence": [f"{len(entries)} local registry tools are blocked."],
     }
+
+
+def _build_agent_check_payload(target: str) -> dict[str, object]:
+    result = _agent_check_result(target)
+    result_payload = result.model_dump(mode="json")
+    target_type = _agent_check_result_target_type(result_payload)
+    evidence = list(result_payload.get("evidence", []))
+    warnings = list(result_payload.get("warnings", []))
+    return {
+        "schema_version": "pkgwhy.agent_check.v1",
+        "command": "pkgwhy agent check",
+        "target": result_payload.get("target") or target,
+        "target_type": target_type,
+        "decision": result_payload["decision"],
+        "risk_level": result_payload["risk_level"],
+        "confidence": result_payload.get("confidence", "medium"),
+        "recommended_next_action": result_payload.get("recommended_next_action"),
+        "exit_code": result_payload["exit_code"],
+        "exit_code_meaning": result_payload["exit_code_meaning"],
+        "warnings": warnings,
+        "evidence": evidence,
+        "evidence_summary": result_payload.get("evidence_summary", {}),
+        "source_freshness": result_payload.get("source_freshness"),
+        "policy": result_payload.get("policy", {}),
+        "result_schema_version": result_payload["schema_version"],
+        "result": result_payload,
+    }
+
+
+def _agent_check_result(target: str):
+    path = Path(target)
+    if path.exists():
+        if path.is_dir() and (path / "pkgwhy.toml").exists():
+            return validate_tool_source(path)
+        if path.is_file() and path.suffix == ".py":
+            return validate_tool_source(path)
+        if path.is_file() and _should_route_precheck_as_pyproject(target):
+            return build_pyproject_precheck(path)
+        if path.is_file():
+            return build_requirements_precheck(path)
+    elif _looks_like_file_target(path):
+        raise ValueError(f"Target file or folder does not exist: {target}")
+    return build_package_precheck(target)
+
+
+def _agent_check_result_target_type(result_payload: dict[str, object]) -> str:
+    schema_version = result_payload.get("schema_version")
+    if schema_version == "pkgwhy.tool_validation.v1":
+        return "tool"
+    target_type = result_payload.get("target_type")
+    if isinstance(target_type, str):
+        return target_type
+    return "package"
+
+
+def _agent_check_target_type_hint(target: str) -> str | None:
+    path = Path(target)
+    if path.suffix.lower() == ".toml" or path.name == "pyproject.toml":
+        return "pyproject"
+    if path.suffix.lower() in {".txt", ".in"}:
+        return "requirements"
+    if path.suffix.lower() == ".py" or "/" in target:
+        return "tool"
+    return "package"
+
+
+def _looks_like_file_target(path: Path) -> bool:
+    return "/" in str(path) or path.name == "pyproject.toml" or path.suffix.lower() in {".toml", ".txt", ".in", ".py"}
 
 
 def _emit_json_error(
