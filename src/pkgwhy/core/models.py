@@ -969,10 +969,19 @@ class ToolValidationResult(BaseModel):
 
     @model_validator(mode="after")
     def populate_decision_contract(self) -> ToolValidationResult:
-        if not self.errors:
-            self.errors = [issue.message for issue in self.issues if issue.severity == "error"]
-        if not self.warnings:
-            self.warnings = [issue.message for issue in self.issues if issue.severity == "warning"]
+        issue_errors = [issue.message for issue in self.issues if issue.severity == "error"]
+        issue_warnings = [issue.message for issue in self.issues if issue.severity == "warning"]
+        if issue_errors:
+            self.errors = list(dict.fromkeys([*self.errors, *issue_errors]))
+        if issue_warnings:
+            self.warnings = list(dict.fromkeys([*self.warnings, *issue_warnings]))
+        if self.errors:
+            self.valid = False
+            self.decision = AgentDecision.BLOCK
+            if self.risk_level in {RiskLevel.LOW, RiskLevel.MEDIUM}:
+                self.risk_level = RiskLevel.HIGH
+        elif not self.valid:
+            self.decision = AgentDecision.BLOCK
         fallback = (
             "Tool source validates for local registry use."
             if self.valid and not self.warnings
@@ -981,7 +990,8 @@ class ToolValidationResult(BaseModel):
         if not self.valid:
             fallback = "Fix validation errors before publishing or running this tool."
         self.recommended_next_action = recommended_next_action(self.decision, fallback)
-        self.exit_code = self.exit_code if self.exit_code is not None else exit_code_for_decision(self.decision)
+        if self.exit_code is None or (self.errors and self.exit_code in {0, 1}):
+            self.exit_code = exit_code_for_decision(self.decision)
         self.exit_code_meaning = exit_code_meaning(self.exit_code)
         if not self.evidence:
             self.evidence = ["Validated local tool source without executing tool code."]

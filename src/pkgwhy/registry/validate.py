@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,6 +30,24 @@ SUPPORTED_DECLARED_PERMISSIONS = {
     "package_manager",
     "shell",
     "subprocess",
+}
+CAPABILITY_PERMISSION_LABELS = {
+    "Browser or JavaScript code present": {"browser_code"},
+    "Credential or token access patterns": {"credentials"},
+    "Deserialisation risk signals": {"deserialisation"},
+    "Dynamic code execution signals": {"dynamic_code"},
+    "Dynamic import signals": {"dynamic_code"},
+    "Encoded payload handling signals": {"dynamic_code"},
+    "Environment variable access signals": {"environment"},
+    "Filesystem access signals": {"filesystem_read"},
+    "JavaScript dynamic code execution signals": {"dynamic_code", "browser_code"},
+    "JavaScript obfuscation signals": {"browser_code"},
+    "Native compiled code present": {"native_code"},
+    "Network access signals": {"network"},
+    "Package manager manipulation signals": {"package_manager"},
+    "Shell script files present": {"shell"},
+    "Subprocess or shell execution signals": {"subprocess"},
+    "WASM binary code present": {"native_code"},
 }
 
 
@@ -189,32 +208,53 @@ def _validate_folder_source(source: Path, *, target: str) -> ToolValidationResul
 
 def _collect_source_files(source: Path, issues: list[ToolValidationIssue]) -> list[Path]:
     files: list[Path] = []
-    for child in sorted(source.rglob("*")):
-        relative = child.relative_to(source)
-        if any(part in EXCLUDED_DIRS for part in relative.parts):
-            issues.append(
-                ToolValidationIssue(
-                    code="unsupported_path_skipped",
-                    severity="warning",
-                    message=f"Unsupported path is skipped by tool bundling: {relative}",
-                    path=str(relative),
-                    suggested_fix="Remove generated, virtualenv, or VCS paths before publishing.",
+    for root, dirnames, filenames in os.walk(source, followlinks=False):
+        root_path = Path(root)
+        kept_dirnames: list[str] = []
+        for dirname in sorted(dirnames):
+            child = root_path / dirname
+            relative = child.relative_to(source)
+            if dirname in EXCLUDED_DIRS:
+                issues.append(
+                    ToolValidationIssue(
+                        code="unsupported_path_skipped",
+                        severity="warning",
+                        message=f"Unsupported path is skipped by tool bundling: {relative}",
+                        path=str(relative),
+                        suggested_fix="Remove generated, virtualenv, or VCS paths before publishing.",
+                    )
                 )
-            )
-            continue
-        if child.is_symlink():
-            issues.append(
-                ToolValidationIssue(
-                    code="symlink_unsupported",
-                    severity="error",
-                    message=f"Symlinks are not supported in tool bundles: {relative}",
-                    path=str(relative),
-                    suggested_fix="Replace symlinks with regular files inside the tool folder.",
+                continue
+            if child.is_symlink():
+                issues.append(
+                    ToolValidationIssue(
+                        code="symlink_unsupported",
+                        severity="error",
+                        message=f"Symlinks are not supported in tool bundles: {relative}",
+                        path=str(relative),
+                        suggested_fix="Replace symlinks with regular files inside the tool folder.",
+                    )
                 )
-            )
-            continue
-        if child.is_file():
-            files.append(child)
+                continue
+            kept_dirnames.append(dirname)
+        dirnames[:] = kept_dirnames
+
+        for filename in sorted(filenames):
+            child = root_path / filename
+            relative = child.relative_to(source)
+            if child.is_symlink():
+                issues.append(
+                    ToolValidationIssue(
+                        code="symlink_unsupported",
+                        severity="error",
+                        message=f"Symlinks are not supported in tool bundles: {relative}",
+                        path=str(relative),
+                        suggested_fix="Replace symlinks with regular files inside the tool folder.",
+                    )
+                )
+                continue
+            if child.is_file():
+                files.append(child)
     return files
 
 
@@ -310,21 +350,26 @@ def _add_permission_warnings(
     manifest: ToolManifest,
     detected_capabilities: list[str],
 ) -> None:
-    permission_relevant_capabilities = [
-        capability
-        for capability in detected_capabilities
-        if capability != "CLI or plugin entrypoints declared in package metadata"
-    ]
-    if permission_relevant_capabilities and not manifest.declared_permissions:
+    expected_permissions = _expected_permissions_for_capabilities(detected_capabilities)
+    missing_permissions = sorted(expected_permissions - set(manifest.declared_permissions))
+    if missing_permissions:
         issues.append(
             ToolValidationIssue(
                 code="declared_permissions_missing",
                 severity="warning",
-                message="Static capability signals were found but the manifest declares no permissions.",
+                message="Static capability signals are not covered by declared permissions: "
+                + ", ".join(missing_permissions),
                 path=MANIFEST_FILENAME,
-                suggested_fix="Declare the expected tool permissions or review the detected capability signals.",
+                suggested_fix="Declare the expected tool permissions or review why the signals are acceptable.",
             )
         )
+
+
+def _expected_permissions_for_capabilities(detected_capabilities: list[str]) -> set[str]:
+    expected: set[str] = set()
+    for capability in detected_capabilities:
+        expected.update(CAPABILITY_PERMISSION_LABELS.get(capability, set()))
+    return expected
 
 
 def _result(

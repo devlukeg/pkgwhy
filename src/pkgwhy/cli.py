@@ -376,7 +376,7 @@ def precheck(
     try:
         if requirements is not None:
             if package is not None:
-                raise PrecheckFileError("use either a package target or -r/--requirement, not both")
+                raise PrecheckTargetError("use either a package target or -r/--requirement, not both")
             result = build_requirements_precheck(
                 requirements,
                 pypi=pypi,
@@ -415,7 +415,7 @@ def precheck(
         if as_json:
             _emit_json_error(
                 command="pkgwhy precheck",
-                target=package or str(requirements) if requirements is not None else package,
+                target=str(requirements) if requirements is not None else package,
                 target_type=_precheck_error_target_type(package, requirements),
                 error_type=exc.__class__.__name__,
                 message=str(exc),
@@ -508,10 +508,12 @@ def pip_install(
         )
     except PipInstallGateError as exc:
         if as_json:
+            target = str(requirements) if requirements is not None else " ".join(packages or []) or None
+            target_type = "requirements" if requirements is not None else ("package" if packages else None)
             _emit_json_error(
                 command="pkgwhy pip install",
-                target=str(requirements) if requirements is not None else " ".join(packages or []) or None,
-                target_type="requirements" if requirements is not None else "package",
+                target=target,
+                target_type=target_type,
                 error_type=exc.__class__.__name__,
                 message=str(exc),
                 suggested_fix="Pass exactly one package requirement or use -r/--requirement with a supported requirements file.",
@@ -1016,7 +1018,7 @@ def _build_agent_check_payload(target: str) -> dict[str, object]:
 def _agent_check_result(target: str):
     path = Path(target)
     if path.exists():
-        if path.is_dir() and (path / "pkgwhy.toml").exists():
+        if path.is_dir():
             return validate_tool_source(path)
         if path.is_file() and path.suffix == ".py":
             return validate_tool_source(path)

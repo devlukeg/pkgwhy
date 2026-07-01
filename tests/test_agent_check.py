@@ -69,3 +69,18 @@ def test_agent_check_dispatches_local_tool_folder() -> None:
     assert data["decision"] == "allow"
     assert data["result_schema_version"] == "pkgwhy.tool_validation.v1"
     assert data["result"]["policy"]["executes_tool_code"] is False
+
+
+def test_agent_check_dispatches_malformed_local_directory_to_tool_validation(tmp_path: Path) -> None:
+    tool_dir = tmp_path / "missing-manifest-tool"
+    tool_dir.mkdir()
+
+    result, data = _json_result(["agent", "check", str(tool_dir), "--json"])
+
+    assert result.exit_code == 2
+    assert data["schema_version"] == "pkgwhy.agent_check.v1"
+    assert data["target_type"] == "tool"
+    assert data["decision"] == "block"
+    assert data["result_schema_version"] == "pkgwhy.tool_validation.v1"
+    assert data["result"]["valid"] is False
+    assert data["result"]["issues"][0]["code"] == "manifest_invalid"

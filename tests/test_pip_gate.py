@@ -362,7 +362,7 @@ def test_pip_gate_cli_json_error_when_target_missing(tmp_path: Path) -> None:
         "schema_version": "pkgwhy.error.v1",
         "command": "pkgwhy pip install",
         "target": None,
-        "target_type": "package",
+        "target_type": None,
         "error_type": "PipInstallGateError",
         "message": "pip install gate requires a package target or -r/--requirement file",
         "exit_code": 3,

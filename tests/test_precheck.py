@@ -324,6 +324,22 @@ def test_precheck_cli_requirements_file_json(tmp_path: Path) -> None:
     assert any("recursive include is not evaluated" in warning for warning in data["warnings"])
 
 
+def test_precheck_cli_json_error_for_conflicting_package_and_requirements(tmp_path: Path) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("typer\n", encoding="utf-8")
+
+    result = runner.invoke(app, ["precheck", "typer", "-r", str(requirements), "--json"])
+
+    assert result.exit_code == 3
+    data = json.loads(result.output)
+    assert data["schema_version"] == "pkgwhy.error.v1"
+    assert data["command"] == "pkgwhy precheck"
+    assert data["target"] == str(requirements)
+    assert data["target_type"] == "requirements"
+    assert data["error_type"] == "PrecheckTargetError"
+    assert data["exit_code_meaning"] == "tool, configuration, or user input error"
+
+
 def test_precheck_requirements_normalizes_hash_locked_lines_and_skips_direct_references(tmp_path: Path) -> None:
     requirements = tmp_path / "requirements.txt"
     requirements.write_text(

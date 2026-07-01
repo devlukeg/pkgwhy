@@ -412,7 +412,7 @@ def _batch_target_summaries(
                 reason=_batch_target_reason(result),
                 source=source,
                 source_line=declaration.source_line,
-                source_index=declaration.source_index or index + 1,
+                source_index=declaration.source_index if declaration.source_index is not None else index + 1,
                 source_section=declaration.source_section,
             )
         )
