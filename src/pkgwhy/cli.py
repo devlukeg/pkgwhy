@@ -13,13 +13,14 @@ from rich.table import Table
 
 from pkgwhy.agent.judge import inspect_installed_package, judge_installed_package
 from pkgwhy.core.constants import CAPABILITY_EXPOSURE_NOTE
-from pkgwhy.core.decision_contract import build_json_error
+from pkgwhy.core.decision_contract import build_json_error, exit_code_meaning
 from pkgwhy.core.models import (
     AgentPackagePrecheckResult,
     PackageMetadata,
     PipInstallGateResult,
     PrecheckBatchResult,
     PreInstallPackagePrecheckResult,
+    RegistryToolEntry,
     RiskRuleEvidence,
     ToolTrustState,
     VulnerabilityMatch,
@@ -709,6 +710,16 @@ def tool_judge(
     try:
         judgement = judge_tool(reference)
     except ValueError as exc:
+        if as_json:
+            _emit_json_error(
+                command="pkgwhy tool judge",
+                message=str(exc),
+                target=reference,
+                target_type="tool",
+                error_type="tool_lookup_error",
+                suggested_fix="Initialize or select a local registry and publish the tool before judging it.",
+            )
+            raise typer.Exit(3) from exc
         console.print(str(exc))
         raise typer.Exit(1) from exc
 
@@ -786,45 +797,132 @@ def registry_list() -> None:
 
 
 @registry_app.command("trust")
-def registry_trust(reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to mark trusted.")]) -> None:
+def registry_trust(
+    reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to mark trusted.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Emit machine-readable JSON output.")] = False,
+) -> None:
     """Mark a local registry tool as trusted."""
-    _set_registry_trust_state(reference, ToolTrustState.TRUSTED)
+    _set_registry_trust_state(reference, ToolTrustState.TRUSTED, command="pkgwhy registry trust", as_json=as_json)
 
 
 @registry_app.command("review")
-def registry_review(reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to mark reviewed.")]) -> None:
+def registry_review(
+    reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to mark reviewed.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Emit machine-readable JSON output.")] = False,
+) -> None:
     """Mark a local registry tool as reviewed."""
-    _set_registry_trust_state(reference, ToolTrustState.REVIEWED)
+    _set_registry_trust_state(reference, ToolTrustState.REVIEWED, command="pkgwhy registry review", as_json=as_json)
 
 
 @registry_app.command("quarantine")
 def registry_quarantine(
-    reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to quarantine.")]
+    reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to quarantine.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Emit machine-readable JSON output.")] = False,
 ) -> None:
     """Mark a local registry tool as quarantined."""
-    _set_registry_trust_state(reference, ToolTrustState.QUARANTINED)
+    _set_registry_trust_state(reference, ToolTrustState.QUARANTINED, command="pkgwhy registry quarantine", as_json=as_json)
 
 
 @registry_app.command("blocked")
-def registry_blocked() -> None:
+def registry_blocked(
+    as_json: Annotated[bool, typer.Option("--json", help="Emit machine-readable JSON output.")] = False,
+) -> None:
     """List tools marked blocked in the current registry."""
-    entries = list_tools_by_trust_state(ToolTrustState.BLOCKED)
+    try:
+        entries = list_tools_by_trust_state(ToolTrustState.BLOCKED)
+    except ValueError as exc:
+        if as_json:
+            _emit_json_error(
+                command="pkgwhy registry blocked",
+                message=str(exc),
+                target="blocked",
+                target_type="registry_trust_state",
+                error_type="registry_configuration_error",
+                suggested_fix="Run 'pkgwhy registry init <path>' or select a configured registry first.",
+            )
+            raise typer.Exit(3) from exc
+        console.print(str(exc))
+        raise typer.Exit(1) from exc
+    if as_json:
+        print(json.dumps(_registry_blocked_payload(entries), indent=2, sort_keys=True))
+        return
     _emit_registry_trust_table("Blocked tools", entries)
 
 
 @registry_app.command("block")
-def registry_block(reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to block.")]) -> None:
+def registry_block(
+    reference: Annotated[str, typer.Argument(help="Tool name or owner/name reference to block.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Emit machine-readable JSON output.")] = False,
+) -> None:
     """Mark a local registry tool as blocked."""
-    _set_registry_trust_state(reference, ToolTrustState.BLOCKED)
+    _set_registry_trust_state(reference, ToolTrustState.BLOCKED, command="pkgwhy registry block", as_json=as_json)
 
 
-def _set_registry_trust_state(reference: str, state: ToolTrustState) -> None:
+def _set_registry_trust_state(reference: str, state: ToolTrustState, *, command: str, as_json: bool) -> None:
     try:
         entry = set_tool_trust_state(reference, state)
     except ValueError as exc:
+        if as_json:
+            _emit_json_error(
+                command=command,
+                message=str(exc),
+                target=reference,
+                target_type="tool",
+                error_type="registry_configuration_error",
+                suggested_fix="Initialize or select a local registry and publish the tool before changing trust state.",
+            )
+            raise typer.Exit(3) from exc
         console.print(str(exc))
         raise typer.Exit(1) from exc
+    if as_json:
+        print(json.dumps(_registry_trust_state_payload(command, entry), indent=2, sort_keys=True))
+        return
     console.print(f"{entry.owner}/{entry.name} {entry.version}: {entry.trust_state.value}")
+
+
+def _registry_trust_state_payload(command: str, entry: RegistryToolEntry) -> dict[str, object]:
+    tool = f"{entry.owner}/{entry.name}"
+    return {
+        "schema_version": "pkgwhy.registry_trust_state.v1",
+        "command": command,
+        "target": tool,
+        "target_type": "tool",
+        "tool": tool,
+        "owner": entry.owner,
+        "name": entry.name,
+        "version": entry.version,
+        "trust_state": entry.trust_state.value,
+        "exit_code": 0,
+        "exit_code_meaning": exit_code_meaning(0),
+        "message": f"{tool} {entry.version}: {entry.trust_state.value}",
+        "evidence": [f"Local registry trust state is {entry.trust_state.value}."],
+    }
+
+
+def _registry_blocked_payload(entries: list[RegistryToolEntry]) -> dict[str, object]:
+    tools = [
+        {
+            "target": f"{entry.owner}/{entry.name}",
+            "tool": f"{entry.owner}/{entry.name}",
+            "owner": entry.owner,
+            "name": entry.name,
+            "version": entry.version,
+            "trust_state": entry.trust_state.value,
+        }
+        for entry in entries
+    ]
+    return {
+        "schema_version": "pkgwhy.registry_blocked.v1",
+        "command": "pkgwhy registry blocked",
+        "target": "blocked",
+        "target_type": "registry_trust_state",
+        "trust_state": ToolTrustState.BLOCKED.value,
+        "blocked_count": len(entries),
+        "tools": tools,
+        "exit_code": 0,
+        "exit_code_meaning": exit_code_meaning(0),
+        "evidence": [f"{len(entries)} local registry tools are blocked."],
+    }
 
 
 def _emit_json_error(

@@ -15,6 +15,7 @@ from pkgwhy.core.models import (
     RiskLevel,
     ToolJudgement,
     ToolManifest,
+    ToolTrustState,
 )
 from pkgwhy.registry.local import current_registry, load_registry_index
 
@@ -45,6 +46,24 @@ def judge_tool(reference: str) -> ToolJudgement:
         recommendation = "Block use until a human verifies or republishes the tool."
         warnings.append("Bundle hash mismatch.")
 
+    evidence = [reason]
+    trust_evidence = f"Registry trust state is {entry.trust_state.value}."
+    evidence.append(trust_evidence)
+    if entry.trust_state == ToolTrustState.BLOCKED:
+        risk = RiskLevel.CRITICAL
+        decision = AgentDecision.BLOCK
+        reason = "Tool is blocked in the local registry trust state."
+        recommendation = "Do not run this tool unless a human changes the registry trust state."
+        warnings.append("Registry trust state blocks this tool.")
+        evidence.append(reason)
+    elif entry.trust_state == ToolTrustState.QUARANTINED:
+        risk = RiskLevel.HIGH
+        decision = AgentDecision.BLOCK
+        reason = "Tool is quarantined in the local registry trust state."
+        recommendation = "Do not run this tool until a human reviews it and changes the registry trust state."
+        warnings.append("Registry trust state quarantines this tool.")
+        evidence.append(reason)
+
     if not detected_capabilities:
         warnings.append("Static capability detection for tool bundles is not implemented yet.")
 
@@ -65,6 +84,7 @@ def judge_tool(reference: str) -> ToolJudgement:
         trust_state=entry.trust_state,
         warnings=warnings,
         recommendation=recommendation,
+        evidence=evidence,
     )
 
 
