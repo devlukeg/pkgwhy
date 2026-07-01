@@ -2,6 +2,7 @@ import json
 import stat
 from pathlib import Path
 
+import typer
 from typer.testing import CliRunner
 
 from pkgwhy.cli import app
@@ -20,6 +21,17 @@ from pkgwhy.core.models import (
 from pkgwhy.pip_gate import PipCommandResult, PipInstallGateError, run_pip_install_gate
 
 runner = CliRunner()
+
+
+def _command_options(*path: str) -> dict[str, object]:
+    command = typer.main.get_command(app)
+    for name in path:
+        command = command.commands[name]
+    return {
+        option: parameter
+        for parameter in command.params
+        for option in getattr(parameter, "opts", ())
+    }
 
 
 def _package_judgement(
@@ -299,15 +311,19 @@ def test_pip_gate_strict_policy_requires_clean_allow(monkeypatch, tmp_path: Path
     assert any("Strict policy" in reason for reason in result.reasons)
 
 
-def test_pip_gate_cli_help_surfaces_install_command() -> None:
+def test_pip_gate_cli_metadata_surfaces_install_options() -> None:
     result = runner.invoke(app, ["pip", "install", "--help"])
+    options = _command_options("pip", "install")
 
     assert result.exit_code == 0
-    assert "--policy" in result.output
-    assert "-r" in result.output
-    assert "--override-review" in result.output
-    assert "--override-block" in result.output
-    assert "--dry-run" in result.output
+    assert "-r" in options
+    assert "--policy" in options
+    assert "--override-review" in options
+    assert "--override-block" in options
+    assert "--dry-run" in options
+    assert getattr(options["--policy"], "help") == "Install policy: standard or strict."
+    assert "requires caution or manual review" in getattr(options["--override-review"], "help")
+    assert "blocks or requires sandbox-only use" in getattr(options["--override-block"], "help")
 
 
 def test_pip_gate_cli_json_dry_run_uses_precheck_and_never_pip(monkeypatch, tmp_path: Path) -> None:
