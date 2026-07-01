@@ -990,7 +990,7 @@ class ToolValidationResult(BaseModel):
         if not self.valid:
             fallback = "Fix validation errors before publishing or running this tool."
         self.recommended_next_action = recommended_next_action(self.decision, fallback)
-        if self.exit_code is None or (self.errors and self.exit_code in {0, 1}):
+        if self.exit_code is None or (self.decision == AgentDecision.BLOCK and self.exit_code in {0, 1}):
             self.exit_code = exit_code_for_decision(self.decision)
         self.exit_code_meaning = exit_code_meaning(self.exit_code)
         if not self.evidence:

@@ -173,3 +173,19 @@ def test_tool_validation_result_normalizes_error_issue_consistency() -> None:
     assert result.risk_level == RiskLevel.HIGH
     assert result.exit_code == 2
     assert result.errors == ["Tool entrypoint does not exist."]
+
+
+def test_tool_validation_result_invalid_state_cannot_keep_success_exit_code() -> None:
+    result = ToolValidationResult(
+        target="bad-tool",
+        target_type="tool_folder",
+        valid=False,
+        decision=AgentDecision.ALLOW,
+        risk_level=RiskLevel.LOW,
+        exit_code=0,
+    )
+
+    assert result.valid is False
+    assert result.decision == AgentDecision.BLOCK
+    assert result.exit_code == 2
+    assert result.exit_code_meaning == "blocked by policy or risk decision"
