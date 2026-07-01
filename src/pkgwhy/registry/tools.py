@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import tarfile
+import tempfile
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -18,6 +20,7 @@ from pkgwhy.core.models import (
     ToolTrustState,
 )
 from pkgwhy.registry.local import current_registry, load_registry_index
+from pkgwhy.registry.validate import analyze_tool_files
 
 
 def judge_tool(reference: str) -> ToolJudgement:
@@ -27,6 +30,7 @@ def judge_tool(reference: str) -> ToolJudgement:
     hash_status = _verify_hash(registry.path, entry)
     warnings: list[str] = ["Signature verification is not implemented yet."]
     detected_capabilities: list[str] = []
+    static_evidence: list[str] = []
 
     if hash_status == HashStatus.VERIFIED:
         risk = RiskLevel.MEDIUM
@@ -46,7 +50,15 @@ def judge_tool(reference: str) -> ToolJudgement:
         recommendation = "Block use until a human verifies or republishes the tool."
         warnings.append("Bundle hash mismatch.")
 
+    if hash_status == HashStatus.VERIFIED:
+        bundle_path = _validate_registry_path(registry.path, entry.bundle_path, entry)
+        static_signals = _analyze_verified_bundle(bundle_path, manifest)
+        detected_capabilities = static_signals.detected_capabilities
+        warnings.extend(static_signals.warnings)
+        static_evidence = static_signals.evidence
+
     evidence = [reason]
+    evidence.extend(static_evidence)
     trust_evidence = f"Registry trust state is {entry.trust_state.value}."
     evidence.append(trust_evidence)
     if entry.trust_state == ToolTrustState.BLOCKED:
@@ -63,9 +75,6 @@ def judge_tool(reference: str) -> ToolJudgement:
         recommendation = "Do not run this tool until a human reviews it and changes the registry trust state."
         warnings.append("Registry trust state quarantines this tool.")
         evidence.append(reason)
-
-    if not detected_capabilities:
-        warnings.append("Static capability detection for tool bundles is not implemented yet.")
 
     return ToolJudgement(
         tool=f"{entry.owner}/{entry.name}",
@@ -132,6 +141,33 @@ def _verify_hash(registry_path: Path, entry: RegistryToolEntry) -> HashStatus:
     if digest.hexdigest() != entry.sha256:
         return HashStatus.MISMATCH
     return HashStatus.VERIFIED
+
+
+def _analyze_verified_bundle(bundle_path: Path, manifest: ToolManifest):
+    with tempfile.TemporaryDirectory(prefix="pkgwhy-tool-static-") as temp_dir:
+        root = Path(temp_dir)
+        extracted_paths: list[Path] = []
+        try:
+            with tarfile.open(bundle_path, "r:gz") as archive:
+                for member in archive.getmembers()[:500]:
+                    member_path = Path(member.name)
+                    if member_path.is_absolute() or ".." in member_path.parts:
+                        continue
+                    if not member.isfile():
+                        continue
+                    target = (root / member_path).resolve()
+                    if not target.is_relative_to(root):
+                        continue
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    source = archive.extractfile(member)
+                    if source is None:
+                        continue
+                    with source, target.open("wb") as handle:
+                        handle.write(source.read(1_000_000))
+                    extracted_paths.append(target)
+        except (OSError, tarfile.TarError):
+            return analyze_tool_files([], manifest.entrypoint)
+        return analyze_tool_files(extracted_paths, manifest.entrypoint)
 
 
 def _validate_registry_path(registry_path: Path, entry_path: str, entry: RegistryToolEntry) -> Path:

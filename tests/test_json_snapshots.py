@@ -485,6 +485,5 @@ def test_tool_judge_json_golden_snapshot(tmp_path: Path) -> None:
         },
         "warnings": [
             "Signature verification is not implemented yet.",
-            "Static capability detection for tool bundles is not implemented yet.",
         ],
     }

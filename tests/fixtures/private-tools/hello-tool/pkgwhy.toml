@@ -1,0 +1,18 @@
+[tool]
+name = "hello-tool"
+owner = "local"
+version = "0.1.0"
+description = "Small fixture tool for pkgwhy validation tests."
+artifact_type = "folder"
+entrypoint = "hello.py"
+declared_permissions = []
+
+[security]
+requires_human_approval = true
+allow_unsigned = false
+allow_unpinned_dependencies = false
+signing_status = "not_implemented"
+
+[agent]
+default_decision = "review_manually"
+non_interactive_decision = "block"

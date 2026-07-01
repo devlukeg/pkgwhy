@@ -930,6 +930,65 @@ class ToolJudgement(BaseModel):
         return self
 
 
+class ToolValidationIssue(BaseModel):
+    """One non-executing validation finding for a local private tool source."""
+
+    code: str
+    severity: Literal["error", "warning"]
+    message: str
+    path: str | None = None
+    suggested_fix: str | None = None
+
+
+class ToolValidationResult(BaseModel):
+    """Agent-readable validation result for a local private tool source."""
+
+    schema_version: str = "pkgwhy.tool_validation.v1"
+    command: str = "pkgwhy tool validate"
+    target: str
+    target_type: Literal["tool_folder", "tool_script", "path"] = "path"
+    valid: bool
+    decision: AgentDecision
+    risk_level: RiskLevel
+    confidence: Confidence = Confidence.HIGH
+    manifest: ToolManifest | None = None
+    manifest_path: str | None = None
+    entrypoint: str | None = None
+    declared_permissions: list[str] = Field(default_factory=list)
+    detected_capabilities: list[str] = Field(default_factory=list)
+    issues: list[ToolValidationIssue] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
+    evidence_summary: dict[str, object] = Field(default_factory=dict)
+    recommended_next_action: str | None = None
+    exit_code: int | None = Field(default=None, ge=0)
+    exit_code_meaning: str | None = None
+    source_freshness: str = "local_filesystem_snapshot"
+    policy: dict[str, object] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def populate_decision_contract(self) -> ToolValidationResult:
+        if not self.errors:
+            self.errors = [issue.message for issue in self.issues if issue.severity == "error"]
+        if not self.warnings:
+            self.warnings = [issue.message for issue in self.issues if issue.severity == "warning"]
+        fallback = (
+            "Tool source validates for local registry use."
+            if self.valid and not self.warnings
+            else "Review validation warnings before publishing or running this tool."
+        )
+        if not self.valid:
+            fallback = "Fix validation errors before publishing or running this tool."
+        self.recommended_next_action = recommended_next_action(self.decision, fallback)
+        self.exit_code = self.exit_code if self.exit_code is not None else exit_code_for_decision(self.decision)
+        self.exit_code_meaning = exit_code_meaning(self.exit_code)
+        if not self.evidence:
+            self.evidence = ["Validated local tool source without executing tool code."]
+        self.evidence_summary = compact_evidence_summary(evidence=self.evidence, warnings=self.warnings)
+        return self
+
+
 class ToolRunResult(BaseModel):
     """Execution metadata for a local private tool run."""
 

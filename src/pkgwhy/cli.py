@@ -46,6 +46,7 @@ from pkgwhy.registry.publish import publish_local_tool
 from pkgwhy.registry.run import RUNNER_ISOLATION_WARNING, run_local_tool
 from pkgwhy.registry.tools import judge_tool
 from pkgwhy.registry.trust import list_tools_by_trust_state, set_tool_trust_state
+from pkgwhy.registry.validate import validate_tool_source
 from pkgwhy.reports.audit import build_audit_report, render_audit_markdown
 from pkgwhy.typosquat.detector import detect_typosquats
 from pkgwhy.vulnerabilities.matching import match_vulnerabilities
@@ -732,6 +733,33 @@ def tool_judge(
     console.print(f"Hash status: {judgement.hash_status.value}")
     console.print(f"Trust state: {judgement.trust_state.value}")
     console.print(f"Recommendation: {judgement.recommendation}")
+
+
+@tool_app.command("validate")
+def tool_validate(
+    path: Annotated[Path, typer.Argument(help="Local .py file or folder with pkgwhy.toml to validate.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Emit machine-readable JSON output.")] = False,
+) -> None:
+    """Validate a local private tool source without publishing or executing it."""
+    result = validate_tool_source(path)
+    if as_json:
+        print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
+        raise typer.Exit(result.exit_code or 0)
+
+    status = "valid" if result.valid else "invalid"
+    console.print(f"Tool source is {status}: {result.target}")
+    console.print(f"Decision: {result.decision.value}")
+    console.print(f"Recommendation: {result.recommended_next_action}")
+    if result.detected_capabilities:
+        console.print("Detected capability signals:")
+        for capability in result.detected_capabilities:
+            console.print(f"  - {capability}")
+    if result.issues:
+        console.print("Validation findings:")
+        for issue in result.issues:
+            location = f" ({issue.path})" if issue.path else ""
+            console.print(f"  - {issue.severity}: {issue.code}{location}: {issue.message}")
+    raise typer.Exit(result.exit_code or 0)
 
 
 @registry_app.command("init")

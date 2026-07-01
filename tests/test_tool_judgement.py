@@ -126,6 +126,24 @@ def test_judge_tool_reports_missing_bundle(tmp_path: Path, monkeypatch: pytest.M
     assert "missing" in judgement.reason
 
 
+def test_judge_tool_detects_static_bundle_capabilities(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PKGWHY_CONFIG_HOME", str(tmp_path / "config"))
+    init_local_registry(tmp_path / "registry")
+    script = tmp_path / "capability_tool.py"
+    script.write_text(
+        "import os\nimport subprocess\nprint(os.getenv('TOKEN'))\nsubprocess.run(['true'])\n",
+        encoding="utf-8",
+    )
+    publish_local_tool(script)
+
+    judgement = judge_tool("local/capability_tool")
+
+    assert "Environment variable access signals" in judgement.detected_capabilities
+    assert "Subprocess or shell execution signals" in judgement.detected_capabilities
+    assert not any("static capability detection" in warning.lower() for warning in judgement.warnings)
+    assert any("subprocess.run" in item for item in judgement.evidence)
+
+
 def test_judge_tool_rejects_corrupt_registry_index(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PKGWHY_CONFIG_HOME", str(tmp_path / "config"))
     registry_path = tmp_path / "registry"
